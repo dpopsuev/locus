@@ -7,7 +7,7 @@ Spatial context bus for AI agents. Point it at any repository and get architectu
 ```bash
 docker run -d --name locus \
   -p 8081:8081 \
-  -v locus-cache:/root/.locus \
+  -v locus-data:/data \
   quay.io/dpopsuev/locus
 ```
 
