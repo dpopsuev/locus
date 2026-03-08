@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/dpopsuev/locus/internal/cache"
-	"github.com/dpopsuev/mos/moslib/arch"
+	"github.com/dpopsuev/locus/internal/arch"
 )
 
 type Source string

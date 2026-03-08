@@ -12,8 +12,8 @@ import (
 	"github.com/dpopsuev/locus/internal/cache"
 	"github.com/dpopsuev/locus/internal/history"
 	"github.com/dpopsuev/locus/internal/remote"
-	"github.com/dpopsuev/mos/moslib/arch"
-	"github.com/dpopsuev/mos/moslib/cursor"
+	"github.com/dpopsuev/locus/internal/arch"
+	"github.com/dpopsuev/locus/internal/cursor"
 )
 
 // Protocol encapsulates all Locus business logic.

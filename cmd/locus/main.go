@@ -15,7 +15,7 @@ import (
 	"github.com/dpopsuev/locus/internal/history"
 	locusmcp "github.com/dpopsuev/locus/internal/mcp"
 	"github.com/dpopsuev/locus/internal/protocol"
-	"github.com/dpopsuev/mos/moslib/arch"
+	"github.com/dpopsuev/locus/internal/arch"
 )
 
 var Version = "dev"

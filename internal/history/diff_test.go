@@ -3,7 +3,7 @@ package history
 import (
 	"testing"
 
-	"github.com/dpopsuev/mos/moslib/arch"
+	"github.com/dpopsuev/locus/internal/arch"
 )
 
 func TestDiffReportsNoChanges(t *testing.T) {

@@ -1,0 +1,10 @@
+---
+description: Prefer deterministic transformers over stochastic ones
+globs:
+  - "circuits/**/*.yaml"
+  - "**/*transformer*"
+---
+
+# Deterministic First
+
+Always prefer deterministic processing.

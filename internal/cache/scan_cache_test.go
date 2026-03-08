@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/dpopsuev/mos/moslib/arch"
+	"github.com/dpopsuev/locus/internal/arch"
 )
 
 func tempCache(t *testing.T) *ScanCache {

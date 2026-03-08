@@ -7,7 +7,7 @@ import (
 
 	"github.com/dpopsuev/locus/internal/cache"
 	"github.com/dpopsuev/locus/internal/protocol"
-	"github.com/dpopsuev/mos/moslib/arch"
+	"github.com/dpopsuev/locus/internal/arch"
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
