@@ -3,7 +3,7 @@ module github.com/dpopsuev/locus
 go 1.25.7
 
 require (
-	github.com/dpopsuev/mos v0.0.0-20260308164649-fccff0159b19
+	github.com/dpopsuev/mos v0.0.0-20260308190900-0044c4d4bc0a
 	github.com/modelcontextprotocol/go-sdk v1.4.0
 	github.com/spf13/cobra v1.10.2
 )

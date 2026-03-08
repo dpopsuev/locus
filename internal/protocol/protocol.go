@@ -34,6 +34,7 @@ type ScanOpts struct {
 	ChurnDays       int
 	IncludeExternal bool
 	IncludeTests    bool
+	IncludeCoverage bool
 	Budget          int
 	Scanner         string
 	GitDays         int
@@ -99,6 +100,7 @@ func (p *Protocol) ScanProject(_ context.Context, path string, opts ScanOpts) (*
 		ScannerOverride: opts.Scanner,
 		ExcludeTests:    !opts.IncludeTests,
 		IncludeExternal: opts.IncludeExternal,
+		IncludeCoverage: opts.IncludeCoverage,
 		Depth:           opts.Depth,
 		ChurnDays:       churnDays,
 		Budget:          opts.Budget,
@@ -195,6 +197,86 @@ func (p *Protocol) GetEdgeList(_ context.Context, path, component string) (strin
 		return "", err
 	}
 	return arch.RenderEdgeList(report, component), nil
+}
+
+// CycleReport holds cycle detection results extracted from a cached scan.
+type CycleReport struct {
+	Cycles          []arch.Cycle          `json:"cycles"`
+	ImportDepth     arch.DepthMap         `json:"import_depth"`
+	LayerViolations []arch.LayerViolation `json:"layer_violations,omitempty"`
+}
+
+func (p *Protocol) GetCycles(_ context.Context, path string, layers []string) (*CycleReport, error) {
+	path = p.resolvePath(path)
+	report, err := p.getOrScan(path)
+	if err != nil {
+		return nil, err
+	}
+	r := &CycleReport{
+		Cycles:      report.Cycles,
+		ImportDepth: report.ImportDepth,
+	}
+	if len(layers) > 0 {
+		r.LayerViolations = arch.CheckLayerPurity(report.Architecture.Edges, layers)
+	} else {
+		r.LayerViolations = report.LayerViolations
+	}
+	return r, nil
+}
+
+// CoverageReport holds per-component coverage data.
+type CoverageReport struct {
+	Coverage      []arch.CoverageResult `json:"coverage"`
+	BelowThreshold []arch.CoverageResult `json:"below_threshold,omitempty"`
+}
+
+func (p *Protocol) GetCoverage(_ context.Context, path string, threshold float64) (*CoverageReport, error) {
+	path = p.resolvePath(path)
+	cov, err := arch.RunGoCoverage(path, arch.DetectProjectPath(path))
+	if err != nil {
+		return nil, err
+	}
+	r := &CoverageReport{Coverage: cov}
+	if threshold > 0 {
+		for _, c := range cov {
+			if c.CoveragePct < threshold {
+				r.BelowThreshold = append(r.BelowThreshold, c)
+			}
+		}
+	}
+	sort.Slice(r.Coverage, func(i, j int) bool { return r.Coverage[i].Component < r.Coverage[j].Component })
+	return r, nil
+}
+
+// APISurfaceReport holds API surface and boundary crossing data.
+type APISurfaceReport struct {
+	Surfaces  []arch.APISurface       `json:"surfaces"`
+	Crossings []arch.BoundaryCrossing `json:"crossings,omitempty"`
+}
+
+func (p *Protocol) GetAPISurface(_ context.Context, path string, trusted []string) (*APISurfaceReport, error) {
+	path = p.resolvePath(path)
+	report, err := p.getOrScan(path)
+	if err != nil {
+		return nil, err
+	}
+	return &APISurfaceReport{
+		Surfaces:  report.APISurfaces,
+		Crossings: report.BoundaryCrossings,
+	}, nil
+}
+
+func (p *Protocol) ValidateArchitecture(_ context.Context, path, desiredState, format string) (*arch.ArchDrift, error) {
+	path = p.resolvePath(path)
+	report, err := p.getOrScan(path)
+	if err != nil {
+		return nil, err
+	}
+	desired, err := arch.ParseDesiredState(desiredState, format)
+	if err != nil {
+		return nil, fmt.Errorf("parse desired state: %w", err)
+	}
+	return arch.ValidateArchitecture(*desired, report.Architecture), nil
 }
 
 func (p *Protocol) CodographRemote(ctx context.Context, url string, opts RemoteOpts) (*arch.ContextReport, error) {

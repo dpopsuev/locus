@@ -83,6 +83,26 @@ func NewServer(sc *cache.ScanCache, historyDir string, workspaceRoots []string) 
 		Description: "Compare architecture between two git branches. Scans each branch (cache-aware: previously scanned branches are instant hits) and returns the diff.",
 	}, noOut(h.handleDiffBranches))
 
+	sdkmcp.AddTool(srv, &sdkmcp.Tool{
+		Name:        "get_cycles",
+		Description: "Detect circular dependencies, compute import depth per component, and check layer purity. Pure graph analysis on cached edges.",
+	}, noOut(h.handleGetCycles))
+
+	sdkmcp.AddTool(srv, &sdkmcp.Tool{
+		Name:        "get_coverage",
+		Description: "Run test coverage analysis and return per-component coverage percentages. Optionally filter to components below a threshold.",
+	}, noOut(h.handleGetCoverage))
+
+	sdkmcp.AddTool(srv, &sdkmcp.Tool{
+		Name:        "get_api_surface",
+		Description: "Return exported symbol counts per component and trust boundary crossings.",
+	}, noOut(h.handleGetAPISurface))
+
+	sdkmcp.AddTool(srv, &sdkmcp.Tool{
+		Name:        "validate_architecture",
+		Description: "Diff a desired-state architecture (mermaid or JSON) against a live scan, reporting missing/extra components and edges.",
+	}, noOut(h.handleValidateArchitecture))
+
 	return srv
 }
 
@@ -98,6 +118,7 @@ type scanProjectInput struct {
 	ChurnDays       int    `json:"churn_days,omitempty"`
 	IncludeExternal bool   `json:"include_external,omitempty"`
 	IncludeTests    bool   `json:"include_tests,omitempty"`
+	IncludeCoverage bool   `json:"include_coverage,omitempty"`
 	Budget          int    `json:"budget,omitempty"`
 	Format          string `json:"format,omitempty"`
 }
@@ -106,7 +127,7 @@ func (h *handler) handleScanProject(ctx context.Context, _ *sdkmcp.CallToolReque
 	report, err := h.proto.ScanProject(ctx, in.Path, protocol.ScanOpts{
 		Depth: in.Depth, ChurnDays: in.ChurnDays,
 		IncludeExternal: in.IncludeExternal, IncludeTests: in.IncludeTests,
-		Budget: in.Budget,
+		IncludeCoverage: in.IncludeCoverage, Budget: in.Budget,
 	})
 	if err != nil {
 		return nil, nil, err
@@ -256,6 +277,67 @@ type diffBranchesInput struct {
 
 func (h *handler) handleDiffBranches(ctx context.Context, _ *sdkmcp.CallToolRequest, in diffBranchesInput) (*sdkmcp.CallToolResult, any, error) {
 	r, err := h.proto.DiffBranches(ctx, in.Path, in.BranchA, in.BranchB)
+	if err != nil {
+		return nil, nil, err
+	}
+	return jsonResult(r)
+}
+
+// --- CON-303: cycles ---
+
+type cyclesInput struct {
+	Path   string   `json:"path"`
+	Layers []string `json:"layers,omitempty"`
+}
+
+func (h *handler) handleGetCycles(ctx context.Context, _ *sdkmcp.CallToolRequest, in cyclesInput) (*sdkmcp.CallToolResult, any, error) {
+	r, err := h.proto.GetCycles(ctx, in.Path, in.Layers)
+	if err != nil {
+		return nil, nil, err
+	}
+	return jsonResult(r)
+}
+
+// --- CON-304: coverage ---
+
+type coverageInput struct {
+	Path      string  `json:"path"`
+	Threshold float64 `json:"threshold,omitempty"`
+}
+
+func (h *handler) handleGetCoverage(ctx context.Context, _ *sdkmcp.CallToolRequest, in coverageInput) (*sdkmcp.CallToolResult, any, error) {
+	r, err := h.proto.GetCoverage(ctx, in.Path, in.Threshold)
+	if err != nil {
+		return nil, nil, err
+	}
+	return jsonResult(r)
+}
+
+// --- CON-305: API surface ---
+
+type apiSurfaceInput struct {
+	Path    string   `json:"path"`
+	Trusted []string `json:"trusted,omitempty"`
+}
+
+func (h *handler) handleGetAPISurface(ctx context.Context, _ *sdkmcp.CallToolRequest, in apiSurfaceInput) (*sdkmcp.CallToolResult, any, error) {
+	r, err := h.proto.GetAPISurface(ctx, in.Path, in.Trusted)
+	if err != nil {
+		return nil, nil, err
+	}
+	return jsonResult(r)
+}
+
+// --- CON-325: validation ---
+
+type validateInput struct {
+	Path         string `json:"path"`
+	DesiredState string `json:"desired_state"`
+	Format       string `json:"format,omitempty"`
+}
+
+func (h *handler) handleValidateArchitecture(ctx context.Context, _ *sdkmcp.CallToolRequest, in validateInput) (*sdkmcp.CallToolResult, any, error) {
+	r, err := h.proto.ValidateArchitecture(ctx, in.Path, in.DesiredState, in.Format)
 	if err != nil {
 		return nil, nil, err
 	}

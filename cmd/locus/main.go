@@ -223,6 +223,57 @@ and returns the structural diff.
 	},
 }
 
+var validateFlags struct {
+	desired string
+	format  string
+}
+
+var validateCmd = &cobra.Command{
+	Use:   "validate [path]",
+	Short: "Validate live architecture against a desired-state definition",
+	Long: `Parse a desired-state architecture from a mermaid or JSON file,
+scan the repository, and report drift (missing/extra components and edges).
+
+  locus validate --desired arch.mermaid
+  locus validate /path/to/repo --desired arch.json --format json`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		path := ""
+		if len(args) > 0 {
+			path = args[0]
+		}
+		data, err := os.ReadFile(validateFlags.desired)
+		if err != nil {
+			return fmt.Errorf("read desired-state file: %w", err)
+		}
+		format := validateFlags.format
+		if format == "" {
+			if ext := validateFlags.desired; len(ext) > 0 {
+				if idx := len(ext) - 1; idx > 0 {
+					for i := len(ext) - 1; i >= 0; i-- {
+						if ext[i] == '.' {
+							format = ext[i+1:]
+							break
+						}
+					}
+				}
+			}
+			if format == "json" || format == "mermaid" || format == "md" {
+				// keep as-is
+			} else {
+				format = "mermaid"
+			}
+		}
+
+		proto := newProto()
+		drift, err := proto.ValidateArchitecture(cmd.Context(), path, string(data), format)
+		if err != nil {
+			return err
+		}
+		return printJSON(drift)
+	},
+}
+
 var healthCmd = &cobra.Command{
 	Use:   "health",
 	Short: "Check the Locus runtime environment",
@@ -250,7 +301,7 @@ var healthCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.AddCommand(versionCmd, scanCmd, serveCmd, codographCmd, historyCmd, diffCmd, healthCmd)
+	rootCmd.AddCommand(versionCmd, scanCmd, serveCmd, codographCmd, historyCmd, diffCmd, validateCmd, healthCmd)
 
 	scanCmd.Flags().StringVar(&scanFlags.format, "format", "json", "Output format: json, md, mermaid")
 	scanCmd.Flags().StringVar(&scanFlags.scanner, "scanner", "auto", "Scanner: auto, go, packages, rust, typescript, composite, ctags, lsp")
@@ -277,6 +328,10 @@ func init() {
 
 	diffCmd.Flags().StringVar(&diffFlags.branchA, "branch-a", "", "First branch to compare")
 	diffCmd.Flags().StringVar(&diffFlags.branchB, "branch-b", "", "Second branch to compare")
+
+	validateCmd.Flags().StringVar(&validateFlags.desired, "desired", "", "Path to desired-state file (mermaid or JSON)")
+	validateCmd.Flags().StringVar(&validateFlags.format, "format", "", "Format of desired-state file: mermaid, json (auto-detected from extension)")
+	_ = validateCmd.MarkFlagRequired("desired")
 }
 
 func renderReport(report *arch.ContextReport, format string) error {
