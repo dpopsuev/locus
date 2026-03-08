@@ -1,5 +1,4 @@
 FROM golang:1.25-alpine AS build
-ARG GOPRIVATE=github.com/dpopsuev/mos
 WORKDIR /build
 COPY go.mod go.sum ./
 RUN go mod download
