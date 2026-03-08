@@ -1,0 +1,14 @@
+FROM golang:1.25-alpine AS build
+ARG GOPRIVATE=github.com/dpopsuev/mos
+WORKDIR /build
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /locus ./cmd/locus
+
+FROM scratch
+COPY --from=build /locus /locus
+ENV LOCUS_TRANSPORT=http
+ENV LOCUS_ADDR=:8081
+EXPOSE 8081
+ENTRYPOINT ["/locus", "serve"]

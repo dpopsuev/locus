@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -91,19 +92,21 @@ var scanCmd = &cobra.Command{
 
 var serveFlags struct {
 	workspaces []string
+	transport  string
+	addr       string
 }
 
 var serveCmd = &cobra.Command{
 	Use:   "serve",
-	Short: "Start the Locus MCP server (stdio transport)",
-	Long: `Start an MCP server that exposes codebase context and knowledge tools via stdio.
+	Short: "Start the Locus MCP server (stdio or HTTP)",
+	Long: `Start an MCP server that exposes codebase context and knowledge tools.
+
+  stdio (default): reads/writes JSON-RPC over stdin/stdout.
+  http:            starts a Streamable HTTP server on --addr.
 
 Tools: scan_project, suggest_depth, get_hot_spots, get_dependencies,
        get_rules, get_skills, codograph_remote, get_codograph_history,
-       diff_codographs, diff_branches.
-
-Configure in your MCP client (e.g. Cursor, Claude Code):
-  { "command": "locus", "args": ["serve"] }`,
+       diff_codographs, diff_branches.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		roots := serveFlags.workspaces
 		if len(roots) == 0 {
@@ -112,6 +115,14 @@ Configure in your MCP client (e.g. Cursor, Claude Code):
 		}
 		sc := cache.New(cache.DefaultCacheDir())
 		srv := locusmcp.NewServer(sc, history.DefaultHistoryDir(), roots)
+		if serveFlags.transport == "http" {
+			handler := sdkmcp.NewStreamableHTTPHandler(
+				func(r *http.Request) *sdkmcp.Server { return srv },
+				nil,
+			)
+			fmt.Fprintf(os.Stderr, "locus: listening on %s\n", serveFlags.addr)
+			return http.ListenAndServe(serveFlags.addr, handler)
+		}
 		return srv.Run(context.Background(), &sdkmcp.StdioTransport{})
 	},
 }
@@ -252,6 +263,8 @@ func init() {
 	scanCmd.Flags().IntVar(&scanFlags.budget, "budget", 0, "Cap output to N tokens (rank by importance, 0 = unlimited)")
 
 	serveCmd.Flags().StringArrayVar(&serveFlags.workspaces, "workspace", nil, "Workspace root paths (repeatable; defaults to cwd)")
+	serveCmd.Flags().StringVar(&serveFlags.transport, "transport", envOr("LOCUS_TRANSPORT", "stdio"), "Transport type: stdio, http ($LOCUS_TRANSPORT)")
+	serveCmd.Flags().StringVar(&serveFlags.addr, "addr", envOr("LOCUS_ADDR", ":8081"), "Listen address for http transport ($LOCUS_ADDR)")
 
 	codographCmd.Flags().StringVar(&codographFlags.ref, "ref", "", "Branch or tag to clone (default: repo default branch)")
 	codographCmd.Flags().BoolVar(&codographFlags.keep, "keep", false, "Keep the cloned directory after scan")

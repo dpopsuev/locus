@@ -2,10 +2,8 @@ module github.com/dpopsuev/locus
 
 go 1.25.7
 
-replace github.com/dpopsuev/mos => ../mos
-
 require (
-	github.com/dpopsuev/mos v0.0.0-00010101000000-000000000000
+	github.com/dpopsuev/mos v0.0.0-20260308164649-fccff0159b19
 	github.com/modelcontextprotocol/go-sdk v1.4.0
 	github.com/spf13/cobra v1.10.2
 )

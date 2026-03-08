@@ -14,7 +14,12 @@ import (
 func NewServer(sc *cache.ScanCache, historyDir string, workspaceRoots []string) *sdkmcp.Server {
 	srv := sdkmcp.NewServer(
 		&sdkmcp.Implementation{Name: "locus", Version: "0.3.0"},
-		nil,
+		&sdkmcp.ServerOptions{
+			Instructions: "Locus is a spatial context bus for AI agents. " +
+				"Point it at any repository to get architecture, dependency graph, churn, hot spots, and symbols. " +
+				"Results are cached by git HEAD SHA. Use scan_project to analyze a repo, get_hot_spots for risk areas, " +
+				"and codograph_remote for GitHub repos you don't have locally.",
+		},
 	)
 	h := &handler{proto: protocol.New(sc, historyDir, workspaceRoots)}
 
