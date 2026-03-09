@@ -9,11 +9,11 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/dpopsuev/locus/internal/arch"
 	"github.com/dpopsuev/locus/internal/cache"
+	"github.com/dpopsuev/locus/internal/cursor"
 	"github.com/dpopsuev/locus/internal/history"
 	"github.com/dpopsuev/locus/internal/remote"
-	"github.com/dpopsuev/locus/internal/arch"
-	"github.com/dpopsuev/locus/internal/cursor"
 )
 
 // Protocol encapsulates all Locus business logic.
@@ -53,8 +53,8 @@ type RemoteOpts struct {
 
 // BranchDiffResult wraps branch metadata with the diff.
 type BranchDiffResult struct {
-	BranchA string               `json:"branch_a"`
-	BranchB string               `json:"branch_b"`
+	BranchA string                 `json:"branch_a"`
+	BranchB string                 `json:"branch_b"`
 	Diff    *history.CodographDiff `json:"diff"`
 }
 
@@ -226,7 +226,7 @@ func (p *Protocol) GetCycles(_ context.Context, path string, layers []string) (*
 
 // CoverageReport holds per-component coverage data.
 type CoverageReport struct {
-	Coverage      []arch.CoverageResult `json:"coverage"`
+	Coverage       []arch.CoverageResult `json:"coverage"`
 	BelowThreshold []arch.CoverageResult `json:"below_threshold,omitempty"`
 }
 
@@ -352,6 +352,11 @@ func (p *Protocol) GetSkills(_ context.Context, path string) ([]cursor.Skill, er
 	return cursor.ReadSkills(path)
 }
 
+// Workspaces returns the configured workspace root paths.
+func (p *Protocol) Workspaces() []string {
+	return p.workspaces
+}
+
 // --- helpers ---
 
 func (p *Protocol) getOrScan(path string) (*arch.ContextReport, error) {
@@ -395,13 +400,31 @@ func (p *Protocol) scanBranch(repoPath, ref string) (*arch.ContextReport, error)
 }
 
 func (p *Protocol) resolvePath(path string) string {
-	if path != "" {
-		return path
+	if path == "" {
+		if len(p.workspaces) > 0 {
+			return p.workspaces[0]
+		}
+		return "."
 	}
-	if len(p.workspaces) > 0 {
-		return p.workspaces[0]
+
+	abs, err := filepath.Abs(path)
+	if err == nil {
+		if _, serr := os.Stat(abs); serr == nil {
+			return abs
+		}
 	}
-	return "."
+
+	for _, ws := range p.workspaces {
+		candidate := filepath.Join(ws, path)
+		if _, serr := os.Stat(candidate); serr == nil {
+			return candidate
+		}
+	}
+
+	if abs != "" {
+		return abs
+	}
+	return path
 }
 
 func getCurrentBranch(dir string) string {

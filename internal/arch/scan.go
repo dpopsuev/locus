@@ -1,6 +1,7 @@
 package arch
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -9,6 +10,7 @@ import (
 
 	"golang.org/x/mod/modfile"
 
+	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/model"
 	"github.com/dpopsuev/locus/internal/survey"
 )
@@ -28,11 +30,12 @@ type ScanOpts struct {
 	Format          string // "json", "md", "mermaid"
 }
 
-// HotSpot identifies a component with high fan-in and high churn.
+// HotSpot identifies a component with high fan-in, high churn, and/or deep nesting.
 type HotSpot struct {
 	Component string `json:"component"`
 	FanIn     int    `json:"fan_in"`
 	Churn     int    `json:"churn"`
+	Nesting   int    `json:"nesting,omitempty"`
 }
 
 // ContextReport is the full output of a ScanAndBuild invocation.
@@ -98,6 +101,8 @@ func ScanAndBuild(root string, opts ScanOpts) (*ContextReport, error) {
 	}
 
 	archModel := ProjectToArchModel(proj, syncOpts)
+	applyLOC(root, proj, modPath, &archModel)
+	applyNestingDepth(root, modPath, &archModel)
 
 	report := &ContextReport{
 		Project:      proj,
@@ -178,8 +183,13 @@ func computeHotSpots(m ArchModel) []HotSpot {
 	var spots []HotSpot
 	for _, s := range m.Services {
 		fi := fanIn[s.Name]
-		if fi >= 3 && s.Churn >= 5 {
-			spots = append(spots, HotSpot{Component: s.Name, FanIn: fi, Churn: s.Churn})
+		if fi >= 3 && (s.Churn >= 5 || s.MaxNesting >= 4) {
+			spots = append(spots, HotSpot{
+				Component: s.Name,
+				FanIn:     fi,
+				Churn:     s.Churn,
+				Nesting:   s.MaxNesting,
+			})
 		}
 	}
 	return spots
@@ -276,6 +286,77 @@ func parsePackageJSONName(data []byte) string {
 		return pkg.Name
 	}
 	return ""
+}
+
+// applyLOC reads source files referenced by the project model and
+// populates LOC (line count) on each ArchService.
+func applyLOC(root string, proj *model.Project, modPath string, m *ArchModel) {
+	absRoot, _ := filepath.Abs(root)
+	locByComponent := make(map[string]int)
+	for _, ns := range proj.Namespaces {
+		component := shortImportPath(modPath, ns.ImportPath)
+		for _, f := range ns.Files {
+			path := filepath.Join(absRoot, f.Path)
+			data, err := os.ReadFile(path)
+			if err != nil {
+				continue
+			}
+			lines := bytes.Count(data, []byte{'\n'})
+			if len(data) > 0 && data[len(data)-1] != '\n' {
+				lines++
+			}
+			f.Lines = lines
+			locByComponent[component] += lines
+		}
+	}
+	for i := range m.Services {
+		if loc, ok := locByComponent[m.Services[i].Name]; ok {
+			m.Services[i].LOC = loc
+		}
+	}
+}
+
+// applyNestingDepth runs tree-sitter nesting analysis and populates
+// MaxNesting and AvgNesting on each ArchService.
+func applyNestingDepth(root, modPath string, m *ArchModel) {
+	ts := &analysis.TreeSitterAnalyzer{}
+	results, err := ts.NestingDepth(root)
+	if err != nil || len(results) == 0 {
+		return
+	}
+
+	type nestAgg struct {
+		max   int
+		sum   int
+		count int
+	}
+	byComponent := make(map[string]*nestAgg)
+	for _, r := range results {
+		pkg := r.Package
+		if pkg == "(root)" {
+			pkg = "."
+		}
+		agg := byComponent[pkg]
+		if agg == nil {
+			agg = &nestAgg{}
+			byComponent[pkg] = agg
+		}
+		if r.MaxDepth > agg.max {
+			agg.max = r.MaxDepth
+		}
+		agg.sum += r.MaxDepth
+		agg.count++
+	}
+
+	for i := range m.Services {
+		name := m.Services[i].Name
+		if agg, ok := byComponent[name]; ok {
+			m.Services[i].MaxNesting = agg.max
+			if agg.count > 0 {
+				m.Services[i].AvgNesting = float64(agg.sum) / float64(agg.count)
+			}
+		}
+	}
 }
 
 // InferDefaultGroups builds component groups from namespace prefix patterns.

@@ -36,7 +36,11 @@ func RenderMarkdown(report *ContextReport) string {
 			n = 10
 		}
 		for _, s := range spots[:n] {
-			fmt.Fprintf(&b, "- %s  churn=%d  fan_in=%d\n", s.Component, s.Churn, fanIn[s.Component])
+			nest := ""
+			if s.Nesting > 0 {
+				nest = fmt.Sprintf("  nesting=%d", s.Nesting)
+			}
+			fmt.Fprintf(&b, "- %s  churn=%d  fan_in=%d%s\n", s.Component, s.Churn, fanIn[s.Component], nest)
 		}
 		b.WriteByte('\n')
 	}
@@ -45,7 +49,8 @@ func RenderMarkdown(report *ContextReport) string {
 }
 
 // RenderCouplingTable produces a markdown table of components with fan-in, fan-out,
-// churn, and symbol count. sortBy is "fan_in", "fan_out", or "churn". topN=0 means all.
+// churn, nesting, and symbol count. sortBy is "fan_in", "fan_out", "churn", or "nesting".
+// topN=0 means all.
 func RenderCouplingTable(report *ContextReport, sortBy string, topN int) string {
 	fanIn := make(map[string]int)
 	fanOut := make(map[string]int)
@@ -55,11 +60,13 @@ func RenderCouplingTable(report *ContextReport, sortBy string, topN int) string 
 	}
 
 	type row struct {
-		Name     string
-		FanIn    int
-		FanOut   int
-		Churn    int
-		Symbols  int
+		Name       string
+		FanIn      int
+		FanOut     int
+		LOC        int
+		Churn      int
+		Symbols    int
+		MaxNesting int
 	}
 
 	rows := make([]row, 0, len(report.Architecture.Services))
@@ -68,11 +75,13 @@ func RenderCouplingTable(report *ContextReport, sortBy string, topN int) string 
 		fo := fanOut[svc.Name]
 		if fi > 0 || fo > 0 {
 			rows = append(rows, row{
-				Name:    svc.Name,
-				FanIn:   fi,
-				FanOut:  fo,
-				Churn:   svc.Churn,
-				Symbols: len(svc.Symbols),
+				Name:       svc.Name,
+				FanIn:      fi,
+				FanOut:     fo,
+				LOC:        svc.LOC,
+				Churn:      svc.Churn,
+				Symbols:    len(svc.Symbols),
+				MaxNesting: svc.MaxNesting,
 			})
 		}
 	}
@@ -82,6 +91,10 @@ func RenderCouplingTable(report *ContextReport, sortBy string, topN int) string 
 		sort.Slice(rows, func(i, j int) bool { return rows[i].FanOut > rows[j].FanOut })
 	case "churn":
 		sort.Slice(rows, func(i, j int) bool { return rows[i].Churn > rows[j].Churn })
+	case "nesting":
+		sort.Slice(rows, func(i, j int) bool { return rows[i].MaxNesting > rows[j].MaxNesting })
+	case "loc":
+		sort.Slice(rows, func(i, j int) bool { return rows[i].LOC > rows[j].LOC })
 	default:
 		sort.Slice(rows, func(i, j int) bool { return rows[i].FanIn > rows[j].FanIn })
 	}
@@ -100,16 +113,18 @@ func RenderCouplingTable(report *ContextReport, sortBy string, topN int) string 
 		}
 	}
 
-	fmt.Fprintf(&b, "%-*s  %6s  %7s  %5s  %7s\n", nameW, "Package", "Fan-In", "Fan-Out", "Churn", "Symbols")
-	fmt.Fprintf(&b, "%s  %s  %s  %s  %s\n",
+	fmt.Fprintf(&b, "%-*s  %6s  %7s  %5s  %5s  %7s  %7s\n", nameW, "Package", "Fan-In", "Fan-Out", "LOC", "Churn", "MaxNest", "Symbols")
+	fmt.Fprintf(&b, "%s  %s  %s  %s  %s  %s  %s\n",
 		strings.Repeat("-", nameW),
 		strings.Repeat("-", 6),
 		strings.Repeat("-", 7),
 		strings.Repeat("-", 5),
+		strings.Repeat("-", 5),
+		strings.Repeat("-", 7),
 		strings.Repeat("-", 7))
 
 	for _, r := range rows {
-		fmt.Fprintf(&b, "%-*s  %6d  %7d  %5d  %7d\n", nameW, r.Name, r.FanIn, r.FanOut, r.Churn, r.Symbols)
+		fmt.Fprintf(&b, "%-*s  %6d  %7d  %5d  %5d  %7d  %7d\n", nameW, r.Name, r.FanIn, r.FanOut, r.LOC, r.Churn, r.MaxNesting, r.Symbols)
 	}
 
 	return b.String()

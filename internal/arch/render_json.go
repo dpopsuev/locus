@@ -20,12 +20,15 @@ type jsonReport struct {
 }
 
 type jsonComponent struct {
-	Name    string       `json:"name"`
-	Package string       `json:"package,omitempty"`
-	FanIn   int          `json:"fan_in"`
-	FanOut  int          `json:"fan_out"`
-	Churn   int          `json:"churn,omitempty"`
-	Symbols []jsonSymbol `json:"symbols,omitempty"`
+	Name       string       `json:"name"`
+	Package    string       `json:"package,omitempty"`
+	FanIn      int          `json:"fan_in"`
+	FanOut     int          `json:"fan_out"`
+	LOC        int          `json:"loc,omitempty"`
+	Churn      int          `json:"churn,omitempty"`
+	MaxNesting int          `json:"max_nesting,omitempty"`
+	AvgNesting float64      `json:"avg_nesting,omitempty"`
+	Symbols    []jsonSymbol `json:"symbols,omitempty"`
 }
 
 type jsonSymbol struct {
@@ -54,11 +57,14 @@ func RenderJSON(report *ContextReport) ([]byte, error) {
 	components := make([]jsonComponent, 0, len(report.Architecture.Services))
 	for _, svc := range report.Architecture.Services {
 		c := jsonComponent{
-			Name:    svc.Name,
-			Package: svc.Package,
-			FanIn:   fanIn[svc.Name],
-			FanOut:  fanOut[svc.Name],
-			Churn:   svc.Churn,
+			Name:       svc.Name,
+			Package:    svc.Package,
+			FanIn:      fanIn[svc.Name],
+			FanOut:     fanOut[svc.Name],
+			LOC:        svc.LOC,
+			Churn:      svc.Churn,
+			MaxNesting: svc.MaxNesting,
+			AvgNesting: svc.AvgNesting,
 		}
 		for _, sym := range svc.Symbols {
 			c.Symbols = append(c.Symbols, jsonSymbol{Name: sym, Kind: "symbol"})

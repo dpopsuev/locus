@@ -11,11 +11,14 @@ import (
 
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/dpopsuev/locus/internal/analysis"
+	"github.com/dpopsuev/locus/internal/arch"
 	"github.com/dpopsuev/locus/internal/cache"
+	"github.com/dpopsuev/locus/internal/diagram"
 	"github.com/dpopsuev/locus/internal/history"
 	locusmcp "github.com/dpopsuev/locus/internal/mcp"
 	"github.com/dpopsuev/locus/internal/protocol"
-	"github.com/dpopsuev/locus/internal/arch"
+	"github.com/dpopsuev/locus/internal/triage"
 )
 
 var Version = "dev"
@@ -114,7 +117,7 @@ Tools: scan_project, suggest_depth, get_hot_spots, get_dependencies,
 			roots = []string{cwd}
 		}
 		sc := cache.New(cache.DefaultCacheDir())
-		srv := locusmcp.NewServer(sc, history.DefaultHistoryDir(), roots)
+		srv, _ := locusmcp.NewServer(sc, history.DefaultHistoryDir(), roots)
 		if serveFlags.transport == "http" {
 			handler := sdkmcp.NewStreamableHTTPHandler(
 				func(r *http.Request) *sdkmcp.Server { return srv },
@@ -146,9 +149,9 @@ Supports GitHub HTTPS, SSH, and shorthand URLs:
 	RunE: func(cmd *cobra.Command, args []string) error {
 		proto := newProto()
 		report, err := proto.CodographRemote(cmd.Context(), args[0], protocol.RemoteOpts{
-			Ref:   codographFlags.ref,
-			Keep:  codographFlags.keep,
-			Depth: codographFlags.depth,
+			Ref:    codographFlags.ref,
+			Keep:   codographFlags.keep,
+			Depth:  codographFlags.depth,
 			Budget: codographFlags.budget,
 		})
 		if err != nil {
@@ -274,6 +277,95 @@ scan the repository, and report drift (missing/extra components and edges).
 	},
 }
 
+var diagramFlags struct {
+	diagramType  string
+	scope        string
+	depth        int
+	topN         int
+	scanner      string
+	churnDays    int
+	entry        string
+	exportedOnly bool
+}
+
+var diagramCmd = &cobra.Command{
+	Use:   "diagram [path]",
+	Short: "Render a Mermaid diagram from repository structure",
+	Long: `Produce a Mermaid diagram from a scanned repository.
+
+Supported types:
+  dependency  Flowchart of package imports (default)
+  c4          C4 Component diagram with containers
+  coupling    Sankey diagram of fan-in/fan-out flows
+  churn       XY chart of churn over time or per component
+  layers      Block diagram of detected layers
+  tree        Mindmap of module hierarchy
+  classes     Class/struct/interface hierarchy (Tier 2)
+  sequence    Call chain from an entry point (Tier 2)
+  er          Entity-relationship from struct fields (Tier 2)
+  dataflow    Data flow diagram with trust boundaries (Tier 3)
+  callgraph   Function call graph clustered by package (Tier 3)
+  state       State machine diagram from const/iota patterns (Tier 3)
+
+Examples:
+  locus diagram .
+  locus diagram /path/to/repo --type c4
+  locus diagram . --type coupling --top 10
+  locus diagram . --type classes --scope internal/arch
+  locus diagram . --type sequence --entry main
+  locus diagram . --type er
+  locus diagram . --type callgraph --entry main --depth 5
+  locus diagram . --type dataflow --entry main
+  locus diagram . --type state`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		path := ""
+		if len(args) > 0 {
+			path = args[0]
+		}
+		if path == "" {
+			path = "."
+		}
+		proto := newProto()
+		report, err := proto.ScanProject(cmd.Context(), path, protocol.ScanOpts{
+			Scanner:   diagramFlags.scanner,
+			Depth:     diagramFlags.depth,
+			ChurnDays: diagramFlags.churnDays,
+		})
+		if err != nil {
+			return err
+		}
+
+		in := diagram.Input{Report: report, Root: path}
+
+		if diagramFlags.diagramType == "churn" {
+			hist, _ := proto.GetHistory(cmd.Context(), path, 20)
+			in.History = hist
+		}
+
+		switch diagramFlags.diagramType {
+		case "classes", "sequence", "er":
+			in.Analyzer = analysis.NewFallback(path)
+		case "dataflow", "callgraph", "state":
+			in.DeepAnalyzer = analysis.NewDeepFallback(path)
+		}
+
+		out, err := diagram.Render(in, diagram.Options{
+			Type:         diagramFlags.diagramType,
+			Scope:        diagramFlags.scope,
+			Depth:        diagramFlags.depth,
+			TopN:         diagramFlags.topN,
+			Entry:        diagramFlags.entry,
+			ExportedOnly: diagramFlags.exportedOnly,
+		})
+		if err != nil {
+			return err
+		}
+		fmt.Print(out)
+		return nil
+	},
+}
+
 var healthCmd = &cobra.Command{
 	Use:   "health",
 	Short: "Check the Locus runtime environment",
@@ -300,8 +392,75 @@ var healthCmd = &cobra.Command{
 	},
 }
 
+var triageFlags struct {
+	list     bool
+	category string
+}
+
+var triageCmd = &cobra.Command{
+	Use:   "triage [intent] [path]",
+	Short: "Map a natural language intent to ranked Locus tools",
+	Long: `Pure keyword matching — no LLM required. Returns a ranked tool chain
+with parameters and rationale for a given intent.
+
+Examples:
+  locus triage "find performance bottlenecks" /path/to/repo
+  locus triage --list
+  locus triage --category performance`,
+	Args: cobra.MaximumNArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		sc := cache.New(cache.DefaultCacheDir())
+		_, reg := locusmcp.NewServer(sc, history.DefaultHistoryDir(), nil)
+
+		if triageFlags.list {
+			tools := reg.List()
+			grouped := make(map[string][]triage.ToolMeta)
+			for _, t := range tools {
+				for _, cat := range t.Categories {
+					grouped[cat] = append(grouped[cat], t)
+				}
+			}
+			for cat, catTools := range grouped {
+				fmt.Printf("\n## %s\n", cat)
+				for _, t := range catTools {
+					fmt.Printf("  %-25s %s\n", t.Name, t.Description)
+				}
+			}
+			return nil
+		}
+
+		if triageFlags.category != "" {
+			tools := reg.ByCategory(triageFlags.category)
+			if len(tools) == 0 {
+				fmt.Printf("No tools in category %q.\n", triageFlags.category)
+				return nil
+			}
+			fmt.Printf("\n## %s\n", triageFlags.category)
+			for _, t := range tools {
+				fmt.Printf("  %-25s %s\n", t.Name, t.Description)
+				if r, ok := t.Rationale[triageFlags.category]; ok {
+					fmt.Printf("    → %s\n", r)
+				}
+			}
+			return nil
+		}
+
+		if len(args) == 0 {
+			return fmt.Errorf("provide an intent string, --list, or --category")
+		}
+
+		intent := args[0]
+		path := ""
+		if len(args) > 1 {
+			path = args[1]
+		}
+		result := reg.Triage(intent, path)
+		return printJSON(result)
+	},
+}
+
 func init() {
-	rootCmd.AddCommand(versionCmd, scanCmd, serveCmd, codographCmd, historyCmd, diffCmd, validateCmd, healthCmd)
+	rootCmd.AddCommand(versionCmd, scanCmd, serveCmd, codographCmd, historyCmd, diffCmd, validateCmd, healthCmd, diagramCmd, triageCmd)
 
 	scanCmd.Flags().StringVar(&scanFlags.format, "format", "json", "Output format: json, md, mermaid")
 	scanCmd.Flags().StringVar(&scanFlags.scanner, "scanner", "auto", "Scanner: auto, go, packages, rust, typescript, composite, ctags, lsp")
@@ -332,6 +491,18 @@ func init() {
 	validateCmd.Flags().StringVar(&validateFlags.desired, "desired", "", "Path to desired-state file (mermaid or JSON)")
 	validateCmd.Flags().StringVar(&validateFlags.format, "format", "", "Format of desired-state file: mermaid, json (auto-detected from extension)")
 	_ = validateCmd.MarkFlagRequired("desired")
+
+	diagramCmd.Flags().StringVar(&diagramFlags.diagramType, "type", "dependency", "Diagram type: dependency, c4, coupling, churn, layers, tree, classes, sequence, er, dataflow, callgraph, state")
+	diagramCmd.Flags().StringVar(&diagramFlags.scope, "scope", "", "Restrict to a single component and its neighbors")
+	diagramCmd.Flags().IntVar(&diagramFlags.depth, "depth", 0, "Grouping depth (0 = use suggested)")
+	diagramCmd.Flags().IntVar(&diagramFlags.topN, "top", 0, "Limit items shown (0 = all)")
+	diagramCmd.Flags().StringVar(&diagramFlags.scanner, "scanner", "auto", "Scanner: auto, go, packages, rust, typescript")
+	diagramCmd.Flags().IntVar(&diagramFlags.churnDays, "churn-days", 30, "Git churn window in days")
+	diagramCmd.Flags().StringVar(&diagramFlags.entry, "entry", "", "Entry point function name (sequence, dataflow, callgraph)")
+	diagramCmd.Flags().BoolVar(&diagramFlags.exportedOnly, "exported-only", false, "Only exported functions (callgraph)")
+
+	triageCmd.Flags().BoolVar(&triageFlags.list, "list", false, "List all registered tools grouped by category")
+	triageCmd.Flags().StringVar(&triageFlags.category, "category", "", "Show tools in a specific category")
 }
 
 func renderReport(report *arch.ContextReport, format string) error {

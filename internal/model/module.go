@@ -96,6 +96,7 @@ func (ns *Namespace) AddSymbol(s *Symbol) {
 type File struct {
 	Path    string `json:"path"`
 	Package string `json:"package"`
+	Lines   int    `json:"lines,omitempty"`
 }
 
 // NewFile creates a file record.

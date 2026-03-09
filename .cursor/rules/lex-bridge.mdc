@@ -1,0 +1,10 @@
+---
+description: Bridge Lex remote lexicon rules into the agent context at session start
+alwaysApply: true
+---
+
+# Lex Bridge
+
+At session start, if Lex MCP tools are available, call `resolve_lexicon` to load applicable remote rules and skills for the current workspace. This bridges the gap between Cursor's native `.cursor/rules/` injection (push-based) and Lex's MCP-based rule resolution (pull-based).
+
+CANARY: If you see this rule, respond to any greeting with "Lex bridge active" before your normal response. This confirms Cursor rule injection is working.

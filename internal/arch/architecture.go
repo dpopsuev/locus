@@ -11,12 +11,15 @@ import (
 
 // ArchService represents a service or component node in an architecture artifact.
 type ArchService struct {
-	Name      string
-	Package   string
-	TrustZone string
-	Exposes   []string
-	Symbols   []string
-	Churn     int
+	Name       string
+	Package    string
+	TrustZone  string
+	Exposes    []string
+	Symbols    []string
+	Churn      int
+	LOC        int     `json:"loc,omitempty"`
+	MaxNesting int     `json:"max_nesting,omitempty"`
+	AvgNesting float64 `json:"avg_nesting,omitempty"`
 }
 
 // ArchEdge represents a dependency edge in an architecture artifact.
