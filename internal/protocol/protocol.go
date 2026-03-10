@@ -1,14 +1,18 @@
 package protocol
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
+	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/arch"
 	"github.com/dpopsuev/locus/internal/cache"
 	"github.com/dpopsuev/locus/internal/cursor"
@@ -22,10 +26,18 @@ type Protocol struct {
 	cache      *cache.ScanCache
 	historyDir string
 	workspaces []string
+	pathMapper *PathMapper
 }
 
 func New(sc *cache.ScanCache, historyDir string, workspaces []string) *Protocol {
-	return &Protocol{cache: sc, historyDir: historyDir, workspaces: workspaces}
+	return NewWithPathMapper(sc, historyDir, workspaces, "")
+}
+
+// NewWithPathMapper creates a Protocol with optional path mapping for containerized runs.
+// pathMapSpec is the LOCUS_PATH_MAP env value (host:container pairs, comma-separated). Empty means no mapping.
+func NewWithPathMapper(sc *cache.ScanCache, historyDir string, workspaces []string, pathMapSpec string) *Protocol {
+	pm := NewPathMapper(pathMapSpec)
+	return &Protocol{cache: sc, historyDir: historyDir, workspaces: workspaces, pathMapper: pm}
 }
 
 // ScanOpts controls a local scan.
@@ -352,6 +364,36 @@ func (p *Protocol) GetSkills(_ context.Context, path string) ([]cursor.Skill, er
 	return cursor.ReadSkills(path)
 }
 
+func (p *Protocol) GetConventions(_ context.Context, path string) (*analysis.ConventionReport, error) {
+	path = p.resolvePath(path)
+	return analysis.DetectConventions(path)
+}
+
+func (p *Protocol) GetImpact(_ context.Context, path, component string) (*ImpactResult, error) {
+	path = p.resolvePath(path)
+	if component == "" {
+		return nil, fmt.Errorf("component is required")
+	}
+	report, err := p.getOrScan(path)
+	if err != nil {
+		return nil, err
+	}
+	return ComputeImpact(
+		report.Architecture.Edges,
+		report.Architecture.Services,
+		component,
+	)
+}
+
+func (p *Protocol) GetGaps(_ context.Context, path string) (*GapReport, error) {
+	path = p.resolvePath(path)
+	report, err := p.getOrScan(path)
+	if err != nil {
+		return nil, err
+	}
+	return DetectGaps(report, path)
+}
+
 // Workspaces returns the configured workspace root paths.
 func (p *Protocol) Workspaces() []string {
 	return p.workspaces
@@ -405,6 +447,11 @@ func (p *Protocol) resolvePath(path string) string {
 			return p.workspaces[0]
 		}
 		return "."
+	}
+
+	// Translate host path to container path when running in a container.
+	if p.pathMapper != nil {
+		path = p.pathMapper.ToContainer(path)
 	}
 
 	abs, err := filepath.Abs(path)
@@ -504,4 +551,230 @@ func checkGit() HealthCheck {
 		return HealthCheck{Name: "git", OK: false, Detail: "git not found on PATH"}
 	}
 	return HealthCheck{Name: "git", OK: true, Detail: strings.TrimSpace(string(out))}
+}
+
+// --- Evolution ---
+
+// EvolutionOpts controls an architecture evolution scan.
+type EvolutionOpts struct {
+	Path      string `json:"path"`
+	OldestRef string `json:"oldest_ref,omitempty"`
+	NewestRef string `json:"newest_ref,omitempty"`
+	Steps     int    `json:"steps,omitempty"`
+	Stride    int    `json:"stride,omitempty"`
+	Depth     int    `json:"depth,omitempty"`
+}
+
+// EvolutionResult is the timeline of architecture snapshots.
+type EvolutionResult struct {
+	Path    string          `json:"path"`
+	Steps   []EvolutionStep `json:"steps"`
+	Summary string          `json:"summary"`
+}
+
+// EvolutionStep is a single point in the evolution timeline.
+type EvolutionStep struct {
+	Index      int                    `json:"index"`
+	SHA        string                 `json:"sha"`
+	ShortSHA   string                 `json:"short_sha"`
+	Message    string                 `json:"message"`
+	Date       string                 `json:"date"`
+	Components int                    `json:"components"`
+	Edges      int                    `json:"edges"`
+	TotalLOC   int                    `json:"total_loc"`
+	Diff       *history.CodographDiff `json:"diff,omitempty"`
+}
+
+// CommitMeta holds metadata for a single git commit.
+type CommitMeta struct {
+	SHA     string
+	Message string
+	Date    string
+}
+
+// listCommits enumerates commits in a range or the last N commits.
+// Range mode (oldest != ""): git log --reverse oldest^..newest (inclusive both ends).
+// Steps mode (limit > 0): git log --reverse -n limit newest.
+func listCommits(repoPath, oldest, newest string, limit int) ([]CommitMeta, error) {
+	if newest == "" {
+		newest = "HEAD"
+	}
+	args := []string{"log", "--reverse", "--format=%H||%aI||%s"}
+	if oldest != "" {
+		args = append(args, oldest+"^.."+newest)
+	} else if limit > 0 {
+		args = append(args, "-n", strconv.Itoa(limit), newest)
+	} else {
+		return nil, fmt.Errorf("either oldest_ref or steps is required")
+	}
+
+	cmd := exec.Command("git", args...)
+	cmd.Dir = repoPath
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("git log: %w", err)
+	}
+
+	var commits []CommitMeta
+	scanner := bufio.NewScanner(bytes.NewReader(out))
+	for scanner.Scan() {
+		line := scanner.Text()
+		parts := strings.SplitN(line, "||", 3)
+		if len(parts) < 3 {
+			continue
+		}
+		commits = append(commits, CommitMeta{
+			SHA:     parts[0],
+			Message: parts[2],
+			Date:    parts[1][:10], // YYYY-MM-DD from ISO 8601
+		})
+	}
+	return commits, nil
+}
+
+// sampleCommits picks every stride-th commit, always including the first and last.
+func sampleCommits(commits []CommitMeta, stride int) []CommitMeta {
+	if stride <= 1 || len(commits) <= 2 {
+		return commits
+	}
+	var sampled []CommitMeta
+	for i := 0; i < len(commits); i += stride {
+		sampled = append(sampled, commits[i])
+	}
+	if sampled[len(sampled)-1].SHA != commits[len(commits)-1].SHA {
+		sampled = append(sampled, commits[len(commits)-1])
+	}
+	return sampled
+}
+
+func totalLOC(report *arch.ContextReport) int {
+	total := 0
+	for _, svc := range report.Architecture.Services {
+		total += svc.LOC
+	}
+	return total
+}
+
+// Evolution scans architecture at multiple commits to show structural growth.
+func (p *Protocol) Evolution(_ context.Context, opts EvolutionOpts) (*EvolutionResult, error) {
+	path := p.resolvePath(opts.Path)
+
+	commits, err := listCommits(path, opts.OldestRef, opts.NewestRef, opts.Steps)
+	if err != nil {
+		return nil, fmt.Errorf("enumerate commits: %w", err)
+	}
+	if len(commits) == 0 {
+		return nil, fmt.Errorf("no commits found in range")
+	}
+
+	commits = sampleCommits(commits, opts.Stride)
+
+	currentBranch := getCurrentBranch(path)
+	needsRestore := false
+	defer func() {
+		if needsRestore && currentBranch != "" {
+			checkoutRef(path, currentBranch)
+		}
+	}()
+
+	var steps []EvolutionStep
+	var prevReport *arch.ContextReport
+
+	for i, commit := range commits {
+		report, cached, cacheErr := p.cache.Get(path, commit.SHA)
+		if cacheErr != nil || !cached {
+			if !needsRestore {
+				needsRestore = true
+			}
+			if err := checkoutRef(path, commit.SHA); err != nil {
+				return nil, fmt.Errorf("checkout %s: %w", commit.SHA[:8], err)
+			}
+			report, err = arch.ScanAndBuild(path, arch.ScanOpts{
+				ExcludeTests: true,
+				ChurnDays:    30,
+				Depth:        opts.Depth,
+			})
+			if err != nil {
+				return nil, fmt.Errorf("scan %s: %w", commit.SHA[:8], err)
+			}
+			_ = p.cache.Put(path, commit.SHA, report)
+		}
+
+		step := EvolutionStep{
+			Index:      i,
+			SHA:        commit.SHA,
+			ShortSHA:   commit.SHA[:7],
+			Message:    commit.Message,
+			Date:       commit.Date,
+			Components: len(report.Architecture.Services),
+			Edges:      len(report.Architecture.Edges),
+			TotalLOC:   totalLOC(report),
+		}
+		if prevReport != nil {
+			step.Diff = history.DiffReports(prevReport, report)
+		}
+		steps = append(steps, step)
+		prevReport = report
+	}
+
+	result := &EvolutionResult{
+		Path:  path,
+		Steps: steps,
+	}
+	result.Summary = buildEvolutionSummary(steps)
+	return result, nil
+}
+
+func buildEvolutionSummary(steps []EvolutionStep) string {
+	if len(steps) == 0 {
+		return "no steps"
+	}
+	first := steps[0]
+	last := steps[len(steps)-1]
+
+	pct := func(old, new int) string {
+		if old == 0 {
+			if new == 0 {
+				return "0%"
+			}
+			return "new"
+		}
+		return fmt.Sprintf("%+.0f%%", float64(new-old)/float64(old)*100)
+	}
+
+	return fmt.Sprintf("Growth: %d -> %d components (%s), %d -> %d edges (%s), %d -> %d LOC (%s)",
+		first.Components, last.Components, pct(first.Components, last.Components),
+		first.Edges, last.Edges, pct(first.Edges, last.Edges),
+		first.TotalLOC, last.TotalLOC, pct(first.TotalLOC, last.TotalLOC),
+	)
+}
+
+// RenderEvolutionTable renders the evolution result as a markdown table.
+func RenderEvolutionTable(r *EvolutionResult) string {
+	var b strings.Builder
+	basename := filepath.Base(r.Path)
+	strideInfo := ""
+	if len(r.Steps) > 0 {
+		strideInfo = fmt.Sprintf("%d steps", len(r.Steps))
+	}
+	fmt.Fprintf(&b, "## Architecture Evolution: %s (%s)\n\n", basename, strideInfo)
+	fmt.Fprintln(&b, "| # | SHA | Date | Message | Pkgs | Edges | LOC | Delta |")
+	fmt.Fprintln(&b, "|---|---------|------------|----------------------|------|-------|------|------------------------|")
+
+	for _, s := range r.Steps {
+		delta := "(basis)"
+		if s.Diff != nil {
+			delta = s.Diff.Summary
+		}
+		msg := s.Message
+		if len(msg) > 40 {
+			msg = msg[:37] + "..."
+		}
+		fmt.Fprintf(&b, "| %d | %s | %s | %s | %d | %d | %d | %s |\n",
+			s.Index, s.ShortSHA, s.Date, msg,
+			s.Components, s.Edges, s.TotalLOC, delta)
+	}
+
+	fmt.Fprintf(&b, "\n%s\n", r.Summary)
+	return b.String()
 }

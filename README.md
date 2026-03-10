@@ -7,11 +7,12 @@ Spatial context bus for AI agents. Point it at any repository and get architectu
 ### Container (recommended)
 
 ```bash
-# podman or docker
+# podman or docker -- mount your workspace for local scanning
 podman run -d --name locus \
   -p 8081:8081 \
   -v locus-data:/data \
-  quay.io/dpopsuev/locus:0.1.0
+  -v ~/Workspace:/workspace:ro \
+  quay.io/dpopsuev/locus:latest
 ```
 
 ### Binary
@@ -79,6 +80,8 @@ locus hot-spots .             # high fan-in + high churn components
 locus coupling .              # coupling table: fan-in, fan-out, churn, symbols
 locus deps . --component internal/arch   # fan-in/fan-out for one component
 locus cycles .                # circular dependencies and layer violations
+locus evolution .             # architecture growth across commits
+locus health                  # server health check
 ```
 
 ### 3. Diagram
@@ -163,19 +166,18 @@ block-beta
 
 ```mermaid
 graph TD
-    cmd_locus["cmd/locus [churn:4]"]
-    internal_analysis["internal/analysis"]
-    internal_arch["internal/arch [churn:17]"]
+    cmd_locus["cmd/locus [churn:5]"]
+    internal_analysis["internal/analysis [churn:15]"]
+    internal_arch["internal/arch [churn:21]"]
     internal_cache["internal/cache [churn:4]"]
     internal_cursor["internal/cursor [churn:2]"]
-    internal_diagram["internal/diagram"]
+    internal_diagram["internal/diagram [churn:16]"]
     internal_history["internal/history [churn:8]"]
-    internal_mcp["internal/mcp [churn:4]"]
-    internal_model["internal/model [churn:2]"]
-    internal_protocol["internal/protocol [churn:3]"]
+    internal_mcp["internal/mcp [churn:5]"]
+    internal_model["internal/model [churn:3]"]
+    internal_protocol["internal/protocol [churn:5]"]
     internal_remote["internal/remote [churn:3]"]
     internal_survey["internal/survey [churn:20]"]
-    internal_triage["internal/triage"]
     cmd_locus -->|"2"| internal_analysis
     cmd_locus -->|"5"| internal_arch
     cmd_locus -->|"2"| internal_cache
@@ -199,12 +201,12 @@ graph TD
     internal_mcp -->|"2"| internal_arch
     internal_mcp -->|"1"| internal_cache
     internal_mcp -->|"14"| internal_diagram
-    internal_mcp -->|"29"| internal_protocol
+    internal_mcp -->|"43"| internal_protocol
     internal_mcp -->|"12"| internal_triage
-    internal_protocol -->|"46"| internal_arch
+    internal_protocol -->|"47"| internal_arch
     internal_protocol -->|"6"| internal_cache
     internal_protocol -->|"4"| internal_cursor
-    internal_protocol -->|"8"| internal_history
+    internal_protocol -->|"9"| internal_history
     internal_protocol -->|"11"| internal_remote
     internal_remote -->|"7"| internal_arch
     internal_survey -->|"46"| internal_model
@@ -219,21 +221,21 @@ C4Component
     title github.com/dpopsuev/locus
 
     Container_Boundary(cmd_boundary, "cmd") {
-        Component(cmd_locus, "cmd/locus", "package", "1 symbols, churn 4")
+        Component(cmd_locus, "cmd/locus", "package", "1 symbols, churn 5")
     }
     Container_Boundary(internal_boundary, "internal") {
-        Component(internal_analysis, "internal/analysis", "package", "35 symbols")
-        Component(internal_arch, "internal/arch", "package", "54 symbols, churn 17")
+        Component(internal_analysis, "internal/analysis", "package", "35 symbols, churn 15")
+        Component(internal_arch, "internal/arch", "package", "54 symbols, churn 21")
         Component(internal_cache, "internal/cache", "package", "5 symbols, churn 4")
         Component(internal_cursor, "internal/cursor", "package", "4 symbols, churn 2")
-        Component(internal_diagram, "internal/diagram", "package", "4 symbols")
+        Component(internal_diagram, "internal/diagram", "package", "4 symbols, churn 16")
         Component(internal_history, "internal/history", "package", "12 symbols, churn 8")
-        Component(internal_mcp, "internal/mcp", "package", "1 symbols, churn 4")
-        Component(internal_model, "internal/model", "package", "45 symbols, churn 2")
-        Component(internal_protocol, "internal/protocol", "package", "13 symbols, churn 3")
+        Component(internal_mcp, "internal/mcp", "package", "1 symbols, churn 5")
+        Component(internal_model, "internal/model", "package", "45 symbols, churn 3")
+        Component(internal_protocol, "internal/protocol", "package", "18 symbols, churn 5")
         Component(internal_remote, "internal/remote", "package", "6 symbols, churn 3")
         Component(internal_survey, "internal/survey", "package", "12 symbols, churn 20")
-        Component(internal_triage, "internal/triage", "package", "6 symbols")
+        Component(internal_triage, "internal/triage", "package", "6 symbols, churn 3")
     }
 
     Rel(cmd_locus, internal_analysis, "uses")
@@ -255,7 +257,7 @@ mindmap
     root(("locus"))
         cmd (1 sym)
             cmd/locus (1 sym)
-        internal (197 sym)
+        internal (202 sym)
             internal/analysis (35 sym)
             internal/arch (54 sym)
             internal/cache (5 sym)
@@ -264,7 +266,7 @@ mindmap
             internal/history (12 sym)
             internal/mcp (1 sym)
             internal/model (45 sym)
-            internal/protocol (13 sym)
+            internal/protocol (18 sym)
             internal/remote (6 sym)
             internal/survey (12 sym)
             internal/triage (6 sym)
@@ -282,10 +284,10 @@ config:
 ---
 sankey-beta
 
+internal/protocol,internal/arch,47
 internal/survey,internal/model,46
-internal/protocol,internal/arch,46
 internal/diagram,internal/analysis,45
-internal/mcp,internal/protocol,29
+internal/mcp,internal/protocol,43
 cmd/locus,internal/protocol,25
 internal/diagram,internal/arch,22
 internal/arch,internal/model,22
@@ -294,7 +296,7 @@ cmd/locus,internal/diagram,14
 internal/history,internal/arch,13
 internal/mcp,internal/triage,12
 internal/protocol,internal/remote,11
-internal/protocol,internal/history,8
+internal/protocol,internal/history,9
 cmd/locus,internal/triage,8
 internal/remote,internal/arch,7
 internal/protocol,internal/cache,6
@@ -323,10 +325,10 @@ cmd/locus,internal/history,1
 ```mermaid
 xychart-beta
     title "Codograph history"
-    x-axis ["Mar 09", "Mar 09", "Mar 09", "Mar 09", "Mar 09", "Mar 09", "Mar 09", "Mar 09", "Mar 09", "Mar 09", "Mar 09", "Mar 09", "Mar 09", "Mar 09"]
+    x-axis ["Mar 09", "Mar 09", "Mar 09", "Mar 09", "Mar 09", "Mar 09", "Mar 09", "Mar 09", "Mar 09", "Mar 09", "Mar 09", "Mar 09", "Mar 09", "Mar 09", "Mar 10"]
     y-axis "Count"
-    line [11, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13]
-    line [24, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32]
+    line [11, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13]
+    line [24, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32]
 ```
 
 ### State Machine Detection
@@ -373,30 +375,32 @@ locus diagram . --type dataflow --entry main
 
 Components with the highest combination of fan-in (many dependents) and churn (frequent changes) -- the riskiest parts of the codebase:
 
-| Component | Fan-In | Churn |
-|-----------|--------|-------|
-| internal/arch | 7 | 17 |
-| internal/history | 3 | 8 |
+| Component | Fan-In | Churn | Nesting |
+|-----------|--------|-------|---------|
+| internal/arch | 7 | 21 | 4 |
+| internal/survey | 3 | 20 | 7 |
+| internal/analysis | 4 | 15 | 7 |
+| internal/history | 3 | 8 | 2 |
 
 ### Components
 
 > `locus scan . --format md` (Components section)
 
-| Component | Package | Churn |
-|-----------|----------|-------|
-| cmd/locus | `github.com/dpopsuev/locus/cmd/locus` | 4 |
-| internal/analysis | `github.com/dpopsuev/locus/internal/analysis` | 0 |
-| internal/arch | `github.com/dpopsuev/locus/internal/arch` | 17 |
-| internal/cache | `github.com/dpopsuev/locus/internal/cache` | 4 |
-| internal/cursor | `github.com/dpopsuev/locus/internal/cursor` | 2 |
-| internal/diagram | `github.com/dpopsuev/locus/internal/diagram` | 0 |
-| internal/history | `github.com/dpopsuev/locus/internal/history` | 8 |
-| internal/mcp | `github.com/dpopsuev/locus/internal/mcp` | 4 |
-| internal/model | `github.com/dpopsuev/locus/internal/model` | 2 |
-| internal/protocol | `github.com/dpopsuev/locus/internal/protocol` | 3 |
-| internal/remote | `github.com/dpopsuev/locus/internal/remote` | 3 |
-| internal/survey | `github.com/dpopsuev/locus/internal/survey` | 20 |
-| internal/triage | `github.com/dpopsuev/locus/internal/triage` | 0 |
+| Component | Package | Churn | Symbols |
+|-----------|----------|-------|---------|
+| cmd/locus | `github.com/dpopsuev/locus/cmd/locus` | 5 | 1 |
+| internal/analysis | `github.com/dpopsuev/locus/internal/analysis` | 15 | 48 |
+| internal/arch | `github.com/dpopsuev/locus/internal/arch` | 21 | 75 |
+| internal/cache | `github.com/dpopsuev/locus/internal/cache` | 4 | 14 |
+| internal/cursor | `github.com/dpopsuev/locus/internal/cursor` | 2 | 8 |
+| internal/diagram | `github.com/dpopsuev/locus/internal/diagram` | 16 | 25 |
+| internal/history | `github.com/dpopsuev/locus/internal/history` | 8 | 22 |
+| internal/mcp | `github.com/dpopsuev/locus/internal/mcp` | 5 | 1 |
+| internal/model | `github.com/dpopsuev/locus/internal/model` | 3 | 53 |
+| internal/protocol | `github.com/dpopsuev/locus/internal/protocol` | 5 | 31 |
+| internal/remote | `github.com/dpopsuev/locus/internal/remote` | 3 | 9 |
+| internal/survey | `github.com/dpopsuev/locus/internal/survey` | 20 | 47 |
+| internal/triage | `github.com/dpopsuev/locus/internal/triage` | 3 | 15 |
 
 ## Packages
 
@@ -404,7 +408,7 @@ Components with the highest combination of fan-in (many dependents) and churn (f
 |---|---|
 | `cmd/locus` | CLI entry point (Cobra). Every MCP tool has a CLI equivalent. |
 | `internal/mcp` | MCP server. Thin handlers that delegate to `protocol`. |
-| `internal/protocol` | All business logic. Both CLI and MCP call through this layer. |
+| `internal/protocol` | All business logic: scan, diff, coverage, cycles, evolution. Both CLI and MCP call through this layer. |
 | `internal/arch` | Architecture model: scan, render (JSON/Markdown/Mermaid), churn, hot spots, cycles, coverage, API surface. |
 | `internal/analysis` | Type analysis (classes, interfaces, field refs, call chains, nesting) and deep analysis (call graph, data flow, state machines) with LSP, Tree-sitter, and regex backends. |
 | `internal/diagram` | Mermaid diagram renderers for all 12 diagram types. |
@@ -437,6 +441,11 @@ Components with the highest combination of fan-in (many dependents) and churn (f
 | `get_api_surface` | Exported symbol counts and trust boundary crossings. |
 | `validate_architecture` | Diff desired-state architecture (Mermaid/JSON) against live scan. |
 | `render_diagram` | Mermaid diagrams: dependency, c4, coupling, churn, layers, tree, classes, sequence, er, dataflow, callgraph, state. |
+| `architecture_evolution` | Scan architecture at multiple commits to show structural growth over time. Returns timeline of component/edge/LOC counts with per-step diffs. |
+| `get_conventions` | Detect coding conventions: naming patterns, file structure, test patterns, config formats. |
+| `get_impact` | Change impact analysis: direct/transitive dependents, blast radius percentage, risk level. |
+| `get_knowledge_gaps` | Find undocumented or under-tested components based on codograph data. |
+| `health_check` | Server health summary: cache status, history availability, workspace roots. |
 | `triage` | Map natural language intent to ranked tool list (no LLM). |
 
 ## Triage
@@ -465,20 +474,22 @@ All tools grouped by category:
 
 | Category | Tools |
 |---|---|
-| architecture | `scan_project`, `suggest_depth`, `get_hot_spots`, `get_coupling_table`, `get_edge_list`, `codograph_remote`, `get_cycles`, `get_api_surface`, `validate_architecture`, `render_diagram` |
+| architecture | `scan_project`, `suggest_depth`, `get_hot_spots`, `get_coupling_table`, `get_edge_list`, `codograph_remote`, `get_cycles`, `get_api_surface`, `validate_architecture`, `render_diagram`, `architecture_evolution` |
 | onboarding | `scan_project`, `get_rules`, `get_skills`, `codograph_remote` |
 | performance | `get_hot_spots`, `get_coupling_table`, `get_cycles` |
 | refactoring | `get_hot_spots`, `get_dependencies` |
 | dependencies | `get_dependencies`, `get_coupling_table`, `get_edge_list`, `get_cycles` |
 | comparison | `diff_codographs`, `diff_branches` |
 | review | `diff_branches` |
-| history | `get_codograph_history` |
+| churn | `get_codograph_history`, `diff_codographs` |
+| history | `get_codograph_history`, `architecture_evolution` |
 | testing | `get_coverage` |
 | quality | `get_coverage` |
 | security | `get_api_surface` |
 | compliance | `validate_architecture` |
 | visualization | `render_diagram` |
 | governance | `get_rules` |
+| meta | `health_check`, `triage` |
 
 ## Supported Languages
 

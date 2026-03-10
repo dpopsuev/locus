@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"strings"
 
 	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/arch"
@@ -15,8 +17,10 @@ import (
 )
 
 func NewServer(sc *cache.ScanCache, historyDir string, workspaceRoots []string) (*sdkmcp.Server, *triage.Registry) {
+	pathMap := os.Getenv("LOCUS_PATH_MAP")
+	proto := protocol.NewWithPathMapper(sc, historyDir, workspaceRoots, pathMap)
 	srv := sdkmcp.NewServer(
-		&sdkmcp.Implementation{Name: "locus", Version: "0.1.0"},
+		&sdkmcp.Implementation{Name: "locus", Version: "0.1.1"},
 		&sdkmcp.ServerOptions{
 			Instructions: "Locus is a spatial context bus for AI agents. " +
 				"Point it at any repository to get architecture, dependency graph, churn, hot spots, and symbols. " +
@@ -24,7 +28,7 @@ func NewServer(sc *cache.ScanCache, historyDir string, workspaceRoots []string) 
 				"and codograph_remote for GitHub repos you don't have locally.",
 		},
 	)
-	h := &handler{proto: protocol.New(sc, historyDir, workspaceRoots)}
+	h := &handler{proto: proto}
 	reg := triage.New()
 
 	triage.AddTool(reg, srv, triage.ToolMeta{
@@ -99,6 +103,42 @@ func NewServer(sc *cache.ScanCache, historyDir string, workspaceRoots []string) 
 		},
 		Priority: 4,
 	}, noOut(h.handleGetSkills))
+
+	triage.AddTool(reg, srv, triage.ToolMeta{
+		Name:        "get_conventions",
+		Description: "Detect coding conventions from scanned codebase: naming (camelCase/snake_case), structure (cmd/, internal/, pkg/), test patterns, config files.",
+		Keywords:    []string{"convention", "style", "naming", "structure", "pattern"},
+		Categories:  []string{"onboarding", "governance"},
+		Rationale: map[string]string{
+			"onboarding":  "Learn project conventions before contributing",
+			"governance":  "Verify adherence to detected conventions",
+		},
+		Priority: 4,
+	}, noOut(h.handleGetConventions))
+
+	triage.AddTool(reg, srv, triage.ToolMeta{
+		Name:        "get_impact",
+		Description: "Compute transitive blast radius for a component change. Returns direct/transitive dependents, blast radius %, and risk level.",
+		Keywords:    []string{"impact", "blast", "radius", "change", "refactor", "dependent"},
+		Categories:  []string{"refactoring", "dependencies"},
+		Rationale: map[string]string{
+			"refactoring":   "Assess risk before changing a component",
+			"dependencies":  "See who is affected by a component change",
+		},
+		Priority: 2,
+	}, noOut(h.handleGetImpact))
+
+	triage.AddTool(reg, srv, triage.ToolMeta{
+		Name:        "get_knowledge_gaps",
+		Description: "Identify undocumented or under-tested components. Reports no tests, no docs, and high fan-in without tests as critical.",
+		Keywords:    []string{"gap", "docs", "tests", "coverage", "undocumented", "untested"},
+		Categories:  []string{"quality", "testing"},
+		Rationale: map[string]string{
+			"quality":  "Find components lacking documentation or tests",
+			"testing":  "Identify high-risk components without test coverage",
+		},
+		Priority: 2,
+	}, noOut(h.handleGetKnowledgeGaps))
 
 	triage.AddTool(reg, srv, triage.ToolMeta{
 		Name:        "get_coupling_table",
@@ -235,6 +275,29 @@ func NewServer(sc *cache.ScanCache, historyDir string, workspaceRoots []string) 
 		Priority: 1,
 	}, noOut(h.handleRenderDiagram))
 
+	triage.AddTool(reg, srv, triage.ToolMeta{
+		Name:        "architecture_evolution",
+		Description: "Scan architecture at multiple commits in a range to show how the codebase structure grows over time. Returns a timeline of component/edge/LOC counts with per-step diffs.",
+		Keywords:    []string{"evolution", "growth", "timeline", "history", "commits", "architecture", "trend"},
+		Categories:  []string{"architecture", "history"},
+		Rationale: map[string]string{
+			"architecture": "Visualize structural growth across a commit range",
+			"history":      "Understand how architecture evolved over time",
+		},
+		Priority: 3,
+	}, noOut(h.handleEvolution))
+
+	triage.AddTool(reg, srv, triage.ToolMeta{
+		Name:        "health_check",
+		Description: "Return health summary per component: total tests, failures, flakes, pass rate. Correlates with Locus component data when available.",
+		Keywords:    []string{"health", "status", "check", "alive", "ready"},
+		Categories:  []string{"meta"},
+		Rationale: map[string]string{
+			"meta": "Verify Locus infrastructure is healthy before running scans",
+		},
+		Priority: 5,
+	}, noOut(h.handleHealthCheck))
+
 	// --- triage tool (self-registering) ---
 
 	h.reg = reg
@@ -342,6 +405,35 @@ func (h *handler) handleGetSkills(ctx context.Context, _ *sdkmcp.CallToolRequest
 		return nil, nil, fmt.Errorf("read skills: %w", err)
 	}
 	return jsonResult(skills)
+}
+
+func (h *handler) handleGetConventions(ctx context.Context, _ *sdkmcp.CallToolRequest, in pathInput) (*sdkmcp.CallToolResult, any, error) {
+	r, err := h.proto.GetConventions(ctx, in.Path)
+	if err != nil {
+		return nil, nil, fmt.Errorf("detect conventions: %w", err)
+	}
+	return jsonResult(r)
+}
+
+type impactInput struct {
+	Path      string `json:"path"`
+	Component string `json:"component"`
+}
+
+func (h *handler) handleGetImpact(ctx context.Context, _ *sdkmcp.CallToolRequest, in impactInput) (*sdkmcp.CallToolResult, any, error) {
+	r, err := h.proto.GetImpact(ctx, in.Path, in.Component)
+	if err != nil {
+		return nil, nil, err
+	}
+	return jsonResult(r)
+}
+
+func (h *handler) handleGetKnowledgeGaps(ctx context.Context, _ *sdkmcp.CallToolRequest, in pathInput) (*sdkmcp.CallToolResult, any, error) {
+	r, err := h.proto.GetGaps(ctx, in.Path)
+	if err != nil {
+		return nil, nil, err
+	}
+	return jsonResult(r)
 }
 
 type couplingInput struct {
@@ -547,6 +639,63 @@ func (h *handler) handleRenderDiagram(ctx context.Context, _ *sdkmcp.CallToolReq
 		return nil, nil, err
 	}
 	return text(out), nil, nil
+}
+
+// --- health ---
+
+type healthCheckInput struct{}
+
+func (h *handler) handleHealthCheck(ctx context.Context, _ *sdkmcp.CallToolRequest, _ healthCheckInput) (*sdkmcp.CallToolResult, any, error) {
+	result := h.proto.Health(ctx)
+	var b fmt.Stringer = buildHealthText(result)
+	return text(b.String()), nil, nil
+}
+
+func buildHealthText(r *protocol.HealthResult) *strings.Builder {
+	b := &strings.Builder{}
+	status := "HEALTHY"
+	if !r.OK {
+		status = "UNHEALTHY"
+	}
+	fmt.Fprintf(b, "Locus Health: %s\n\n", status)
+	for _, c := range r.Checks {
+		mark := "OK"
+		if !c.OK {
+			mark = "FAIL"
+		}
+		fmt.Fprintf(b, "  [%s] %s", mark, c.Name)
+		if c.Detail != "" {
+			fmt.Fprintf(b, " — %s", c.Detail)
+		}
+		b.WriteString("\n")
+	}
+	return b
+}
+
+// --- evolution ---
+
+type evolutionInput struct {
+	Path      string `json:"path"`
+	OldestRef string `json:"oldest_ref,omitempty"`
+	NewestRef string `json:"newest_ref,omitempty"`
+	Steps     int    `json:"steps,omitempty"`
+	Stride    int    `json:"stride,omitempty"`
+	Depth     int    `json:"depth,omitempty"`
+}
+
+func (h *handler) handleEvolution(ctx context.Context, _ *sdkmcp.CallToolRequest, in evolutionInput) (*sdkmcp.CallToolResult, any, error) {
+	result, err := h.proto.Evolution(ctx, protocol.EvolutionOpts{
+		Path:      in.Path,
+		OldestRef: in.OldestRef,
+		NewestRef: in.NewestRef,
+		Steps:     in.Steps,
+		Stride:    in.Stride,
+		Depth:     in.Depth,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	return text(protocol.RenderEvolutionTable(result)), nil, nil
 }
 
 // --- triage ---

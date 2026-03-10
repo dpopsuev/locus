@@ -24,10 +24,11 @@ import (
 var Version = "dev"
 
 func newProto() *protocol.Protocol {
-	return protocol.New(
+	return protocol.NewWithPathMapper(
 		cache.New(envOr("LOCUS_CACHE_DIR", cache.DefaultCacheDir())),
 		envOr("LOCUS_HISTORY_DIR", history.DefaultHistoryDir()),
 		nil,
+		os.Getenv("LOCUS_PATH_MAP"),
 	)
 }
 
@@ -366,6 +367,75 @@ Examples:
 	},
 }
 
+var impactFlags struct {
+	component string
+}
+
+var impactCmd = &cobra.Command{
+	Use:   "impact [path]",
+	Short: "Compute transitive blast radius for a component change",
+	Long: `Scan the repository and compute impact of changing a component:
+direct dependents, transitive dependents, blast radius %, and risk level.
+
+  locus impact . --component internal/arch`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		path := "."
+		if len(args) > 0 {
+			path = args[0]
+		}
+		if impactFlags.component == "" {
+			return fmt.Errorf("--component is required")
+		}
+		proto := newProto()
+		r, err := proto.GetImpact(cmd.Context(), path, impactFlags.component)
+		if err != nil {
+			return err
+		}
+		return printJSON(r)
+	},
+}
+
+var conventionsCmd = &cobra.Command{
+	Use:   "conventions [path]",
+	Short: "Detect coding conventions from the codebase",
+	Long: `Scan the project and report detected conventions: naming (camelCase/snake_case),
+structure (cmd/, internal/, pkg/), test patterns (*_test.go, *.spec.ts), config files.`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		path := "."
+		if len(args) > 0 {
+			path = args[0]
+		}
+		proto := newProto()
+		r, err := proto.GetConventions(cmd.Context(), path)
+		if err != nil {
+			return err
+		}
+		return printJSON(r)
+	},
+}
+
+var gapsCmd = &cobra.Command{
+	Use:   "gaps [path]",
+	Short: "Identify undocumented or under-tested components",
+	Long: `Scan the repository and report knowledge gaps: components without tests,
+without docs, or high fan-in components lacking tests (critical).`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		path := "."
+		if len(args) > 0 {
+			path = args[0]
+		}
+		proto := newProto()
+		r, err := proto.GetGaps(cmd.Context(), path)
+		if err != nil {
+			return err
+		}
+		return printJSON(r)
+	},
+}
+
 var healthCmd = &cobra.Command{
 	Use:   "health",
 	Short: "Check the Locus runtime environment",
@@ -460,7 +530,7 @@ Examples:
 }
 
 func init() {
-	rootCmd.AddCommand(versionCmd, scanCmd, serveCmd, codographCmd, historyCmd, diffCmd, validateCmd, healthCmd, diagramCmd, triageCmd)
+	rootCmd.AddCommand(versionCmd, scanCmd, serveCmd, codographCmd, historyCmd, diffCmd, validateCmd, conventionsCmd, impactCmd, gapsCmd, healthCmd, diagramCmd, triageCmd)
 
 	scanCmd.Flags().StringVar(&scanFlags.format, "format", "json", "Output format: json, md, mermaid")
 	scanCmd.Flags().StringVar(&scanFlags.scanner, "scanner", "auto", "Scanner: auto, go, packages, rust, typescript, composite, ctags, lsp")
@@ -487,6 +557,8 @@ func init() {
 
 	diffCmd.Flags().StringVar(&diffFlags.branchA, "branch-a", "", "First branch to compare")
 	diffCmd.Flags().StringVar(&diffFlags.branchB, "branch-b", "", "Second branch to compare")
+
+	impactCmd.Flags().StringVar(&impactFlags.component, "component", "", "Component to analyze (e.g. internal/arch)")
 
 	validateCmd.Flags().StringVar(&validateFlags.desired, "desired", "", "Path to desired-state file (mermaid or JSON)")
 	validateCmd.Flags().StringVar(&validateFlags.format, "format", "", "Format of desired-state file: mermaid, json (auto-detected from extension)")
