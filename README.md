@@ -357,36 +357,6 @@ locus diagram . --type state                             # state machine detecti
 | `render_diagram` | Mermaid diagrams: dependency, c4, coupling, churn, layers, tree, classes, sequence, er. Use `theme` (light/dark/natural). |
 | `triage` | Map natural language intent to ranked tool list (no LLM). |
 
-## LLM Chatbox Examples
-
-Quick reference for what the agent sends over MCP. The Workflow section above shows full conversations.
-
-```json
-// Scan a repository
-{ "tool": "codograph", "arguments": { "action": "scan_local", "path": "." } }
-
-// Hot spots (high fan-in + high churn)
-{ "tool": "dependencies", "arguments": { "action": "coupling", "path": ".", "view": "hot_spots" } }
-
-// Blast radius for a refactor
-{ "tool": "dependencies", "arguments": { "action": "impact", "path": ".", "component": "internal/arch" } }
-
-// Dependency diagram with health colors
-{ "tool": "render_diagram", "arguments": { "path": ".", "type": "dependency", "theme": "natural" } }
-
-// Circular dependencies
-{ "tool": "get_cycles", "arguments": { "path": "." } }
-
-// Scan a remote GitHub repo
-{ "tool": "codograph", "arguments": { "action": "scan_remote", "url": "github.com/org/repo" } }
-
-// Diff architecture between branches
-{ "tool": "codograph", "arguments": { "action": "diff", "path": ".", "branch_a": "main", "branch_b": "feature/x" } }
-
-// "What tool should I use?"
-{ "tool": "triage", "arguments": { "intent": "where are the hot spots?" } }
-```
-
 ## Triage
 
 Locus includes a built-in intent router that maps natural language queries to the right tool chain without an LLM:
