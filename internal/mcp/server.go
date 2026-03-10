@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/arch"
@@ -20,103 +22,47 @@ func NewServer(sc *cache.ScanCache, historyDir string, workspaceRoots []string) 
 	pathMap := os.Getenv("LOCUS_PATH_MAP")
 	proto := protocol.NewWithPathMapper(sc, historyDir, workspaceRoots, pathMap)
 	srv := sdkmcp.NewServer(
-		&sdkmcp.Implementation{Name: "locus", Version: "0.2.1"},
+		&sdkmcp.Implementation{Name: "locus", Version: "0.3.0"},
 		&sdkmcp.ServerOptions{
 			Instructions: "Locus is a spatial context bus for AI agents. " +
 				"Point it at any repository to get architecture, dependency graph, churn, hot spots, and symbols. " +
-				"Results are cached by git HEAD SHA. Use scan_project to analyze a repo, get_coupling_table with view=hot_spots for risk areas, " +
-				"and codograph_remote for GitHub repos you don't have locally.",
+				"Results are cached by git HEAD SHA. Use codograph scan_local to analyze a repo, " +
+				"dependencies coupling with view=hot_spots for risk areas, " +
+				"and codograph scan_remote for GitHub repos you don't have locally.",
 		},
 	)
 	h := &handler{proto: proto}
 	reg := triage.New()
 
 	triage.AddTool(reg, srv, triage.ToolMeta{
-		Name:        "scan_project",
-		Description: "Scan a repository and return its full codebase context: architecture, dependency graph, churn, hot spots, and symbols. Results are cached by git HEAD SHA.",
-		Keywords:    []string{"scan", "architecture", "overview", "structure", "codebase"},
-		Categories:  []string{"architecture", "onboarding"},
-		DefaultArgs: map[string]any{"format": "summary"},
+		Name: "codograph",
+		Description: "Scan and compare repository architectures. " +
+			"Actions: scan_local (full codebase context), scan_remote (GitHub via shallow clone), " +
+			"history (past scans, set diff=true to compare latest two), diff (compare two git branches).",
+		Keywords:   []string{"scan", "architecture", "overview", "remote", "github", "history", "diff", "branch", "compare"},
+		Categories: []string{"architecture", "onboarding", "comparison"},
 		Rationale: map[string]string{
 			"architecture": "Full codebase overview with dependency graph and metrics",
 			"onboarding":   "Best first step for understanding an unfamiliar codebase",
+			"comparison":   "Compare branches or track architectural evolution",
 		},
 		Priority: 1,
-	}, noOut(h.handleScanProject))
+	}, noOut(h.handleCodograph))
 
 	triage.AddTool(reg, srv, triage.ToolMeta{
-		Name:        "get_dependencies",
-		Description: "Return fan-in and fan-out edges for a specific component in a repository.",
-		Keywords:    []string{"depend", "import", "upstream", "downstream"},
-		Categories:  []string{"dependencies", "refactoring"},
+		Name: "dependencies",
+		Description: "Analyze component dependencies, impact, and coupling. " +
+			"Actions: deps (fan-in/fan-out for a component), impact (transitive blast radius), " +
+			"coupling (coupling table, view=hot_spots for risk areas, view=edges for edge list).",
+		Keywords:   []string{"depend", "import", "impact", "blast", "coupling", "fan", "upstream", "downstream"},
+		Categories: []string{"dependencies", "refactoring", "performance"},
 		Rationale: map[string]string{
-			"dependencies": "Direct upstream/downstream view of a single component",
-			"refactoring":  "Impact analysis for changes to a specific package",
+			"dependencies": "Component-level dependency analysis and coupling metrics",
+			"refactoring":  "Assess risk and blast radius before changes",
+			"performance":  "Identify highly coupled components",
 		},
 		Priority: 2,
-	}, noOut(h.handleGetDependencies))
-
-	triage.AddTool(reg, srv, triage.ToolMeta{
-		Name:        "get_impact",
-		Description: "Compute transitive blast radius for a component change. Returns direct/transitive dependents, blast radius %, and risk level.",
-		Keywords:    []string{"impact", "blast", "radius", "change", "refactor", "dependent"},
-		Categories:  []string{"refactoring", "dependencies"},
-		Rationale: map[string]string{
-			"refactoring":   "Assess risk before changing a component",
-			"dependencies":  "See who is affected by a component change",
-		},
-		Priority: 2,
-	}, noOut(h.handleGetImpact))
-
-	triage.AddTool(reg, srv, triage.ToolMeta{
-		Name:        "get_coupling_table",
-		Description: "Return a pre-formatted coupling table: package name, fan-in, fan-out, churn, symbol count. Sorted and filtered so agents never need Python/jq glue. Use view=hot_spots for risk areas (high fan-in + churn), view=edges for dependency edge list.",
-		Keywords:    []string{"coupling", "fan", "blast", "depend"},
-		Categories:  []string{"performance", "architecture", "dependencies"},
-		DefaultArgs: map[string]any{"sort_by": "fan_in"},
-		Rationale: map[string]string{
-			"performance":  "Most depended-on = highest blast radius",
-			"architecture": "Quantified coupling metrics for design review",
-			"dependencies": "Fan-in/fan-out table for dependency analysis",
-		},
-		Priority: 2,
-	}, noOut(h.handleGetCouplingTable))
-
-	triage.AddTool(reg, srv, triage.ToolMeta{
-		Name:        "codograph_remote",
-		Description: "Produce a codograph from a remote GitHub repository via shallow clone. Accepts a git URL (HTTPS, SSH, or shorthand like github.com/org/repo) and optional ref (branch/tag). Returns the same ContextReport as scan_project. Results are cached by URL+SHA.",
-		Keywords:    []string{"remote", "github", "clone", "external"},
-		Categories:  []string{"architecture", "onboarding"},
-		Rationale: map[string]string{
-			"architecture": "Analyze any GitHub repo without cloning it locally",
-			"onboarding":   "Quick architecture view of an external dependency",
-		},
-		Priority: 2,
-	}, noOut(h.handleCodographRemote))
-
-	triage.AddTool(reg, srv, triage.ToolMeta{
-		Name:        "get_codograph_history",
-		Description: "List past codographs for a repository path. Returns timestamps, HEAD SHAs, source (local/remote), and component/edge counts. Use the 'last' parameter to limit results. Set diff=true to compare the latest two codographs.",
-		Keywords:    []string{"history", "past", "trend", "evolution", "diff", "compare"},
-		Categories:  []string{"churn", "history"},
-		Rationale: map[string]string{
-			"churn":   "Track architectural evolution over time",
-			"history": "See past scans and compare growth",
-		},
-		Priority: 1,
-	}, noOut(h.handleGetCodographHistory))
-
-	triage.AddTool(reg, srv, triage.ToolMeta{
-		Name:        "diff_branches",
-		Description: "Compare architecture between two git branches. Scans each branch (cache-aware: previously scanned branches are instant hits) and returns the diff.",
-		Keywords:    []string{"branch", "compare", "merge", "pr", "review"},
-		Categories:  []string{"comparison", "review"},
-		Rationale: map[string]string{
-			"comparison": "Structural diff between git branches",
-			"review":     "Assess architectural impact of a PR or merge",
-		},
-		Priority: 1,
-	}, noOut(h.handleDiffBranches))
+	}, noOut(h.handleDependencies))
 
 	triage.AddTool(reg, srv, triage.ToolMeta{
 		Name:        "get_cycles",
@@ -143,8 +89,6 @@ func NewServer(sc *cache.ScanCache, historyDir string, workspaceRoots []string) 
 		Priority: 1,
 	}, noOut(h.handleRenderDiagram))
 
-	// --- triage tool (self-registering) ---
-
 	h.reg = reg
 	triage.AddTool(reg, srv, triage.ToolMeta{
 		Name:        "triage",
@@ -163,6 +107,90 @@ func NewServer(sc *cache.ScanCache, historyDir string, workspaceRoots []string) 
 type handler struct {
 	proto *protocol.Protocol
 	reg   *triage.Registry
+}
+
+// --- consolidated input types ---
+
+type codographActionInput struct {
+	Action string `json:"action"`
+
+	Path            string `json:"path,omitempty"`
+	Depth           int    `json:"depth,omitempty"`
+	ChurnDays       int    `json:"churn_days,omitempty"`
+	IncludeExternal bool   `json:"include_external,omitempty"`
+	IncludeTests    bool   `json:"include_tests,omitempty"`
+	IncludeCoverage bool   `json:"include_coverage,omitempty"`
+	Budget          int    `json:"budget,omitempty"`
+	Format          string `json:"format,omitempty"`
+
+	URL string `json:"url,omitempty"`
+	Ref string `json:"ref,omitempty"`
+
+	Keep bool `json:"keep,omitempty"`
+
+	Last int  `json:"last,omitempty"`
+	Diff bool `json:"diff,omitempty"`
+
+	BranchA string `json:"branch_a,omitempty"`
+	BranchB string `json:"branch_b,omitempty"`
+}
+
+type dependenciesActionInput struct {
+	Action    string `json:"action"`
+	Path      string `json:"path"`
+	Component string `json:"component,omitempty"`
+	SortBy    string `json:"sort_by,omitempty"`
+	TopN      int    `json:"top_n,omitempty"`
+	View      string `json:"view,omitempty"`
+	ChurnDays int    `json:"churn_days,omitempty"`
+}
+
+// --- dispatchers ---
+
+func (h *handler) handleCodograph(ctx context.Context, req *sdkmcp.CallToolRequest, in codographActionInput) (*sdkmcp.CallToolResult, any, error) {
+	switch in.Action {
+	case "scan_local":
+		return h.handleScanProject(ctx, req, scanProjectInput{
+			Path: in.Path, Depth: in.Depth, ChurnDays: in.ChurnDays,
+			IncludeExternal: in.IncludeExternal, IncludeTests: in.IncludeTests,
+			IncludeCoverage: in.IncludeCoverage, Budget: in.Budget, Format: in.Format,
+		})
+	case "scan_remote":
+		return h.handleCodographRemote(ctx, req, remoteInput{
+			URL: in.URL, Ref: in.Ref, Depth: in.Depth,
+			ChurnDays: in.ChurnDays, Budget: in.Budget, Keep: in.Keep,
+		})
+	case "history":
+		return h.handleGetCodographHistory(ctx, req, historyInput{
+			Path: in.Path, Last: in.Last, Diff: in.Diff,
+		})
+	case "diff":
+		return h.handleDiffBranches(ctx, req, diffBranchesInput{
+			Path: in.Path, BranchA: in.BranchA, BranchB: in.BranchB,
+		})
+	default:
+		return nil, nil, fmt.Errorf("unknown codograph action %q (valid: scan_local, scan_remote, history, diff)", in.Action)
+	}
+}
+
+func (h *handler) handleDependencies(ctx context.Context, req *sdkmcp.CallToolRequest, in dependenciesActionInput) (*sdkmcp.CallToolResult, any, error) {
+	switch in.Action {
+	case "deps":
+		return h.handleGetDependencies(ctx, req, depsInput{
+			Path: in.Path, Component: in.Component,
+		})
+	case "impact":
+		return h.handleGetImpact(ctx, req, impactInput{
+			Path: in.Path, Component: in.Component,
+		})
+	case "coupling":
+		return h.handleGetCouplingTable(ctx, req, couplingInput{
+			Path: in.Path, SortBy: in.SortBy, TopN: in.TopN,
+			View: in.View, ChurnDays: in.ChurnDays, Component: in.Component,
+		})
+	default:
+		return nil, nil, fmt.Errorf("unknown dependencies action %q (valid: deps, impact, coupling)", in.Action)
+	}
 }
 
 // --- handlers ---
@@ -625,5 +653,19 @@ func jsonResult(data any) (*sdkmcp.CallToolResult, any, error) {
 }
 
 func noOut[In any](h func(context.Context, *sdkmcp.CallToolRequest, In) (*sdkmcp.CallToolResult, any, error)) sdkmcp.ToolHandlerFor[In, any] {
-	return h
+	return func(ctx context.Context, req *sdkmcp.CallToolRequest, in In) (*sdkmcp.CallToolResult, any, error) {
+		tool := ""
+		if req != nil {
+			tool = req.Params.Name
+		}
+		start := time.Now()
+		result, out, err := h(ctx, req, in)
+		elapsed := time.Since(start)
+		if err != nil {
+			slog.Error("tool call failed", "tool", tool, "elapsed", elapsed, "error", err)
+		} else {
+			slog.Debug("tool call", "tool", tool, "elapsed", elapsed)
+		}
+		return result, out, err
+	}
 }

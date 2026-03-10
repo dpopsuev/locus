@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -112,6 +114,7 @@ Tools: scan_project, get_dependencies, get_impact, get_coupling_table,
        codograph_remote, get_codograph_history, diff_branches,
        get_cycles, render_diagram, triage.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		initLogger()
 		roots := serveFlags.workspaces
 		if len(roots) == 0 {
 			cwd, _ := os.Getwd()
@@ -124,9 +127,10 @@ Tools: scan_project, get_dependencies, get_impact, get_coupling_table,
 				func(r *http.Request) *sdkmcp.Server { return srv },
 				nil,
 			)
-			fmt.Fprintf(os.Stderr, "locus: listening on %s\n", serveFlags.addr)
+			slog.Info("locus server starting", "transport", "http", "addr", serveFlags.addr)
 			return http.ListenAndServe(serveFlags.addr, handler)
 		}
+		slog.Info("locus server starting", "transport", "stdio")
 		return srv.Run(context.Background(), &sdkmcp.StdioTransport{})
 	},
 }
@@ -606,6 +610,22 @@ func printJSON(v any) error {
 	data, _ := json.MarshalIndent(v, "", "  ")
 	fmt.Println(string(data))
 	return nil
+}
+
+func initLogger() {
+	level := slog.LevelInfo
+	if v := os.Getenv("LOCUS_LOG_LEVEL"); v != "" {
+		switch strings.ToLower(v) {
+		case "debug":
+			level = slog.LevelDebug
+		case "warn":
+			level = slog.LevelWarn
+		case "error":
+			level = slog.LevelError
+		}
+	}
+	handler := slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: level})
+	slog.SetDefault(slog.New(handler))
 }
 
 func main() {
