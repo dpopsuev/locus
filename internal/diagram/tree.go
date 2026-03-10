@@ -5,13 +5,18 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-
-	"github.com/dpopsuev/locus/internal/arch"
 )
 
-// renderTree produces a Mermaid mindmap of the module hierarchy.
-// Root = project name, branches = first-level groups, leaves = packages.
-func renderTree(report *arch.ContextReport, opts Options) string {
+func renderTree(in Input, opts Options) string {
+	report := in.Report
+	rt := in.ResolvedTheme
+
+	fi := fanIn(report.Architecture.Edges)
+	churnMap := make(map[string]int)
+	for _, s := range report.Architecture.Services {
+		churnMap[s.Name] = s.Churn
+	}
+
 	root := filepath.Base(report.ModulePath)
 	if root == "" || root == "." {
 		root = "project"
@@ -45,6 +50,20 @@ func renderTree(report *arch.ContextReport, opts Options) string {
 
 	sort.Strings(order)
 
+	healthIcon := func(name string) string {
+		h := ClassifyHealth(fi[name], churnMap[name])
+		switch h {
+		case Fatal:
+			return "\u2718 "
+		case Sick:
+			return "\u26A0 "
+		default:
+			return ""
+		}
+	}
+
+	_ = rt
+
 	var b strings.Builder
 	b.WriteString("mindmap\n")
 	fmt.Fprintf(&b, "    root((\"%s\"))\n", root)
@@ -52,7 +71,7 @@ func renderTree(report *arch.ContextReport, opts Options) string {
 	for _, gName := range order {
 		g := groups[gName]
 		if len(g.children) == 0 {
-			label := g.name
+			label := healthIcon(g.name) + g.name
 			if g.symbols > 0 {
 				label += fmt.Sprintf(" (%d sym)", g.symbols)
 			}
@@ -60,7 +79,7 @@ func renderTree(report *arch.ContextReport, opts Options) string {
 			continue
 		}
 
-		label := g.name
+		label := healthIcon(g.name) + g.name
 		if g.symbols > 0 {
 			label += fmt.Sprintf(" (%d sym)", g.symbols)
 		}
@@ -74,7 +93,7 @@ func renderTree(report *arch.ContextReport, opts Options) string {
 					break
 				}
 			}
-			childLabel := child
+			childLabel := healthIcon(child) + child
 			if symCount > 0 {
 				childLabel += fmt.Sprintf(" (%d sym)", symCount)
 			}

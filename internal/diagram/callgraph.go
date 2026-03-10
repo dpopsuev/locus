@@ -30,6 +30,9 @@ func renderCallGraph(in Input, opts Options) (string, error) {
 	}
 
 	var b strings.Builder
+	if in.ResolvedTheme != nil {
+		b.WriteString(in.ResolvedTheme.InitDirective() + "\n")
+	}
 	b.WriteString("flowchart TB\n")
 
 	// Group nodes by package

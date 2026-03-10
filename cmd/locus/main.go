@@ -287,6 +287,7 @@ var diagramFlags struct {
 	churnDays    int
 	entry        string
 	exportedOnly bool
+	theme        string
 }
 
 var diagramCmd = &cobra.Command{
@@ -351,6 +352,10 @@ Examples:
 			in.DeepAnalyzer = analysis.NewDeepFallback(path)
 		}
 
+		theme := diagramFlags.theme
+		if theme == "" {
+			theme = os.Getenv("LOCUS_THEME")
+		}
 		out, err := diagram.Render(in, diagram.Options{
 			Type:         diagramFlags.diagramType,
 			Scope:        diagramFlags.scope,
@@ -358,6 +363,7 @@ Examples:
 			TopN:         diagramFlags.topN,
 			Entry:        diagramFlags.entry,
 			ExportedOnly: diagramFlags.exportedOnly,
+			Theme:        theme,
 		})
 		if err != nil {
 			return err
@@ -572,6 +578,7 @@ func init() {
 	diagramCmd.Flags().IntVar(&diagramFlags.churnDays, "churn-days", 30, "Git churn window in days")
 	diagramCmd.Flags().StringVar(&diagramFlags.entry, "entry", "", "Entry point function name (sequence, dataflow, callgraph)")
 	diagramCmd.Flags().BoolVar(&diagramFlags.exportedOnly, "exported-only", false, "Only exported functions (callgraph)")
+	diagramCmd.Flags().StringVar(&diagramFlags.theme, "theme", "", "Color theme: light, dark, natural (default: $LOCUS_THEME or natural)")
 
 	triageCmd.Flags().BoolVar(&triageFlags.list, "list", false, "List all registered tools grouped by category")
 	triageCmd.Flags().StringVar(&triageFlags.category, "category", "", "Show tools in a specific category")

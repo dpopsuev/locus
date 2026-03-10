@@ -110,7 +110,7 @@ func TestRenderCouplingTopN(t *testing.T) {
 	lines := strings.Split(strings.TrimSpace(out), "\n")
 	dataLines := 0
 	for _, l := range lines {
-		if !strings.HasPrefix(l, "---") && !strings.HasPrefix(l, "config") && !strings.HasPrefix(l, "  ") && !strings.HasPrefix(l, "sankey") && l != "" {
+		if !strings.HasPrefix(l, "---") && !strings.HasPrefix(l, "config") && !strings.HasPrefix(l, "  ") && !strings.HasPrefix(l, "sankey") && !strings.HasPrefix(l, "%%") && l != "" {
 			dataLines++
 		}
 	}

@@ -17,6 +17,7 @@ type Options struct {
 	TopN         int    // limit items shown (0 = all)
 	Entry        string // entry point function name (sequence, dataflow, callgraph)
 	ExportedOnly bool   // only exported functions (callgraph)
+	Theme        string // "light" | "dark" | "natural" (default)
 }
 
 // Input bundles everything the renderers may need. Not every renderer
@@ -27,23 +28,32 @@ type Input struct {
 	Analyzer     analysis.TypeAnalyzer
 	DeepAnalyzer analysis.DeepAnalyzer
 	Root         string // repository root path (needed by Tier 2/3 renderers)
+	ResolvedTheme *ResolvedTheme
 }
 
 // Render dispatches to the appropriate renderer by type name.
 func Render(in Input, opts Options) (string, error) {
+	if in.ResolvedTheme == nil {
+		theme := DefaultTheme()
+		mode := opts.Theme
+		if mode == "" {
+			mode = "natural"
+		}
+		in.ResolvedTheme = theme.Resolve(mode)
+	}
 	switch opts.Type {
 	case "dependency":
-		return renderDependency(in.Report, opts), nil
+		return renderDependency(in, opts), nil
 	case "c4":
-		return renderC4(in.Report, opts), nil
+		return renderC4(in, opts), nil
 	case "coupling":
-		return renderCoupling(in.Report, opts), nil
+		return renderCoupling(in, opts), nil
 	case "churn":
-		return renderChurn(in.Report, in.History, opts), nil
+		return renderChurn(in, opts), nil
 	case "layers":
-		return renderLayers(in.Report, opts), nil
+		return renderLayers(in, opts), nil
 	case "tree":
-		return renderTree(in.Report, opts), nil
+		return renderTree(in, opts), nil
 	case "classes":
 		return renderClasses(in, opts)
 	case "sequence":

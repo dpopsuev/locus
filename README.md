@@ -99,6 +99,11 @@ locus diagram . --type sequence --entry main   # sequence diagram from entry poi
 locus diagram . --type callgraph --entry Scan  # call graph from function
 locus diagram . --type dataflow --entry main   # data flow diagram
 locus diagram . --type state        # state machine detection
+
+# Themed output (light/dark/natural)
+locus diagram . --type dependency --theme dark
+locus diagram . --type c4 --theme light
+LOCUS_THEME=dark locus diagram . --type layers
 ```
 
 ### 4. Triage
@@ -432,7 +437,7 @@ Components with the highest combination of fan-in (many dependents) and churn (f
 | `codograph_remote` | Scan a remote GitHub repo via shallow clone. Cached by URL+SHA. |
 | `get_codograph_history` | Past codographs with timestamps, SHAs, counts. Set `diff=true` to compare latest two. |
 | `diff_branches` | Architecture diff between two git branches (cache-aware). |
-| `render_diagram` | Mermaid diagrams: dependency, c4, coupling, churn, layers, tree, classes, sequence, er. |
+| `render_diagram` | Mermaid diagrams: dependency, c4, coupling, churn, layers, tree, classes, sequence, er. Use `theme` param (light/dark/natural) for themed output with health-based coloring. |
 | `triage` | Map natural language intent to ranked tool list (no LLM). |
 
 ## LLM Chatbox Examples
@@ -531,6 +536,14 @@ These show what an LLM agent sends over MCP. Copy-paste into any chat to see the
 }}
 ```
 
+**Generate a dark-themed dependency diagram:**
+
+```json
+{ "tool": "render_diagram", "arguments": {
+    "path": "/workspace/myproject", "type": "dependency", "theme": "dark"
+}}
+```
+
 **Scan a remote GitHub repo:**
 
 ```json
@@ -613,6 +626,48 @@ All tools grouped by category:
 | Any | LSP (gopls, etc.) | workspace/symbol | references |
 | Any | ctags (universal) | all ctags kinds | import heuristics |
 
+## Diagram Theming
+
+Locus supports three visual themes for Mermaid diagrams: `light`, `dark`, and `natural` (default). Themes control colors, shapes, and health-based semantic coloring.
+
+### Health Classification
+
+Components are automatically classified by risk level based on fan-in and churn:
+
+| Level | Condition | Color |
+|---|---|---|
+| **Healthy** | Default | Green |
+| **Sick** | fan-in >= 3 AND churn >= 8 | Yellow |
+| **Fatal** | fan-in >= 5 AND churn >= 15 | Red |
+
+Health coloring is applied to dependency flowcharts, C4 component diagrams, churn bar charts, and tree mindmaps. Layer diagrams highlight violations in red.
+
+### Theme Selection
+
+```bash
+locus diagram . --type dependency --theme dark
+LOCUS_THEME=dark locus diagram . --type c4
+```
+
+Via MCP: pass `"theme": "dark"` in the `render_diagram` arguments.
+
+### Custom Theme File
+
+Place a `theme.yaml` in `~/.locus/` or set `LOCUS_THEME_FILE` to override default tokens:
+
+```yaml
+colors:
+  green:
+    dark: "#68D391"
+    light: "#276749"
+    natural: "#38A169"
+shapes:
+  component:
+    fill: surface
+    stroke: blue
+    color: text
+```
+
 ## Configuration
 
 | Variable | Default | Description |
@@ -621,6 +676,8 @@ All tools grouped by category:
 | `LOCUS_HISTORY_DIR` | `~/.locus/history` | Codograph history directory |
 | `LOCUS_TRANSPORT` | `stdio` | Transport: `stdio`, `http` |
 | `LOCUS_ADDR` | `:8081` | Listen address (HTTP only) |
+| `LOCUS_THEME` | `natural` | Default diagram theme: `light`, `dark`, `natural` |
+| `LOCUS_THEME_FILE` | `~/.locus/theme.yaml` | Custom theme override file |
 
 ## License
 

@@ -8,9 +8,10 @@ import (
 	"github.com/dpopsuev/locus/internal/arch"
 )
 
-// renderCoupling produces a Mermaid sankey-beta diagram showing fan-in/fan-out
-// coupling flows between components.
-func renderCoupling(report *arch.ContextReport, opts Options) string {
+func renderCoupling(in Input, opts Options) string {
+	report := in.Report
+	rt := in.ResolvedTheme
+
 	type flow struct {
 		from  string
 		to    string
@@ -47,6 +48,8 @@ func renderCoupling(report *arch.ContextReport, opts Options) string {
 	b.WriteString("  sankey:\n")
 	b.WriteString("    showValues: true\n")
 	b.WriteString("---\n")
+	fmt.Fprintf(&b, "%%%% Health legend: Healthy=%s  Sick=%s  Fatal=%s\n",
+		rt.ColorHex("green"), rt.ColorHex("yellow"), rt.ColorHex("red"))
 	b.WriteString("sankey-beta\n\n")
 
 	for _, f := range flows {
@@ -63,7 +66,6 @@ func sanitizeSankey(s string) string {
 	return s
 }
 
-// fanIn computes fan-in counts from edges.
 func fanIn(edges []arch.ArchEdge) map[string]int {
 	m := make(map[string]int)
 	for _, e := range edges {
@@ -72,7 +74,6 @@ func fanIn(edges []arch.ArchEdge) map[string]int {
 	return m
 }
 
-// fanOut computes fan-out counts from edges.
 func fanOut(edges []arch.ArchEdge) map[string]int {
 	m := make(map[string]int)
 	for _, e := range edges {

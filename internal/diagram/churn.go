@@ -4,22 +4,17 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-
-	"github.com/dpopsuev/locus/internal/arch"
-	"github.com/dpopsuev/locus/internal/history"
 )
 
-// renderChurn produces a Mermaid xychart-beta showing component/edge counts
-// over time from codograph history. When history is unavailable, falls back
-// to a bar chart of per-component churn from the current scan.
-func renderChurn(report *arch.ContextReport, hist []history.EntrySummary, opts Options) string {
-	if len(hist) >= 2 {
-		return renderChurnTimeline(hist, opts)
+func renderChurn(in Input, opts Options) string {
+	if len(in.History) >= 2 {
+		return renderChurnTimeline(in, opts)
 	}
-	return renderChurnBar(report, opts)
+	return renderChurnBar(in, opts)
 }
 
-func renderChurnTimeline(hist []history.EntrySummary, opts Options) string {
+func renderChurnTimeline(in Input, opts Options) string {
+	hist := in.History
 	topN := opts.TopN
 	if topN <= 0 {
 		topN = len(hist)
@@ -33,6 +28,7 @@ func renderChurnTimeline(hist []history.EntrySummary, opts Options) string {
 	}
 
 	var b strings.Builder
+	b.WriteString(in.ResolvedTheme.InitDirective() + "\n")
 	b.WriteString("xychart-beta\n")
 	b.WriteString("    title \"Codograph history\"\n")
 
@@ -51,16 +47,23 @@ func renderChurnTimeline(hist []history.EntrySummary, opts Options) string {
 	return b.String()
 }
 
-func renderChurnBar(report *arch.ContextReport, opts Options) string {
+func renderChurnBar(in Input, opts Options) string {
+	report := in.Report
+	rt := in.ResolvedTheme
+
+	fi := fanIn(report.Architecture.Edges)
+
 	type entry struct {
-		name  string
-		churn int
+		name   string
+		churn  int
+		health Health
 	}
 
 	var entries []entry
 	for _, svc := range report.Architecture.Services {
 		if svc.Churn > 0 {
-			entries = append(entries, entry{name: svc.Name, churn: svc.Churn})
+			h := ClassifyHealth(fi[svc.Name], svc.Churn)
+			entries = append(entries, entry{name: svc.Name, churn: svc.Churn, health: h})
 		}
 	}
 
@@ -79,13 +82,27 @@ func renderChurnBar(report *arch.ContextReport, opts Options) string {
 		return "xychart-beta\n    title \"No churn data available\"\n    x-axis [\"N/A\"]\n    y-axis \"Churn\" 0 --> 1\n    bar [0]\n"
 	}
 
+	healthMarker := func(h Health) string {
+		switch h {
+		case Fatal:
+			return " \u2718"
+		case Sick:
+			return " \u26A0"
+		default:
+			return " \u2714"
+		}
+	}
+
+	_ = rt
+
 	var b strings.Builder
+	b.WriteString(in.ResolvedTheme.InitDirective() + "\n")
 	b.WriteString("xychart-beta\n")
 	b.WriteString("    title \"Component churn\"\n")
 
 	var names, values []string
 	for _, e := range entries {
-		names = append(names, fmt.Sprintf("\"%s\"", e.name))
+		names = append(names, fmt.Sprintf("\"%s%s\"", e.name, healthMarker(e.health)))
 		values = append(values, fmt.Sprintf("%d", e.churn))
 	}
 

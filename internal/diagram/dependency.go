@@ -7,13 +7,20 @@ import (
 	"github.com/dpopsuev/locus/internal/arch"
 )
 
-// renderDependency produces a Mermaid flowchart from the ArchModel.
-// This is a refactored version of arch.RenderMermaid routed through
-// the diagram subsystem so all diagrams share one interface.
-func renderDependency(report *arch.ContextReport, opts Options) string {
-	m := report.Architecture
+func renderDependency(in Input, opts Options) string {
+	m := in.Report.Architecture
+	rt := in.ResolvedTheme
+
+	fi := fanIn(m.Edges)
+	churnMap := make(map[string]int)
+	for _, s := range m.Services {
+		churnMap[s.Name] = s.Churn
+	}
+
 	var b strings.Builder
+	b.WriteString(rt.InitDirective() + "\n")
 	b.WriteString("graph TD\n")
+	b.WriteString(rt.ClassDefs() + "\n")
 
 	for _, s := range m.Services {
 		if opts.Scope != "" && s.Name != opts.Scope && !isEdgeNeighbor(m.Edges, opts.Scope, s.Name) {
@@ -24,7 +31,12 @@ func renderDependency(report *arch.ContextReport, opts Options) string {
 		if s.Churn > 0 {
 			label += fmt.Sprintf(" [churn:%d]", s.Churn)
 		}
-		fmt.Fprintf(&b, "    %s[\"%s\"]\n", id, label)
+		h := ClassifyHealth(fi[s.Name], churnMap[s.Name])
+		suffix := rt.NodeSuffix(h)
+		if strings.HasPrefix(s.Name, "cmd/") {
+			suffix = ":::entry"
+		}
+		fmt.Fprintf(&b, "    %s[\"%s\"]%s\n", id, label, suffix)
 	}
 
 	for _, e := range m.Edges {

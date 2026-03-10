@@ -3,13 +3,12 @@ package diagram
 import (
 	"fmt"
 	"strings"
-
-	"github.com/dpopsuev/locus/internal/arch"
 )
 
-// renderC4 produces a Mermaid C4Component diagram.
-// Top-level depth groups become containers; leaf packages become components.
-func renderC4(report *arch.ContextReport, opts Options) string {
+func renderC4(in Input, opts Options) string {
+	report := in.Report
+	rt := in.ResolvedTheme
+
 	depth := opts.Depth
 	if depth <= 0 {
 		depth = report.SuggestedDepth
@@ -18,9 +17,20 @@ func renderC4(report *arch.ContextReport, opts Options) string {
 		depth = 1
 	}
 
+	fi := fanIn(report.Architecture.Edges)
+	churnMap := make(map[string]int)
+	for _, s := range report.Architecture.Services {
+		churnMap[s.Name] = s.Churn
+	}
+
 	type container struct {
 		name       string
-		components []arch.ArchService
+		components []struct {
+			name   string
+			churn  int
+			syms   int
+			health Health
+		}
 	}
 
 	groups := make(map[string]*container)
@@ -32,7 +42,13 @@ func renderC4(report *arch.ContextReport, opts Options) string {
 			groups[g] = &container{name: g}
 			order = append(order, g)
 		}
-		groups[g].components = append(groups[g].components, svc)
+		h := ClassifyHealth(fi[svc.Name], churnMap[svc.Name])
+		groups[g].components = append(groups[g].components, struct {
+			name   string
+			churn  int
+			syms   int
+			health Health
+		}{name: svc.Name, churn: svc.Churn, syms: len(svc.Symbols), health: h})
 	}
 
 	var b strings.Builder
@@ -43,26 +59,28 @@ func renderC4(report *arch.ContextReport, opts Options) string {
 		g := groups[gName]
 		id := mermaidID(g.name)
 
-		if len(g.components) == 1 && g.components[0].Name == g.name {
+		if len(g.components) == 1 && g.components[0].name == g.name {
 			comp := g.components[0]
 			tech := "package"
-			desc := fmt.Sprintf("%d symbols", len(comp.Symbols))
-			if comp.Churn > 0 {
-				desc += fmt.Sprintf(", churn %d", comp.Churn)
+			desc := fmt.Sprintf("%d symbols", comp.syms)
+			if comp.churn > 0 {
+				desc += fmt.Sprintf(", churn %d", comp.churn)
 			}
-			fmt.Fprintf(&b, "    Component(%s, \"%s\", \"%s\", \"%s\")\n", id, comp.Name, tech, desc)
+			tag := rt.HealthClass(comp.health)
+			fmt.Fprintf(&b, "    Component(%s, \"%s\", \"%s\", \"%s\", $tags=\"%s\")\n", id, comp.name, tech, desc, tag)
 			continue
 		}
 
 		fmt.Fprintf(&b, "    Container_Boundary(%s_boundary, \"%s\") {\n", id, g.name)
 		for _, comp := range g.components {
-			cid := mermaidID(comp.Name)
+			cid := mermaidID(comp.name)
 			tech := "package"
-			desc := fmt.Sprintf("%d symbols", len(comp.Symbols))
-			if comp.Churn > 0 {
-				desc += fmt.Sprintf(", churn %d", comp.Churn)
+			desc := fmt.Sprintf("%d symbols", comp.syms)
+			if comp.churn > 0 {
+				desc += fmt.Sprintf(", churn %d", comp.churn)
 			}
-			fmt.Fprintf(&b, "        Component(%s, \"%s\", \"%s\", \"%s\")\n", cid, comp.Name, tech, desc)
+			tag := rt.HealthClass(comp.health)
+			fmt.Fprintf(&b, "        Component(%s, \"%s\", \"%s\", \"%s\", $tags=\"%s\")\n", cid, comp.name, tech, desc, tag)
 		}
 		b.WriteString("    }\n")
 	}
@@ -88,6 +106,16 @@ func renderC4(report *arch.ContextReport, opts Options) string {
 		}
 		fmt.Fprintf(&b, "    Rel(%s, %s, \"%s\")\n", fromID, toID, label)
 	}
+
+	b.WriteByte('\n')
+	fmt.Fprintf(&b, "    UpdateElementStyle(*, $fontColor=\"%s\", $borderColor=\"%s\")\n",
+		rt.ColorHex("text"), rt.ColorHex("blue"))
+	fmt.Fprintf(&b, "    UpdateElementStyle(healthy, $bgColor=\"%s\", $borderColor=\"%s\")\n",
+		rt.ColorHex("green"), rt.ColorHex("green"))
+	fmt.Fprintf(&b, "    UpdateElementStyle(sick, $bgColor=\"%s\", $borderColor=\"%s\")\n",
+		rt.ColorHex("yellow"), rt.ColorHex("yellow"))
+	fmt.Fprintf(&b, "    UpdateElementStyle(fatal, $bgColor=\"%s\", $borderColor=\"%s\")\n",
+		rt.ColorHex("red"), rt.ColorHex("red"))
 
 	return b.String()
 }

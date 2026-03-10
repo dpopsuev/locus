@@ -20,7 +20,7 @@ func NewServer(sc *cache.ScanCache, historyDir string, workspaceRoots []string) 
 	pathMap := os.Getenv("LOCUS_PATH_MAP")
 	proto := protocol.NewWithPathMapper(sc, historyDir, workspaceRoots, pathMap)
 	srv := sdkmcp.NewServer(
-		&sdkmcp.Implementation{Name: "locus", Version: "0.2.0"},
+		&sdkmcp.Implementation{Name: "locus", Version: "0.2.1"},
 		&sdkmcp.ServerOptions{
 			Instructions: "Locus is a spatial context bus for AI agents. " +
 				"Point it at any repository to get architecture, dependency graph, churn, hot spots, and symbols. " +
@@ -133,7 +133,7 @@ func NewServer(sc *cache.ScanCache, historyDir string, workspaceRoots []string) 
 
 	triage.AddTool(reg, srv, triage.ToolMeta{
 		Name:        "render_diagram",
-		Description: "Render a Mermaid diagram from repository structure. Types: dependency (flowchart), c4 (C4 Component), coupling (Sankey), churn (XY chart), layers (block), tree (mindmap), classes (classDiagram), sequence (sequenceDiagram), er (erDiagram). Returns valid Mermaid text.",
+		Description: "Render a Mermaid diagram from repository structure. Types: dependency (flowchart), c4 (C4 Component), coupling (Sankey), churn (XY chart), layers (block), tree (mindmap), classes (classDiagram), sequence (sequenceDiagram), er (erDiagram). Returns valid Mermaid text. Use theme param (light/dark/natural) for themed output.",
 		Keywords:    []string{"diagram", "visual", "mermaid", "chart", "graph", "class", "sequence", "er", "entity", "hierarchy", "call"},
 		Categories:  []string{"architecture", "visualization"},
 		Rationale: map[string]string{
@@ -489,6 +489,7 @@ type diagramInput struct {
 	TopN         int    `json:"top_n,omitempty"`
 	Entry        string `json:"entry,omitempty"`
 	ExportedOnly bool   `json:"exported_only,omitempty"`
+	Theme        string `json:"theme,omitempty"`
 }
 
 func (h *handler) handleRenderDiagram(ctx context.Context, _ *sdkmcp.CallToolRequest, in diagramInput) (*sdkmcp.CallToolResult, any, error) {
@@ -530,6 +531,7 @@ func (h *handler) handleRenderDiagram(ctx context.Context, _ *sdkmcp.CallToolReq
 		TopN:         in.TopN,
 		Entry:        in.Entry,
 		ExportedOnly: in.ExportedOnly,
+		Theme:        in.Theme,
 	})
 	if err != nil {
 		return nil, nil, err

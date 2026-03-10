@@ -8,15 +8,15 @@ import (
 	"github.com/dpopsuev/locus/internal/arch"
 )
 
-// renderLayers produces a Mermaid block-beta diagram showing detected layers
-// with components placed within and violations highlighted.
-func renderLayers(report *arch.ContextReport, opts Options) string {
+func renderLayers(in Input, opts Options) string {
+	report := in.Report
+	rt := in.ResolvedTheme
+
 	depths := report.ImportDepth
 	if depths == nil {
 		depths = arch.ComputeImportDepth(report.Architecture.Edges)
 	}
 
-	// Group components by layer (import depth).
 	type layer struct {
 		depth      int
 		components []string
@@ -41,6 +41,7 @@ func renderLayers(report *arch.ContextReport, opts Options) string {
 	}
 
 	var b strings.Builder
+	b.WriteString(rt.InitDirective() + "\n")
 	b.WriteString("block-beta\n")
 
 	for _, l := range layers {
@@ -67,6 +68,10 @@ func renderLayers(report *arch.ContextReport, opts Options) string {
 	}
 
 	if len(report.LayerViolations) > 0 {
+		violationColor := rt.ShapeHex["violation_edge"]
+		if violationColor.Stroke != "" {
+			fmt.Fprintf(&b, "\n    classDef violation stroke:%s,stroke-width:2px\n", violationColor.Stroke)
+		}
 		b.WriteString("\n")
 		for _, v := range report.LayerViolations {
 			fromID := mermaidID(v.From)
