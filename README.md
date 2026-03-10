@@ -425,27 +425,14 @@ Components with the highest combination of fan-in (many dependents) and churn (f
 | Tool | Description |
 |---|---|
 | `scan_project` | Full codebase context: architecture, deps, churn, symbols. Results cached by git HEAD SHA. |
-| `suggest_depth` | Optimal `--depth` grouping level for a repo. |
-| `get_hot_spots` | High fan-in + high churn components (risk areas). |
 | `get_dependencies` | Fan-in/fan-out edges for a specific component. |
-| `get_coupling_table` | Package coupling: fan-in, fan-out, churn, symbol count. Pre-formatted. |
-| `get_edge_list` | Dependency edge list, optional component filter. |
-| `get_rules` | `.cursor/rules` for a workspace. |
-| `get_skills` | `.cursor/skills` for a workspace. |
-| `codograph_remote` | Scan a remote GitHub repo via shallow clone. Cached by URL+SHA. |
-| `get_codograph_history` | Past codographs with timestamps, SHAs, component/edge counts. |
-| `diff_codographs` | Diff between two most recent codographs: added/removed components, edges, churn deltas. |
-| `diff_branches` | Architecture diff between two git branches (cache-aware). |
-| `get_cycles` | Circular dependencies, import depth, layer purity. |
-| `get_coverage` | Per-component test coverage percentages. |
-| `get_api_surface` | Exported symbol counts and trust boundary crossings. |
-| `validate_architecture` | Diff desired-state architecture (Mermaid/JSON) against live scan. |
-| `render_diagram` | Mermaid diagrams: dependency, c4, coupling, churn, layers, tree, classes, sequence, er, dataflow, callgraph, state. |
-| `architecture_evolution` | Scan architecture at multiple commits to show structural growth over time. Returns timeline of component/edge/LOC counts with per-step diffs. |
-| `get_conventions` | Detect coding conventions: naming patterns, file structure, test patterns, config formats. |
 | `get_impact` | Change impact analysis: direct/transitive dependents, blast radius percentage, risk level. |
-| `get_knowledge_gaps` | Find undocumented or under-tested components based on codograph data. |
-| `health_check` | Server health summary: cache status, history availability, workspace roots. |
+| `get_coupling_table` | Coupling table, hot spots, or edge list. Use `view=coupling\|hot_spots\|edges`. |
+| `get_cycles` | Cycles, coverage, API surface, conventions, or knowledge gaps. Use `analysis=cycles\|coverage\|api_surface\|conventions\|gaps`. |
+| `codograph_remote` | Scan a remote GitHub repo via shallow clone. Cached by URL+SHA. |
+| `get_codograph_history` | Past codographs with timestamps, SHAs, counts. Set `diff=true` to compare latest two. |
+| `diff_branches` | Architecture diff between two git branches (cache-aware). |
+| `render_diagram` | Mermaid diagrams: dependency, c4, coupling, churn, layers, tree, classes, sequence, er. |
 | `triage` | Map natural language intent to ranked tool list (no LLM). |
 
 ## Triage

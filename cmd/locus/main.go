@@ -108,9 +108,9 @@ var serveCmd = &cobra.Command{
   stdio (default): reads/writes JSON-RPC over stdin/stdout.
   http:            starts a Streamable HTTP server on --addr.
 
-Tools: scan_project, suggest_depth, get_hot_spots, get_dependencies,
-       get_rules, get_skills, codograph_remote, get_codograph_history,
-       diff_codographs, diff_branches.`,
+Tools: scan_project, get_dependencies, get_impact, get_coupling_table,
+       codograph_remote, get_codograph_history, diff_branches,
+       get_cycles, render_diagram, triage.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		roots := serveFlags.workspaces
 		if len(roots) == 0 {

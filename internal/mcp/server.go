@@ -24,7 +24,7 @@ func NewServer(sc *cache.ScanCache, historyDir string, workspaceRoots []string) 
 		&sdkmcp.ServerOptions{
 			Instructions: "Locus is a spatial context bus for AI agents. " +
 				"Point it at any repository to get architecture, dependency graph, churn, hot spots, and symbols. " +
-				"Results are cached by git HEAD SHA. Use scan_project to analyze a repo, get_hot_spots for risk areas, " +
+				"Results are cached by git HEAD SHA. Use scan_project to analyze a repo, get_coupling_table with view=hot_spots for risk areas, " +
 				"and codograph_remote for GitHub repos you don't have locally.",
 		},
 	)
@@ -45,31 +45,6 @@ func NewServer(sc *cache.ScanCache, historyDir string, workspaceRoots []string) 
 	}, noOut(h.handleScanProject))
 
 	triage.AddTool(reg, srv, triage.ToolMeta{
-		Name:        "suggest_depth",
-		Description: "Analyze a repository and suggest the optimal --depth grouping level.",
-		Keywords:    []string{"depth", "group", "granularity"},
-		Categories:  []string{"architecture"},
-		Rationale: map[string]string{
-			"architecture": "Optimal grouping level for readable diagrams",
-		},
-		Priority: 5,
-	}, noOut(h.handleSuggestDepth))
-
-	triage.AddTool(reg, srv, triage.ToolMeta{
-		Name:        "get_hot_spots",
-		Description: "Return the hottest components in a repository (high fan-in + high churn).",
-		Keywords:    []string{"perf", "bottleneck", "hot", "slow", "latency", "churn", "risk"},
-		Categories:  []string{"performance", "refactoring", "architecture"},
-		DefaultArgs: map[string]any{"top_n": 10},
-		Rationale: map[string]string{
-			"performance":  "High fan-in + high churn = likely bottleneck",
-			"refactoring":  "Most-changed components with most dependents = highest risk",
-			"architecture": "Structural hot spots reveal design pressure points",
-		},
-		Priority: 1,
-	}, noOut(h.handleGetHotSpots))
-
-	triage.AddTool(reg, srv, triage.ToolMeta{
 		Name:        "get_dependencies",
 		Description: "Return fan-in and fan-out edges for a specific component in a repository.",
 		Keywords:    []string{"depend", "import", "upstream", "downstream"},
@@ -80,41 +55,6 @@ func NewServer(sc *cache.ScanCache, historyDir string, workspaceRoots []string) 
 		},
 		Priority: 2,
 	}, noOut(h.handleGetDependencies))
-
-	triage.AddTool(reg, srv, triage.ToolMeta{
-		Name:        "get_rules",
-		Description: "Return all .cursor/rules/*.mdc rules for a workspace root, with frontmatter metadata and body content.",
-		Keywords:    []string{"rule", "convention", "standard", "lint"},
-		Categories:  []string{"onboarding", "governance"},
-		Rationale: map[string]string{
-			"onboarding":  "Discover coding standards and conventions for this workspace",
-			"governance":  "Review enforced rules and lint configurations",
-		},
-		Priority: 3,
-	}, noOut(h.handleGetRules))
-
-	triage.AddTool(reg, srv, triage.ToolMeta{
-		Name:        "get_skills",
-		Description: "Return all .cursor/skills/*/SKILL.md skills for a workspace root, with frontmatter metadata and body content.",
-		Keywords:    []string{"skill", "capability", "workflow"},
-		Categories:  []string{"onboarding"},
-		Rationale: map[string]string{
-			"onboarding": "Discover available agent skills and workflows",
-		},
-		Priority: 4,
-	}, noOut(h.handleGetSkills))
-
-	triage.AddTool(reg, srv, triage.ToolMeta{
-		Name:        "get_conventions",
-		Description: "Detect coding conventions from scanned codebase: naming (camelCase/snake_case), structure (cmd/, internal/, pkg/), test patterns, config files.",
-		Keywords:    []string{"convention", "style", "naming", "structure", "pattern"},
-		Categories:  []string{"onboarding", "governance"},
-		Rationale: map[string]string{
-			"onboarding":  "Learn project conventions before contributing",
-			"governance":  "Verify adherence to detected conventions",
-		},
-		Priority: 4,
-	}, noOut(h.handleGetConventions))
 
 	triage.AddTool(reg, srv, triage.ToolMeta{
 		Name:        "get_impact",
@@ -129,20 +69,8 @@ func NewServer(sc *cache.ScanCache, historyDir string, workspaceRoots []string) 
 	}, noOut(h.handleGetImpact))
 
 	triage.AddTool(reg, srv, triage.ToolMeta{
-		Name:        "get_knowledge_gaps",
-		Description: "Identify undocumented or under-tested components. Reports no tests, no docs, and high fan-in without tests as critical.",
-		Keywords:    []string{"gap", "docs", "tests", "coverage", "undocumented", "untested"},
-		Categories:  []string{"quality", "testing"},
-		Rationale: map[string]string{
-			"quality":  "Find components lacking documentation or tests",
-			"testing":  "Identify high-risk components without test coverage",
-		},
-		Priority: 2,
-	}, noOut(h.handleGetKnowledgeGaps))
-
-	triage.AddTool(reg, srv, triage.ToolMeta{
 		Name:        "get_coupling_table",
-		Description: "Return a pre-formatted coupling table: package name, fan-in, fan-out, churn, symbol count. Sorted and filtered so agents never need Python/jq glue.",
+		Description: "Return a pre-formatted coupling table: package name, fan-in, fan-out, churn, symbol count. Sorted and filtered so agents never need Python/jq glue. Use view=hot_spots for risk areas (high fan-in + churn), view=edges for dependency edge list.",
 		Keywords:    []string{"coupling", "fan", "blast", "depend"},
 		Categories:  []string{"performance", "architecture", "dependencies"},
 		DefaultArgs: map[string]any{"sort_by": "fan_in"},
@@ -153,18 +81,6 @@ func NewServer(sc *cache.ScanCache, historyDir string, workspaceRoots []string) 
 		},
 		Priority: 2,
 	}, noOut(h.handleGetCouplingTable))
-
-	triage.AddTool(reg, srv, triage.ToolMeta{
-		Name:        "get_edge_list",
-		Description: "Return a pre-formatted list of dependency edges. Optionally filter to a single component.",
-		Keywords:    []string{"edge", "dependency", "import", "link"},
-		Categories:  []string{"dependencies", "architecture"},
-		Rationale: map[string]string{
-			"dependencies": "Raw edge list for dependency analysis",
-			"architecture": "Complete import graph as flat list",
-		},
-		Priority: 3,
-	}, noOut(h.handleGetEdgeList))
 
 	triage.AddTool(reg, srv, triage.ToolMeta{
 		Name:        "codograph_remote",
@@ -180,8 +96,8 @@ func NewServer(sc *cache.ScanCache, historyDir string, workspaceRoots []string) 
 
 	triage.AddTool(reg, srv, triage.ToolMeta{
 		Name:        "get_codograph_history",
-		Description: "List past codographs for a repository path. Returns timestamps, HEAD SHAs, source (local/remote), and component/edge counts. Use the 'last' parameter to limit results.",
-		Keywords:    []string{"history", "past", "trend", "evolution"},
+		Description: "List past codographs for a repository path. Returns timestamps, HEAD SHAs, source (local/remote), and component/edge counts. Use the 'last' parameter to limit results. Set diff=true to compare the latest two codographs.",
+		Keywords:    []string{"history", "past", "trend", "evolution", "diff", "compare"},
 		Categories:  []string{"churn", "history"},
 		Rationale: map[string]string{
 			"churn":   "Track architectural evolution over time",
@@ -189,18 +105,6 @@ func NewServer(sc *cache.ScanCache, historyDir string, workspaceRoots []string) 
 		},
 		Priority: 1,
 	}, noOut(h.handleGetCodographHistory))
-
-	triage.AddTool(reg, srv, triage.ToolMeta{
-		Name:        "diff_codographs",
-		Description: "Compare two codographs and return a diff: added/removed components, added/removed edges, churn deltas, and a human-readable summary. Defaults to comparing the latest two codographs for a given path.",
-		Keywords:    []string{"diff", "compare", "change", "delta"},
-		Categories:  []string{"churn", "comparison"},
-		Rationale: map[string]string{
-			"churn":      "What changed between scans",
-			"comparison": "Structural diff of two points in time",
-		},
-		Priority: 1,
-	}, noOut(h.handleDiffCodographs))
 
 	triage.AddTool(reg, srv, triage.ToolMeta{
 		Name:        "diff_branches",
@@ -216,7 +120,7 @@ func NewServer(sc *cache.ScanCache, historyDir string, workspaceRoots []string) 
 
 	triage.AddTool(reg, srv, triage.ToolMeta{
 		Name:        "get_cycles",
-		Description: "Detect circular dependencies, compute import depth per component, and check layer purity. Pure graph analysis on cached edges.",
+		Description: "Detect circular dependencies, compute import depth per component, and check layer purity. Use analysis=coverage for test coverage, analysis=api_surface for exported symbols, analysis=conventions for coding patterns, analysis=gaps for undocumented/under-tested components.",
 		Keywords:    []string{"cycle", "circular", "loop", "deadlock"},
 		Categories:  []string{"performance", "architecture", "dependencies"},
 		Rationale: map[string]string{
@@ -226,42 +130,6 @@ func NewServer(sc *cache.ScanCache, historyDir string, workspaceRoots []string) 
 		},
 		Priority: 1,
 	}, noOut(h.handleGetCycles))
-
-	triage.AddTool(reg, srv, triage.ToolMeta{
-		Name:        "get_coverage",
-		Description: "Run test coverage analysis and return per-component coverage percentages. Optionally filter to components below a threshold.",
-		Keywords:    []string{"test", "coverage", "untested", "gap", "quality"},
-		Categories:  []string{"testing", "quality"},
-		Rationale: map[string]string{
-			"testing": "Identify untested or under-tested components",
-			"quality": "Coverage gaps correlate with defect density",
-		},
-		Priority: 1,
-	}, noOut(h.handleGetCoverage))
-
-	triage.AddTool(reg, srv, triage.ToolMeta{
-		Name:        "get_api_surface",
-		Description: "Return exported symbol counts per component and trust boundary crossings.",
-		Keywords:    []string{"api", "surface", "export", "boundary", "trust", "attack"},
-		Categories:  []string{"security", "architecture"},
-		Rationale: map[string]string{
-			"security":     "Large API surface = larger attack surface",
-			"architecture": "Exported symbols define component contracts",
-		},
-		Priority: 1,
-	}, noOut(h.handleGetAPISurface))
-
-	triage.AddTool(reg, srv, triage.ToolMeta{
-		Name:        "validate_architecture",
-		Description: "Diff a desired-state architecture (mermaid or JSON) against a live scan, reporting missing/extra components and edges.",
-		Keywords:    []string{"drift", "desired", "validate", "compliance", "enforce"},
-		Categories:  []string{"compliance", "architecture"},
-		Rationale: map[string]string{
-			"compliance":   "Detect drift from intended architecture",
-			"architecture": "Enforce desired-state constraints on live code",
-		},
-		Priority: 1,
-	}, noOut(h.handleValidateArchitecture))
 
 	triage.AddTool(reg, srv, triage.ToolMeta{
 		Name:        "render_diagram",
@@ -274,29 +142,6 @@ func NewServer(sc *cache.ScanCache, historyDir string, workspaceRoots []string) 
 		},
 		Priority: 1,
 	}, noOut(h.handleRenderDiagram))
-
-	triage.AddTool(reg, srv, triage.ToolMeta{
-		Name:        "architecture_evolution",
-		Description: "Scan architecture at multiple commits in a range to show how the codebase structure grows over time. Returns a timeline of component/edge/LOC counts with per-step diffs.",
-		Keywords:    []string{"evolution", "growth", "timeline", "history", "commits", "architecture", "trend"},
-		Categories:  []string{"architecture", "history"},
-		Rationale: map[string]string{
-			"architecture": "Visualize structural growth across a commit range",
-			"history":      "Understand how architecture evolved over time",
-		},
-		Priority: 3,
-	}, noOut(h.handleEvolution))
-
-	triage.AddTool(reg, srv, triage.ToolMeta{
-		Name:        "health_check",
-		Description: "Return health summary per component: total tests, failures, flakes, pass rate. Correlates with Locus component data when available.",
-		Keywords:    []string{"health", "status", "check", "alive", "ready"},
-		Categories:  []string{"meta"},
-		Rationale: map[string]string{
-			"meta": "Verify Locus infrastructure is healthy before running scans",
-		},
-		Priority: 5,
-	}, noOut(h.handleHealthCheck))
 
 	// --- triage tool (self-registering) ---
 
@@ -391,22 +236,6 @@ func (h *handler) handleGetDependencies(ctx context.Context, _ *sdkmcp.CallToolR
 	return jsonResult(r)
 }
 
-func (h *handler) handleGetRules(ctx context.Context, _ *sdkmcp.CallToolRequest, in pathInput) (*sdkmcp.CallToolResult, any, error) {
-	rules, err := h.proto.GetRules(ctx, in.Path)
-	if err != nil {
-		return nil, nil, fmt.Errorf("read rules: %w", err)
-	}
-	return jsonResult(rules)
-}
-
-func (h *handler) handleGetSkills(ctx context.Context, _ *sdkmcp.CallToolRequest, in pathInput) (*sdkmcp.CallToolResult, any, error) {
-	skills, err := h.proto.GetSkills(ctx, in.Path)
-	if err != nil {
-		return nil, nil, fmt.Errorf("read skills: %w", err)
-	}
-	return jsonResult(skills)
-}
-
 func (h *handler) handleGetConventions(ctx context.Context, _ *sdkmcp.CallToolRequest, in pathInput) (*sdkmcp.CallToolResult, any, error) {
 	r, err := h.proto.GetConventions(ctx, in.Path)
 	if err != nil {
@@ -437,17 +266,37 @@ func (h *handler) handleGetKnowledgeGaps(ctx context.Context, _ *sdkmcp.CallTool
 }
 
 type couplingInput struct {
-	Path   string `json:"path"`
-	SortBy string `json:"sort_by,omitempty"`
-	TopN   int    `json:"top_n,omitempty"`
+	Path      string `json:"path"`
+	SortBy    string `json:"sort_by,omitempty"`
+	TopN      int    `json:"top_n,omitempty"`
+	View      string `json:"view,omitempty"`       // coupling|hot_spots|edges (default: coupling)
+	ChurnDays int    `json:"churn_days,omitempty"` // for hot_spots view
+	Component string `json:"component,omitempty"`  // for edges view
 }
 
 func (h *handler) handleGetCouplingTable(ctx context.Context, _ *sdkmcp.CallToolRequest, in couplingInput) (*sdkmcp.CallToolResult, any, error) {
-	md, err := h.proto.GetCouplingTable(ctx, in.Path, in.SortBy, in.TopN)
-	if err != nil {
-		return nil, nil, err
+	path := in.Path
+	switch in.View {
+	case "hot_spots":
+		spots, err := h.proto.GetHotSpots(ctx, path, in.ChurnDays, in.TopN)
+		if err != nil {
+			return nil, nil, err
+		}
+		data, _ := json.MarshalIndent(spots, "", "  ")
+		return text(string(data)), nil, nil
+	case "edges":
+		result, err := h.proto.GetEdgeList(ctx, path, in.Component)
+		if err != nil {
+			return nil, nil, err
+		}
+		return text(result), nil, nil
+	default:
+		result, err := h.proto.GetCouplingTable(ctx, path, in.SortBy, in.TopN)
+		if err != nil {
+			return nil, nil, err
+		}
+		return text(result), nil, nil
 	}
-	return text(md), nil, nil
 }
 
 type edgeListInput struct {
@@ -490,14 +339,25 @@ func (h *handler) handleCodographRemote(ctx context.Context, _ *sdkmcp.CallToolR
 type historyInput struct {
 	Path string `json:"path"`
 	Last int    `json:"last,omitempty"`
+	Diff bool   `json:"diff,omitempty"`
 }
 
 func (h *handler) handleGetCodographHistory(ctx context.Context, _ *sdkmcp.CallToolRequest, in historyInput) (*sdkmcp.CallToolResult, any, error) {
-	entries, err := h.proto.GetHistory(ctx, in.Path, in.Last)
+	path := in.Path
+	if in.Diff {
+		result, err := h.proto.DiffCodographs(ctx, path)
+		if err != nil {
+			return nil, nil, err
+		}
+		data, _ := json.MarshalIndent(result, "", "  ")
+		return text(string(data)), nil, nil
+	}
+	entries, err := h.proto.GetHistory(ctx, path, in.Last)
 	if err != nil {
 		return nil, nil, fmt.Errorf("list history: %w", err)
 	}
-	return jsonResult(entries)
+	data, _ := json.MarshalIndent(entries, "", "  ")
+	return text(string(data)), nil, nil
 }
 
 func (h *handler) handleDiffCodographs(ctx context.Context, _ *sdkmcp.CallToolRequest, in pathInput) (*sdkmcp.CallToolResult, any, error) {
@@ -525,16 +385,52 @@ func (h *handler) handleDiffBranches(ctx context.Context, _ *sdkmcp.CallToolRequ
 // --- CON-303: cycles ---
 
 type cyclesInput struct {
-	Path   string   `json:"path"`
-	Layers []string `json:"layers,omitempty"`
+	Path      string   `json:"path"`
+	Layers    []string `json:"layers,omitempty"`
+	Analysis  string   `json:"analysis,omitempty"`  // cycles|coverage|api_surface|conventions|gaps|all (default: cycles)
+	Threshold float64  `json:"threshold,omitempty"` // for coverage
+	Trusted   []string `json:"trusted,omitempty"`    // for api_surface
 }
 
 func (h *handler) handleGetCycles(ctx context.Context, _ *sdkmcp.CallToolRequest, in cyclesInput) (*sdkmcp.CallToolResult, any, error) {
-	r, err := h.proto.GetCycles(ctx, in.Path, in.Layers)
-	if err != nil {
-		return nil, nil, err
+	path := in.Path
+	switch in.Analysis {
+	case "coverage":
+		report, err := h.proto.GetCoverage(ctx, path, in.Threshold)
+		if err != nil {
+			return nil, nil, err
+		}
+		data, _ := json.MarshalIndent(report, "", "  ")
+		return text(string(data)), nil, nil
+	case "api_surface":
+		report, err := h.proto.GetAPISurface(ctx, path, in.Trusted)
+		if err != nil {
+			return nil, nil, err
+		}
+		data, _ := json.MarshalIndent(report, "", "  ")
+		return text(string(data)), nil, nil
+	case "conventions":
+		report, err := h.proto.GetConventions(ctx, path)
+		if err != nil {
+			return nil, nil, err
+		}
+		data, _ := json.MarshalIndent(report, "", "  ")
+		return text(string(data)), nil, nil
+	case "gaps":
+		report, err := h.proto.GetGaps(ctx, path)
+		if err != nil {
+			return nil, nil, err
+		}
+		data, _ := json.MarshalIndent(report, "", "  ")
+		return text(string(data)), nil, nil
+	default:
+		report, err := h.proto.GetCycles(ctx, path, in.Layers)
+		if err != nil {
+			return nil, nil, err
+		}
+		data, _ := json.MarshalIndent(report, "", "  ")
+		return text(string(data)), nil, nil
 	}
-	return jsonResult(r)
 }
 
 // --- CON-304: coverage ---
