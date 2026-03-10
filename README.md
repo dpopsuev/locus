@@ -435,6 +435,132 @@ Components with the highest combination of fan-in (many dependents) and churn (f
 | `render_diagram` | Mermaid diagrams: dependency, c4, coupling, churn, layers, tree, classes, sequence, er. |
 | `triage` | Map natural language intent to ranked tool list (no LLM). |
 
+## LLM Chatbox Examples
+
+These show what an LLM agent sends over MCP. Copy-paste into any chat to see them in action.
+
+**Scan a repository:**
+
+```json
+{ "tool": "scan_project", "arguments": { "path": "/workspace/myproject" } }
+```
+
+**Find risk hot spots (high fan-in + high churn):**
+
+```json
+{ "tool": "get_coupling_table", "arguments": {
+    "path": "/workspace/myproject", "view": "hot_spots", "top_n": 5
+}}
+```
+
+**Get the full coupling table:**
+
+```json
+{ "tool": "get_coupling_table", "arguments": {
+    "path": "/workspace/myproject", "sort_by": "fan_in"
+}}
+```
+
+**List dependency edges for one component:**
+
+```json
+{ "tool": "get_coupling_table", "arguments": {
+    "path": "/workspace/myproject", "view": "edges", "component": "internal/auth"
+}}
+```
+
+**Detect circular dependencies:**
+
+```json
+{ "tool": "get_cycles", "arguments": { "path": "/workspace/myproject" } }
+```
+
+**Check test coverage by component:**
+
+```json
+{ "tool": "get_cycles", "arguments": {
+    "path": "/workspace/myproject", "analysis": "coverage"
+}}
+```
+
+**Find exported API surface:**
+
+```json
+{ "tool": "get_cycles", "arguments": {
+    "path": "/workspace/myproject", "analysis": "api_surface"
+}}
+```
+
+**Detect coding conventions:**
+
+```json
+{ "tool": "get_cycles", "arguments": {
+    "path": "/workspace/myproject", "analysis": "conventions"
+}}
+```
+
+**Find undocumented or under-tested components:**
+
+```json
+{ "tool": "get_cycles", "arguments": {
+    "path": "/workspace/myproject", "analysis": "gaps"
+}}
+```
+
+**Blast radius for a component change:**
+
+```json
+{ "tool": "get_impact", "arguments": {
+    "path": "/workspace/myproject", "component": "internal/auth"
+}}
+```
+
+**Fan-in/fan-out for a single component:**
+
+```json
+{ "tool": "get_dependencies", "arguments": {
+    "path": "/workspace/myproject", "component": "internal/protocol"
+}}
+```
+
+**Generate a Mermaid dependency diagram:**
+
+```json
+{ "tool": "render_diagram", "arguments": {
+    "path": "/workspace/myproject", "type": "dependency"
+}}
+```
+
+**Scan a remote GitHub repo:**
+
+```json
+{ "tool": "codograph_remote", "arguments": {
+    "url": "github.com/org/repo"
+}}
+```
+
+**Diff architecture between two branches:**
+
+```json
+{ "tool": "diff_branches", "arguments": {
+    "path": "/workspace/myproject", "branch_a": "main", "branch_b": "feature/auth"
+}}
+```
+
+**View codograph history and diff latest two:**
+
+```json
+{ "tool": "get_codograph_history", "arguments": {
+    "path": "/workspace/myproject", "diff": true
+}}
+```
+
+**Ask which tool to use:**
+
+```json
+{ "tool": "triage", "arguments": { "intent": "where are the hot spots?" } }
+```
+
 ## Triage
 
 Locus includes a built-in intent router that maps natural language queries to the right tool chain without an LLM:
@@ -449,8 +575,8 @@ $ locus triage "where are the hot spots?"
   "confidence": 0.037,
   "tools": [
     {
-      "name": "get_hot_spots",
-      "params": { "top_n": 10 },
+      "name": "get_coupling_table",
+      "params": { "view": "hot_spots", "top_n": 10 },
       "reason": "Structural hot spots reveal design pressure points"
     }
   ]
@@ -461,22 +587,19 @@ All tools grouped by category:
 
 | Category | Tools |
 |---|---|
-| architecture | `scan_project`, `suggest_depth`, `get_hot_spots`, `get_coupling_table`, `get_edge_list`, `codograph_remote`, `get_cycles`, `get_api_surface`, `validate_architecture`, `render_diagram`, `architecture_evolution` |
-| onboarding | `scan_project`, `get_rules`, `get_skills`, `codograph_remote` |
-| performance | `get_hot_spots`, `get_coupling_table`, `get_cycles` |
-| refactoring | `get_hot_spots`, `get_dependencies` |
-| dependencies | `get_dependencies`, `get_coupling_table`, `get_edge_list`, `get_cycles` |
-| comparison | `diff_codographs`, `diff_branches` |
+| architecture | `scan_project`, `get_coupling_table`, `codograph_remote`, `get_cycles`, `render_diagram` |
+| onboarding | `scan_project`, `codograph_remote` |
+| performance | `get_coupling_table` (view=hot_spots), `get_cycles` |
+| refactoring | `get_coupling_table` (view=hot_spots), `get_dependencies`, `get_impact` |
+| dependencies | `get_dependencies`, `get_coupling_table` (view=edges), `get_cycles` |
+| comparison | `get_codograph_history` (diff=true), `diff_branches` |
 | review | `diff_branches` |
-| churn | `get_codograph_history`, `diff_codographs` |
-| history | `get_codograph_history`, `architecture_evolution` |
-| testing | `get_coverage` |
-| quality | `get_coverage` |
-| security | `get_api_surface` |
-| compliance | `validate_architecture` |
+| churn | `get_codograph_history` |
+| testing | `get_cycles` (analysis=coverage) |
+| quality | `get_cycles` (analysis=gaps) |
+| security | `get_cycles` (analysis=api_surface) |
 | visualization | `render_diagram` |
-| governance | `get_rules` |
-| meta | `health_check`, `triage` |
+| meta | `triage` |
 
 ## Supported Languages
 

@@ -20,7 +20,7 @@ func NewServer(sc *cache.ScanCache, historyDir string, workspaceRoots []string) 
 	pathMap := os.Getenv("LOCUS_PATH_MAP")
 	proto := protocol.NewWithPathMapper(sc, historyDir, workspaceRoots, pathMap)
 	srv := sdkmcp.NewServer(
-		&sdkmcp.Implementation{Name: "locus", Version: "0.1.1"},
+		&sdkmcp.Implementation{Name: "locus", Version: "0.2.0"},
 		&sdkmcp.ServerOptions{
 			Instructions: "Locus is a spatial context bus for AI agents. " +
 				"Point it at any repository to get architecture, dependency graph, churn, hot spots, and symbols. " +
