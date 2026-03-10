@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/locus_logo.png" alt="Locus" width="200">
+</p>
+
 # Locus
 
 Spatial context bus for AI agents. Point it at any repository and get architecture, dependency graph, churn, hot spots, and symbols -- via CLI or MCP server. No ceremony.
@@ -429,15 +433,10 @@ Components with the highest combination of fan-in (many dependents) and churn (f
 
 | Tool | Description |
 |---|---|
-| `scan_project` | Full codebase context: architecture, deps, churn, symbols. Results cached by git HEAD SHA. |
-| `get_dependencies` | Fan-in/fan-out edges for a specific component. |
-| `get_impact` | Change impact analysis: direct/transitive dependents, blast radius percentage, risk level. |
-| `get_coupling_table` | Coupling table, hot spots, or edge list. Use `view=coupling\|hot_spots\|edges`. |
+| `codograph` | Scan and compare repository architectures. Actions: `scan_local` (full codebase context), `scan_remote` (GitHub via shallow clone), `history` (past scans, diff=true to compare), `diff` (compare git branches). |
+| `dependencies` | Analyze component dependencies, impact, and coupling. Actions: `deps` (fan-in/fan-out), `impact` (blast radius), `coupling` (table, view=hot_spots/edges). |
 | `get_cycles` | Cycles, coverage, API surface, conventions, or knowledge gaps. Use `analysis=cycles\|coverage\|api_surface\|conventions\|gaps`. |
-| `codograph_remote` | Scan a remote GitHub repo via shallow clone. Cached by URL+SHA. |
-| `get_codograph_history` | Past codographs with timestamps, SHAs, counts. Set `diff=true` to compare latest two. |
-| `diff_branches` | Architecture diff between two git branches (cache-aware). |
-| `render_diagram` | Mermaid diagrams: dependency, c4, coupling, churn, layers, tree, classes, sequence, er. Use `theme` param (light/dark/natural) for themed output with health-based coloring. |
+| `render_diagram` | Mermaid diagrams: dependency, c4, coupling, churn, layers, tree, classes, sequence, er. Use `theme` (light/dark/natural). |
 | `triage` | Map natural language intent to ranked tool list (no LLM). |
 
 ## LLM Chatbox Examples
@@ -447,30 +446,30 @@ These show what an LLM agent sends over MCP. Copy-paste into any chat to see the
 **Scan a repository:**
 
 ```json
-{ "tool": "scan_project", "arguments": { "path": "/workspace/myproject" } }
+{ "tool": "codograph", "arguments": { "action": "scan_local", "path": "/workspace/myproject" } }
 ```
 
 **Find risk hot spots (high fan-in + high churn):**
 
 ```json
-{ "tool": "get_coupling_table", "arguments": {
-    "path": "/workspace/myproject", "view": "hot_spots", "top_n": 5
+{ "tool": "dependencies", "arguments": {
+    "action": "coupling", "path": "/workspace/myproject", "view": "hot_spots", "top_n": 5
 }}
 ```
 
 **Get the full coupling table:**
 
 ```json
-{ "tool": "get_coupling_table", "arguments": {
-    "path": "/workspace/myproject", "sort_by": "fan_in"
+{ "tool": "dependencies", "arguments": {
+    "action": "coupling", "path": "/workspace/myproject", "sort_by": "fan_in"
 }}
 ```
 
 **List dependency edges for one component:**
 
 ```json
-{ "tool": "get_coupling_table", "arguments": {
-    "path": "/workspace/myproject", "view": "edges", "component": "internal/auth"
+{ "tool": "dependencies", "arguments": {
+    "action": "coupling", "path": "/workspace/myproject", "view": "edges", "component": "internal/auth"
 }}
 ```
 
@@ -515,16 +514,16 @@ These show what an LLM agent sends over MCP. Copy-paste into any chat to see the
 **Blast radius for a component change:**
 
 ```json
-{ "tool": "get_impact", "arguments": {
-    "path": "/workspace/myproject", "component": "internal/auth"
+{ "tool": "dependencies", "arguments": {
+    "action": "impact", "path": "/workspace/myproject", "component": "internal/auth"
 }}
 ```
 
 **Fan-in/fan-out for a single component:**
 
 ```json
-{ "tool": "get_dependencies", "arguments": {
-    "path": "/workspace/myproject", "component": "internal/protocol"
+{ "tool": "dependencies", "arguments": {
+    "action": "deps", "path": "/workspace/myproject", "component": "internal/protocol"
 }}
 ```
 
@@ -547,24 +546,24 @@ These show what an LLM agent sends over MCP. Copy-paste into any chat to see the
 **Scan a remote GitHub repo:**
 
 ```json
-{ "tool": "codograph_remote", "arguments": {
-    "url": "github.com/org/repo"
+{ "tool": "codograph", "arguments": {
+    "action": "scan_remote", "url": "github.com/org/repo"
 }}
 ```
 
 **Diff architecture between two branches:**
 
 ```json
-{ "tool": "diff_branches", "arguments": {
-    "path": "/workspace/myproject", "branch_a": "main", "branch_b": "feature/auth"
+{ "tool": "codograph", "arguments": {
+    "action": "diff", "path": "/workspace/myproject", "branch_a": "main", "branch_b": "feature/auth"
 }}
 ```
 
 **View codograph history and diff latest two:**
 
 ```json
-{ "tool": "get_codograph_history", "arguments": {
-    "path": "/workspace/myproject", "diff": true
+{ "tool": "codograph", "arguments": {
+    "action": "history", "path": "/workspace/myproject", "diff": true
 }}
 ```
 
@@ -588,8 +587,8 @@ $ locus triage "where are the hot spots?"
   "confidence": 0.037,
   "tools": [
     {
-      "name": "get_coupling_table",
-      "params": { "view": "hot_spots", "top_n": 10 },
+      "name": "dependencies",
+      "params": { "action": "coupling", "view": "hot_spots", "top_n": 10 },
       "reason": "Structural hot spots reveal design pressure points"
     }
   ]
@@ -600,14 +599,14 @@ All tools grouped by category:
 
 | Category | Tools |
 |---|---|
-| architecture | `scan_project`, `get_coupling_table`, `codograph_remote`, `get_cycles`, `render_diagram` |
-| onboarding | `scan_project`, `codograph_remote` |
-| performance | `get_coupling_table` (view=hot_spots), `get_cycles` |
-| refactoring | `get_coupling_table` (view=hot_spots), `get_dependencies`, `get_impact` |
-| dependencies | `get_dependencies`, `get_coupling_table` (view=edges), `get_cycles` |
-| comparison | `get_codograph_history` (diff=true), `diff_branches` |
-| review | `diff_branches` |
-| churn | `get_codograph_history` |
+| architecture | `codograph scan_local`, `dependencies coupling`, `codograph scan_remote`, `get_cycles`, `render_diagram` |
+| onboarding | `codograph scan_local`, `codograph scan_remote` |
+| performance | `dependencies coupling` (view=hot_spots), `get_cycles` |
+| refactoring | `dependencies coupling` (view=hot_spots), `dependencies deps`, `dependencies impact` |
+| dependencies | `dependencies deps`, `dependencies coupling` (view=edges), `get_cycles` |
+| comparison | `codograph history` (diff=true), `codograph diff` |
+| review | `codograph diff` |
+| churn | `codograph history` |
 | testing | `get_cycles` (analysis=coverage) |
 | quality | `get_cycles` (analysis=gaps) |
 | security | `get_cycles` (analysis=api_surface) |
@@ -678,6 +677,7 @@ shapes:
 | `LOCUS_ADDR` | `:8081` | Listen address (HTTP only) |
 | `LOCUS_THEME` | `natural` | Default diagram theme: `light`, `dark`, `natural` |
 | `LOCUS_THEME_FILE` | `~/.locus/theme.yaml` | Custom theme override file |
+| `LOCUS_LOG_LEVEL` | `info` | Log level: `debug`, `info`, `warn`, `error`. JSON to stderr. |
 
 ## License
 
