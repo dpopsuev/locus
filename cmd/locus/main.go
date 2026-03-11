@@ -121,7 +121,7 @@ Tools: scan_project, get_dependencies, get_impact, get_coupling_table,
 			roots = []string{cwd}
 		}
 		sc := cache.New(cache.DefaultCacheDir())
-		srv, _ := locusmcp.NewServer(sc, history.DefaultHistoryDir(), roots)
+		srv, _ := locusmcp.NewServer(sc, history.DefaultHistoryDir(), roots, Version)
 		if serveFlags.transport == "http" {
 			handler := sdkmcp.NewStreamableHTTPHandler(
 				func(r *http.Request) *sdkmcp.Server { return srv },
@@ -490,7 +490,7 @@ Examples:
 	Args: cobra.MaximumNArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		sc := cache.New(cache.DefaultCacheDir())
-		_, reg := locusmcp.NewServer(sc, history.DefaultHistoryDir(), nil)
+		_, reg := locusmcp.NewServer(sc, history.DefaultHistoryDir(), nil, Version)
 
 		if triageFlags.list {
 			tools := reg.List()

@@ -18,11 +18,11 @@ import (
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-func NewServer(sc *cache.ScanCache, historyDir string, workspaceRoots []string) (*sdkmcp.Server, *triage.Registry) {
+func NewServer(sc *cache.ScanCache, historyDir string, workspaceRoots []string, version string) (*sdkmcp.Server, *triage.Registry) {
 	pathMap := os.Getenv("LOCUS_PATH_MAP")
 	proto := protocol.NewWithPathMapper(sc, historyDir, workspaceRoots, pathMap)
 	srv := sdkmcp.NewServer(
-		&sdkmcp.Implementation{Name: "locus", Version: "0.4.0"},
+		&sdkmcp.Implementation{Name: "locus", Version: version},
 		&sdkmcp.ServerOptions{
 			Instructions: "Locus is a spatial context bus for AI agents. " +
 				"Point it at any repository to get architecture, dependency graph, churn, hot spots, and symbols. " +
