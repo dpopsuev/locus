@@ -76,11 +76,11 @@ Locus is designed for natural language. You talk to your agent, and it calls the
 
 > **You:** Which parts are risky to change?
 >
-> **Agent:** *(calls `dependencies` with action `coupling`, view `hot_spots`)* Two components are in the danger zone: `internal/arch` (fan-in 7, churn 21) and `internal/analysis` (fan-in 4, churn 16). Both are deeply depended on and change frequently. I'd add tests before touching either.
+> **Agent:** *(calls `analysis` with action `coupling`, view `hot_spots`)* Two components are in the danger zone: `internal/arch` (fan-in 7, churn 21) and `internal/analysis` (fan-in 4, churn 16). Both are deeply depended on and change frequently. I'd add tests before touching either.
 
 > **You:** If I refactor internal/cache, what breaks?
 >
-> **Agent:** *(calls `dependencies` with action `impact`)* Blast radius is 38%. Direct dependents: `internal/protocol`, `internal/history`, `cmd/locus`. Transitive: everything that depends on those — 5 packages total. Risk level: medium.
+> **Agent:** *(calls `analysis` with action `impact`)* Blast radius is 38%. Direct dependents: `internal/protocol`, `internal/history`, `cmd/locus`. Transitive: everything that depends on those — 5 packages total. Risk level: medium.
 
 > **You:** Show me the architecture as a layer diagram with health colors.
 >
@@ -352,8 +352,7 @@ locus diagram . --type state                             # state machine detecti
 | Tool | Description |
 |---|---|
 | `codograph` | Scan and compare repository architectures. Actions: `scan_local` (full codebase context), `scan_remote` (GitHub via shallow clone), `history` (past scans, diff=true to compare), `diff` (compare git branches). |
-| `dependencies` | Analyze component dependencies, impact, and coupling. Actions: `deps` (fan-in/fan-out), `impact` (blast radius), `coupling` (table, view=hot_spots/edges). |
-| `get_cycles` | Cycles, coverage, API surface, conventions, or knowledge gaps. Use `analysis=cycles\|coverage\|api_surface\|conventions\|gaps`. |
+| `analysis` | Analyze component dependencies, impact, and coupling. Actions: `deps` (fan-in/fan-out), `impact` (blast radius), `coupling` (table, view=hot_spots/edges). Use analysis=coverage for test coverage, analysis=api_surface for exported symbols, analysis=conventions for coding patterns, analysis=gaps for undocumented/under-tested components. |
 | `render_diagram` | Mermaid diagrams: dependency, c4, coupling, churn, layers, tree, classes, sequence, er. Use `theme` (light/dark/natural). |
 | `triage` | Map natural language intent to ranked tool list (no LLM). |
 
@@ -371,7 +370,7 @@ $ locus triage "where are the hot spots?"
   "confidence": 0.037,
   "tools": [
     {
-      "name": "dependencies",
+      "name": "analysis",
       "params": { "action": "coupling", "view": "hot_spots", "top_n": 10 },
       "reason": "Structural hot spots reveal design pressure points"
     }
@@ -383,17 +382,17 @@ All tools grouped by category:
 
 | Category | Tools |
 |---|---|
-| architecture | `codograph scan_local`, `dependencies coupling`, `codograph scan_remote`, `get_cycles`, `render_diagram` |
+| architecture | `codograph scan_local`, `analysis coupling`, `codograph scan_remote`, `analysis`, `render_diagram` |
 | onboarding | `codograph scan_local`, `codograph scan_remote` |
-| performance | `dependencies coupling` (view=hot_spots), `get_cycles` |
-| refactoring | `dependencies coupling` (view=hot_spots), `dependencies deps`, `dependencies impact` |
-| dependencies | `dependencies deps`, `dependencies coupling` (view=edges), `get_cycles` |
+| performance | `analysis coupling` (view=hot_spots), `analysis` |
+| refactoring | `analysis coupling` (view=hot_spots), `analysis deps`, `analysis impact` |
+| dependencies | `analysis deps`, `analysis coupling` (view=edges), `analysis` |
 | comparison | `codograph history` (diff=true), `codograph diff` |
 | review | `codograph diff` |
 | churn | `codograph history` |
-| testing | `get_cycles` (analysis=coverage) |
-| quality | `get_cycles` (analysis=gaps) |
-| security | `get_cycles` (analysis=api_surface) |
+| testing | `analysis` (analysis=coverage) |
+| quality | `analysis` (analysis=gaps) |
+| security | `analysis` (analysis=api_surface) |
 | visualization | `render_diagram` |
 | meta | `triage` |
 
