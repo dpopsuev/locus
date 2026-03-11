@@ -22,7 +22,7 @@ func NewServer(sc *cache.ScanCache, historyDir string, workspaceRoots []string) 
 	pathMap := os.Getenv("LOCUS_PATH_MAP")
 	proto := protocol.NewWithPathMapper(sc, historyDir, workspaceRoots, pathMap)
 	srv := sdkmcp.NewServer(
-		&sdkmcp.Implementation{Name: "locus", Version: "0.3.0"},
+		&sdkmcp.Implementation{Name: "locus", Version: "0.4.0"},
 		&sdkmcp.ServerOptions{
 			Instructions: "Locus is a spatial context bus for AI agents. " +
 				"Point it at any repository to get architecture, dependency graph, churn, hot spots, and symbols. " +
@@ -50,32 +50,22 @@ func NewServer(sc *cache.ScanCache, historyDir string, workspaceRoots []string) 
 	}, noOut(h.handleCodograph))
 
 	triage.AddTool(reg, srv, triage.ToolMeta{
-		Name: "dependencies",
+		Name: "analysis",
 		Description: "Analyze component dependencies, impact, and coupling. " +
 			"Actions: deps (fan-in/fan-out for a component), impact (transitive blast radius), " +
-			"coupling (coupling table, view=hot_spots for risk areas, view=edges for edge list).",
-		Keywords:   []string{"depend", "import", "impact", "blast", "coupling", "fan", "upstream", "downstream"},
-		Categories: []string{"dependencies", "refactoring", "performance"},
+			"coupling (coupling table, view=hot_spots for risk areas, view=edges for edge list). " +
+			"Use analysis=coverage for test coverage, analysis=api_surface for exported symbols, " +
+			"analysis=conventions for coding patterns, analysis=gaps for undocumented/under-tested components.",
+		Keywords:   []string{"depend", "import", "impact", "blast", "coupling", "fan", "upstream", "downstream", "cycle", "circular", "loop", "coverage", "convention", "gap"},
+		Categories: []string{"dependencies", "refactoring", "performance", "architecture"},
 		Rationale: map[string]string{
-			"dependencies": "Component-level dependency analysis and coupling metrics",
+			"dependencies": "Component-level dependency analysis, coupling metrics, and cycle detection",
 			"refactoring":  "Assess risk and blast radius before changes",
-			"performance":  "Identify highly coupled components",
+			"performance":  "Identify highly coupled components and circular dependencies",
+			"architecture": "Cycles violate clean layering, conventions show patterns",
 		},
 		Priority: 2,
-	}, noOut(h.handleDependencies))
-
-	triage.AddTool(reg, srv, triage.ToolMeta{
-		Name:        "get_cycles",
-		Description: "Detect circular dependencies, compute import depth per component, and check layer purity. Use analysis=coverage for test coverage, analysis=api_surface for exported symbols, analysis=conventions for coding patterns, analysis=gaps for undocumented/under-tested components.",
-		Keywords:    []string{"cycle", "circular", "loop", "deadlock"},
-		Categories:  []string{"performance", "architecture", "dependencies"},
-		Rationale: map[string]string{
-			"performance":  "Circular deps can cause initialization deadlocks",
-			"architecture": "Cycles violate clean layering principles",
-			"dependencies": "Circular deps cause build and deploy issues",
-		},
-		Priority: 1,
-	}, noOut(h.handleGetCycles))
+	}, noOut(h.handleAnalysis))
 
 	triage.AddTool(reg, srv, triage.ToolMeta{
 		Name:        "render_diagram",
@@ -112,37 +102,41 @@ type handler struct {
 // --- consolidated input types ---
 
 type codographActionInput struct {
-	Action string `json:"action"`
+	Action string `json:"action" jsonschema:"required,scan_local | scan_remote | history | diff"`
 
-	Path            string `json:"path,omitempty"`
-	Depth           int    `json:"depth,omitempty"`
-	ChurnDays       int    `json:"churn_days,omitempty"`
-	IncludeExternal bool   `json:"include_external,omitempty"`
-	IncludeTests    bool   `json:"include_tests,omitempty"`
-	IncludeCoverage bool   `json:"include_coverage,omitempty"`
-	Budget          int    `json:"budget,omitempty"`
-	Format          string `json:"format,omitempty"`
+	Path            string `json:"path,omitempty" jsonschema:"absolute path to local repository"`
+	Depth           int    `json:"depth,omitempty" jsonschema:"directory grouping depth for components"`
+	ChurnDays       int    `json:"churn_days,omitempty" jsonschema:"git history window in days for churn metrics"`
+	IncludeExternal bool   `json:"include_external,omitempty" jsonschema:"include external/vendor dependencies in scan"`
+	IncludeTests    bool   `json:"include_tests,omitempty" jsonschema:"include test files in scan"`
+	IncludeCoverage bool   `json:"include_coverage,omitempty" jsonschema:"compute test coverage metrics"`
+	Budget          int    `json:"budget,omitempty" jsonschema:"max components to include in output"`
+	Format          string `json:"format,omitempty" jsonschema:"output format: json (default) or summary"`
 
-	URL string `json:"url,omitempty"`
-	Ref string `json:"ref,omitempty"`
+	URL string `json:"url,omitempty" jsonschema:"GitHub repository URL (scan_remote)"`
+	Ref string `json:"ref,omitempty" jsonschema:"git ref to scan (scan_remote)"`
 
-	Keep bool `json:"keep,omitempty"`
+	Keep bool `json:"keep,omitempty" jsonschema:"keep cloned repo after scan_remote"`
 
-	Last int  `json:"last,omitempty"`
-	Diff bool `json:"diff,omitempty"`
+	Last int  `json:"last,omitempty" jsonschema:"number of history entries to return"`
+	Diff bool `json:"diff,omitempty" jsonschema:"if true, compare latest two scans (history)"`
 
-	BranchA string `json:"branch_a,omitempty"`
-	BranchB string `json:"branch_b,omitempty"`
+	BranchA string `json:"branch_a,omitempty" jsonschema:"first branch to compare (diff)"`
+	BranchB string `json:"branch_b,omitempty" jsonschema:"second branch to compare (diff)"`
 }
 
-type dependenciesActionInput struct {
-	Action    string `json:"action"`
-	Path      string `json:"path"`
-	Component string `json:"component,omitempty"`
-	SortBy    string `json:"sort_by,omitempty"`
-	TopN      int    `json:"top_n,omitempty"`
-	View      string `json:"view,omitempty"`
-	ChurnDays int    `json:"churn_days,omitempty"`
+type analysisActionInput struct {
+	Action string `json:"action" jsonschema:"required,deps | impact | coupling | cycles | coverage | api_surface | conventions | gaps"`
+	Path   string `json:"path" jsonschema:"required,absolute path to local repository"`
+
+	Component string   `json:"component,omitempty" jsonschema:"component path for deps/impact/coupling edges"`
+	SortBy    string   `json:"sort_by,omitempty" jsonschema:"sort field for coupling table"`
+	TopN      int      `json:"top_n,omitempty" jsonschema:"limit results to top N entries"`
+	View      string   `json:"view,omitempty" jsonschema:"coupling view: hot_spots for risk areas, edges for edge list"`
+	ChurnDays int      `json:"churn_days,omitempty" jsonschema:"git history window in days (coupling hot_spots)"`
+	Layers    []string `json:"layers,omitempty" jsonschema:"ordered layer names for purity checking (cycles)"`
+	Threshold float64  `json:"threshold,omitempty" jsonschema:"minimum coverage threshold to flag (coverage)"`
+	Trusted   []string `json:"trusted,omitempty" jsonschema:"trusted import prefixes to exclude (api_surface)"`
 }
 
 // --- dispatchers ---
@@ -173,7 +167,7 @@ func (h *handler) handleCodograph(ctx context.Context, req *sdkmcp.CallToolReque
 	}
 }
 
-func (h *handler) handleDependencies(ctx context.Context, req *sdkmcp.CallToolRequest, in dependenciesActionInput) (*sdkmcp.CallToolResult, any, error) {
+func (h *handler) handleAnalysis(ctx context.Context, req *sdkmcp.CallToolRequest, in analysisActionInput) (*sdkmcp.CallToolResult, any, error) {
 	switch in.Action {
 	case "deps":
 		return h.handleGetDependencies(ctx, req, depsInput{
@@ -188,8 +182,28 @@ func (h *handler) handleDependencies(ctx context.Context, req *sdkmcp.CallToolRe
 			Path: in.Path, SortBy: in.SortBy, TopN: in.TopN,
 			View: in.View, ChurnDays: in.ChurnDays, Component: in.Component,
 		})
+	case "cycles":
+		return h.handleGetCycles(ctx, req, cyclesInput{
+			Path: in.Path, Layers: in.Layers,
+		})
+	case "coverage":
+		return h.handleGetCycles(ctx, req, cyclesInput{
+			Path: in.Path, Analysis: "coverage", Threshold: in.Threshold,
+		})
+	case "api_surface":
+		return h.handleGetCycles(ctx, req, cyclesInput{
+			Path: in.Path, Analysis: "api_surface", Trusted: in.Trusted,
+		})
+	case "conventions":
+		return h.handleGetCycles(ctx, req, cyclesInput{
+			Path: in.Path, Analysis: "conventions",
+		})
+	case "gaps":
+		return h.handleGetCycles(ctx, req, cyclesInput{
+			Path: in.Path, Analysis: "gaps",
+		})
 	default:
-		return nil, nil, fmt.Errorf("unknown dependencies action %q (valid: deps, impact, coupling)", in.Action)
+		return nil, nil, fmt.Errorf("unknown analysis action %q (valid: deps, impact, coupling, cycles, coverage, api_surface, conventions, gaps)", in.Action)
 	}
 }
 
@@ -510,14 +524,14 @@ func (h *handler) handleValidateArchitecture(ctx context.Context, _ *sdkmcp.Call
 // --- CON-354: diagrams ---
 
 type diagramInput struct {
-	Path         string `json:"path"`
-	Type         string `json:"type"`
-	Scope        string `json:"scope,omitempty"`
-	Depth        int    `json:"depth,omitempty"`
-	TopN         int    `json:"top_n,omitempty"`
-	Entry        string `json:"entry,omitempty"`
-	ExportedOnly bool   `json:"exported_only,omitempty"`
-	Theme        string `json:"theme,omitempty"`
+	Path         string `json:"path" jsonschema:"required,absolute path to local repository"`
+	Type         string `json:"type" jsonschema:"required,diagram type: dependency, c4, coupling, churn, layers, tree, classes, sequence, er"`
+	Scope        string `json:"scope,omitempty" jsonschema:"limit diagram to a sub-package or directory"`
+	Depth        int    `json:"depth,omitempty" jsonschema:"directory grouping depth for components"`
+	TopN         int    `json:"top_n,omitempty" jsonschema:"limit to top N components in diagram"`
+	Entry        string `json:"entry,omitempty" jsonschema:"entry point component for sequence/callgraph diagrams"`
+	ExportedOnly bool   `json:"exported_only,omitempty" jsonschema:"only include exported symbols in class diagrams"`
+	Theme        string `json:"theme,omitempty" jsonschema:"Mermaid theme: light, dark, or natural"`
 }
 
 func (h *handler) handleRenderDiagram(ctx context.Context, _ *sdkmcp.CallToolRequest, in diagramInput) (*sdkmcp.CallToolResult, any, error) {
@@ -627,8 +641,8 @@ func (h *handler) handleEvolution(ctx context.Context, _ *sdkmcp.CallToolRequest
 // --- triage ---
 
 type triageInput struct {
-	Intent string `json:"intent"`
-	Path   string `json:"path,omitempty"`
+	Intent string `json:"intent" jsonschema:"required,natural language description of what you want to do"`
+	Path   string `json:"path,omitempty" jsonschema:"optional repository path for context"`
 }
 
 func (h *handler) handleTriage(_ context.Context, _ *sdkmcp.CallToolRequest, in triageInput) (*sdkmcp.CallToolResult, any, error) {
