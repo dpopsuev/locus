@@ -127,10 +127,10 @@ Tools: scan_project, get_dependencies, get_impact, get_coupling_table,
 				func(r *http.Request) *sdkmcp.Server { return srv },
 				nil,
 			)
-			slog.Info("locus server starting", "transport", "http", "addr", serveFlags.addr)
+			slog.Info("locus server starting", "version", Version, "transport", "http", "addr", serveFlags.addr)
 			return http.ListenAndServe(serveFlags.addr, handler)
 		}
-		slog.Info("locus server starting", "transport", "stdio")
+		slog.Info("locus server starting", "version", Version, "transport", "stdio")
 		return srv.Run(context.Background(), &sdkmcp.StdioTransport{})
 	},
 }
