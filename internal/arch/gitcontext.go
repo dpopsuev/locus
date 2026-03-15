@@ -156,8 +156,8 @@ func AuthorOwnership(root string, modPath string) map[string][]Author {
 			list = append(list, Author{Name: name, Commits: count})
 		}
 		sort.Slice(list, func(i, j int) bool { return list[i].Commits > list[j].Commits })
-		if len(list) > 5 {
-			list = list[:5]
+		if len(list) > MaxAuthorsPerPackage {
+			list = list[:MaxAuthorsPerPackage]
 		}
 		result[pkg] = list
 	}
@@ -204,8 +204,8 @@ func FileHotSpots(root string, days int) []HotFile {
 	}
 
 	sort.Slice(files, func(i, j int) bool { return files[i].Changes > files[j].Changes })
-	if len(files) > 50 {
-		files = files[:50]
+	if len(files) > MaxFileHotSpots {
+		files = files[:MaxFileHotSpots]
 	}
 	return files
 }

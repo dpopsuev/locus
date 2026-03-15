@@ -169,8 +169,8 @@ func TestRenderUnknownType(t *testing.T) {
 
 func TestTypes(t *testing.T) {
 	types := Types()
-	if len(types) != 12 {
-		t.Fatalf("expected 12 types, got %d: %v", len(types), types)
+	if len(types) != 13 {
+		t.Fatalf("expected 13 types, got %d: %v", len(types), types)
 	}
 }
 

@@ -40,7 +40,7 @@ func (s *CompositeScanner) Scan(root string) (*model.Project, error) {
 
 	for _, sub := range subs {
 		subRoot := filepath.Join(absRoot, sub.relPath)
-		sc := scannerForLang(sub.lang)
+		sc := ScannerForLang(sub.lang)
 		subProj, err := sc.Scan(subRoot)
 		if err != nil {
 			continue
@@ -75,18 +75,9 @@ func discoverSubProjects(root string) []subProject {
 	var subs []subProject
 	seen := make(map[string]bool)
 
-	type marker struct {
-		file string
-		lang model.Language
-	}
-	markers := []marker{
-		{"go.mod", model.LangGo},
-		{"Cargo.toml", model.LangRust},
-	}
-
-	for _, m := range markers {
-		if _, err := os.Stat(filepath.Join(root, m.file)); err == nil {
-			subs = append(subs, subProject{relPath: ".", lang: m.lang})
+	for _, m := range RootProjectMarkers {
+		if _, err := os.Stat(filepath.Join(root, m.File)); err == nil {
+			subs = append(subs, subProject{relPath: ".", lang: m.Lang})
 			seen["."] = true
 		}
 	}
@@ -97,9 +88,7 @@ func discoverSubProjects(root string) []subProject {
 			return err
 		}
 		if d.IsDir() {
-			base := d.Name()
-			if base == "node_modules" || base == "target" || base == "vendor" ||
-				base == "dist" || base == "build" || strings.HasPrefix(base, ".") {
+			if ShouldSkipDir(d.Name()) {
 				return filepath.SkipDir
 			}
 			return nil
@@ -139,18 +128,6 @@ func hasNodeModulesParent(rel string) bool {
 	return false
 }
 
-func scannerForLang(lang model.Language) Scanner {
-	switch lang {
-	case model.LangGo:
-		return &PackagesScanner{Fallback: &GoScanner{}}
-	case model.LangRust:
-		return &RustScanner{}
-	case model.LangTypeScript:
-		return &TypeScriptScanner{}
-	default:
-		return &GoScanner{}
-	}
-}
 
 func prefixImportPath(prefix, importPath string) string {
 	if prefix == "." || prefix == "" {

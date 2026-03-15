@@ -92,6 +92,54 @@ export function init() {}
 	}
 }
 
+func TestCompositeScanMergesPythonAndTS(t *testing.T) {
+	dir := t.TempDir()
+
+	files := map[string]string{
+		"pyproject.toml":    "[project]\nname = \"backend\"\n",
+		"backend/main.py":   "def serve():\n    pass\n",
+		"web/package.json":  `{"name": "web-ui"}`,
+		"web/src/index.ts":  `export function mount() {}`,
+	}
+
+	for name, content := range files {
+		p := filepath.Join(dir, name)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	sc := &survey.CompositeScanner{}
+	proj, err := sc.Scan(dir)
+	if err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+
+	nsMap := make(map[string]*model.Namespace)
+	for _, ns := range proj.Namespaces {
+		nsMap[ns.ImportPath] = ns
+	}
+
+	if _, ok := nsMap["backend"]; !ok {
+		allPaths := make([]string, 0, len(nsMap))
+		for k := range nsMap {
+			allPaths = append(allPaths, k)
+		}
+		t.Errorf("missing Python namespace 'backend'; have: %v", allPaths)
+	}
+
+	if _, ok := nsMap["web/src"]; !ok {
+		allPaths := make([]string, 0, len(nsMap))
+		for k := range nsMap {
+			allPaths = append(allPaths, k)
+		}
+		t.Errorf("missing TypeScript namespace 'web/src'; have: %v", allPaths)
+	}
+}
+
 func TestCompositeScanAutoDetectsMultipleLanguages(t *testing.T) {
 	dir := t.TempDir()
 

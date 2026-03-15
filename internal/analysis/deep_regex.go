@@ -26,7 +26,7 @@ var (
 func (a *RegexDeepAnalyzer) CallGraph(root string, opts CallGraphOpts) (*CallGraph, error) {
 	depth := opts.Depth
 	if depth <= 0 {
-		depth = 10
+		depth = DefaultCallGraphDepth
 	}
 
 	type funcDef struct {
@@ -121,12 +121,12 @@ func (a *RegexDeepAnalyzer) CallGraph(root string, opts CallGraphOpts) (*CallGra
 	for _, n := range nodeSet {
 		nodes = append(nodes, n)
 	}
-	return &CallGraph{Nodes: nodes, Edges: edges, Layer: "regex"}, nil
+	return &CallGraph{Nodes: nodes, Edges: edges, Layer: LayerRegex}, nil
 }
 
 func (a *RegexDeepAnalyzer) DataFlowTrace(root, entry string, maxDepth int) (*DataFlow, error) {
 	if maxDepth <= 0 {
-		maxDepth = 8
+		maxDepth = DefaultDataFlowDepth
 	}
 
 	funcBodies := make(map[string]string)
@@ -203,7 +203,7 @@ func (a *RegexDeepAnalyzer) DataFlowTrace(root, entry string, maxDepth int) (*Da
 	for _, n := range nodeMap {
 		nodes = append(nodes, n)
 	}
-	return &DataFlow{Nodes: nodes, Edges: edges, Layer: "regex"}, nil
+	return &DataFlow{Nodes: nodes, Edges: edges, Layer: LayerRegex}, nil
 }
 
 func (a *RegexDeepAnalyzer) DetectStateMachines(root string) ([]StateMachine, error) {

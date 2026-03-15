@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dpopsuev/locus/internal/arch"
 	"github.com/dpopsuev/locus/internal/cache"
 )
 
@@ -229,6 +230,264 @@ func TestRenderEvolutionTable(t *testing.T) {
 	}
 	if !strings.Contains(out, "Growth:") {
 		t.Error("expected summary line")
+	}
+}
+
+func TestGetViolations_AutoDetectLayers(t *testing.T) {
+	// Use the locus repo itself.
+	repoPath, err := filepath.Abs("../..")
+	if err != nil {
+		t.Skip("cannot resolve repo path")
+	}
+	if _, err := os.Stat(filepath.Join(repoPath, ".git")); err != nil {
+		t.Skip("not in a git repo")
+	}
+
+	cacheDir := filepath.Join(t.TempDir(), "cache")
+	sc := cache.New(cacheDir)
+	p := New(sc, t.TempDir(), []string{repoPath})
+
+	report, err := p.GetViolations(context.Background(), repoPath, nil)
+	if err != nil {
+		t.Fatalf("GetViolations: %v", err)
+	}
+	if len(report.Layers) == 0 {
+		t.Error("expected auto-detected layers")
+	}
+	if report.Summary == "" {
+		t.Error("expected summary")
+	}
+	t.Logf("Violations: %s, layers=%d", report.Summary, len(report.Layers))
+}
+
+func TestGetViolations_ExplicitLayers(t *testing.T) {
+	repoPath, err := filepath.Abs("../..")
+	if err != nil {
+		t.Skip("cannot resolve repo path")
+	}
+	if _, err := os.Stat(filepath.Join(repoPath, ".git")); err != nil {
+		t.Skip("not in a git repo")
+	}
+
+	cacheDir := filepath.Join(t.TempDir(), "cache")
+	sc := cache.New(cacheDir)
+	p := New(sc, t.TempDir(), []string{repoPath})
+
+	// Use explicit layers — model is low, mcp is high.
+	layers := []string{"model", "survey", "arch", "analysis", "protocol", "mcp"}
+	report, err := p.GetViolations(context.Background(), repoPath, layers)
+	if err != nil {
+		t.Fatalf("GetViolations: %v", err)
+	}
+	if len(report.Layers) != len(layers) {
+		t.Errorf("expected %d layers, got %d", len(layers), len(report.Layers))
+	}
+	t.Logf("Violations with explicit layers: %s", report.Summary)
+	for _, v := range report.Violations {
+		t.Logf("  violation: %s -> %s", v.From, v.To)
+	}
+}
+
+func TestGetScanDiff(t *testing.T) {
+	cacheDir := filepath.Join(t.TempDir(), "cache")
+	sc := cache.New(cacheDir)
+	p := New(sc, t.TempDir(), nil)
+
+	beforeReport := &arch.ContextReport{
+		Architecture: arch.ArchModel{
+			Services: []arch.ArchService{
+				{Name: "pkg_a", LOC: 100},
+				{Name: "pkg_b", LOC: 200},
+			},
+			Edges: []arch.ArchEdge{
+				{From: "pkg_a", To: "pkg_b"},
+			},
+		},
+	}
+	afterReport := &arch.ContextReport{
+		Architecture: arch.ArchModel{
+			Services: []arch.ArchService{
+				{Name: "pkg_a", LOC: 150},
+				{Name: "pkg_b", LOC: 200},
+				{Name: "pkg_c", LOC: 50},
+			},
+			Edges: []arch.ArchEdge{
+				{From: "pkg_a", To: "pkg_b"},
+				{From: "pkg_a", To: "pkg_c"},
+			},
+		},
+	}
+
+	_ = sc.Put("/repo", "sha1", beforeReport)
+	_ = sc.Put("/repo", "sha2", afterReport)
+
+	diff, err := p.GetScanDiff(context.Background(), "/repo", "sha1", "sha2")
+	if err != nil {
+		t.Fatalf("GetScanDiff: %v", err)
+	}
+	if len(diff.AddedComponents) != 1 || diff.AddedComponents[0] != "pkg_c" {
+		t.Errorf("added = %v, want [pkg_c]", diff.AddedComponents)
+	}
+	if len(diff.RemovedComponents) != 0 {
+		t.Errorf("removed = %v, want []", diff.RemovedComponents)
+	}
+	if diff.AddedEdges != 1 {
+		t.Errorf("added edges = %d, want 1", diff.AddedEdges)
+	}
+	if diff.LOCDelta != 100 {
+		t.Errorf("LOC delta = %d, want 100", diff.LOCDelta)
+	}
+	t.Logf("Diff: %s", diff.Summary)
+}
+
+func TestGetCachedReport_RoundTrip(t *testing.T) {
+	cacheDir := filepath.Join(t.TempDir(), "cache")
+	sc := cache.New(cacheDir)
+	p := New(sc, t.TempDir(), nil)
+
+	// Simulate a remote scan: store a report under a cache key.
+	fakeKey := "remote:https://github.com/example/repo@abc123def456"
+	fakeSHA := "abc123def456"
+	report := &arch.ContextReport{
+		ModulePath: "github.com/example/repo",
+		Scanner:    "go",
+	}
+	if err := sc.Put(fakeKey, fakeSHA, report); err != nil {
+		t.Fatalf("put: %v", err)
+	}
+
+	// Retrieve via GetCachedReport.
+	got, err := p.GetCachedReport(fakeKey)
+	if err != nil {
+		t.Fatalf("GetCachedReport: %v", err)
+	}
+	if got.ModulePath != "github.com/example/repo" {
+		t.Errorf("module path = %q, want github.com/example/repo", got.ModulePath)
+	}
+
+	// Retrieve via getOrScan with cache key.
+	got2, err := p.getOrScan("", fakeKey)
+	if err != nil {
+		t.Fatalf("getOrScan with cache key: %v", err)
+	}
+	if got2.ModulePath != got.ModulePath {
+		t.Errorf("getOrScan returned different module path")
+	}
+
+	// Missing key should error.
+	_, err = p.GetCachedReport("remote:https://github.com/missing/repo@deadbeef")
+	if err == nil {
+		t.Error("expected error for missing cache key")
+	}
+}
+
+func TestRunPreset(t *testing.T) {
+	repoPath, err := filepath.Abs("../..")
+	if err != nil {
+		t.Skip("cannot resolve repo path")
+	}
+	if _, err := os.Stat(filepath.Join(repoPath, ".git")); err != nil {
+		t.Skip("not in a git repo")
+	}
+
+	sc := cache.New(filepath.Join(t.TempDir(), "cache"))
+	p := New(sc, t.TempDir(), []string{repoPath})
+
+	for _, preset := range []string{PresetArchReview, PresetHealthCheck, PresetOnboarding, PresetPrePR} {
+		out, err := p.RunPreset(context.Background(), repoPath, preset)
+		if err != nil {
+			t.Fatalf("RunPreset(%s): %v", preset, err)
+		}
+		if out == "" {
+			t.Errorf("RunPreset(%s) returned empty", preset)
+		}
+		t.Logf("%s: %d chars", preset, len(out))
+	}
+
+	_, err = p.RunPreset(context.Background(), repoPath, "nonexistent")
+	if err == nil {
+		t.Error("expected error for unknown preset")
+	}
+}
+
+func TestGetComponentDetail(t *testing.T) {
+	cacheDir := filepath.Join(t.TempDir(), "cache")
+	sc := cache.New(cacheDir)
+	p := New(sc, t.TempDir(), nil)
+
+	report := &arch.ContextReport{
+		Architecture: arch.ArchModel{
+			Services: []arch.ArchService{
+				{Name: "pkg_a", LOC: 500, Churn: 3, Symbols: []string{"Foo", "Bar", "Baz"}},
+				{Name: "pkg_b", LOC: 200},
+			},
+			Edges: []arch.ArchEdge{
+				{From: "pkg_a", To: "pkg_b"},
+				{From: "pkg_b", To: "pkg_a"},
+			},
+		},
+	}
+	_ = sc.Put("/repo", "sha1", report)
+
+	detail, err := p.GetComponentDetail(context.Background(), "/repo", "pkg_a", "")
+	if err != nil {
+		// No cache hit without SHA, expected
+		t.Skip("no cache hit without SHA resolution")
+	}
+	if detail.Name != "pkg_a" {
+		t.Errorf("name = %q, want pkg_a", detail.Name)
+	}
+}
+
+func TestAnswerQuery(t *testing.T) {
+	repoPath, err := filepath.Abs("../..")
+	if err != nil {
+		t.Skip("cannot resolve repo path")
+	}
+	if _, err := os.Stat(filepath.Join(repoPath, ".git")); err != nil {
+		t.Skip("not in a git repo")
+	}
+
+	sc := cache.New(filepath.Join(t.TempDir(), "cache"))
+	p := New(sc, t.TempDir(), []string{repoPath})
+
+	tests := []struct {
+		query  string
+		action string
+	}{
+		{"what are the riskiest components?", "coupling view=hot_spots"},
+		{"any circular dependencies?", "cycles"},
+		{"are there layer violations?", "violations"},
+		{"give me an overview", "preset=architecture_review"},
+		{"something completely unknown", "none"},
+	}
+	for _, tt := range tests {
+		r, err := p.AnswerQuery(context.Background(), repoPath, tt.query)
+		if err != nil {
+			t.Fatalf("AnswerQuery(%q): %v", tt.query, err)
+		}
+		if r.Action != tt.action {
+			t.Errorf("query=%q: action=%q, want %q", tt.query, r.Action, tt.action)
+		}
+	}
+}
+
+func TestGenerateHints(t *testing.T) {
+	// Report with cycles and hot spots should produce hints.
+	report := &arch.ContextReport{
+		Cycles:   []arch.Cycle{{"a", "b", "a"}},
+		HotSpots: []arch.HotSpot{{Component: "pkg_a", FanIn: 5, Churn: 10}},
+	}
+	hints := GenerateHints(report)
+	if len(hints) < 2 {
+		t.Errorf("expected at least 2 hints, got %d", len(hints))
+	}
+
+	// Clean report should produce no hints.
+	clean := &arch.ContextReport{}
+	hints = GenerateHints(clean)
+	if len(hints) != 0 {
+		t.Errorf("expected 0 hints for clean report, got %d", len(hints))
 	}
 }
 

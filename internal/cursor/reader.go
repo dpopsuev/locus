@@ -28,8 +28,8 @@ func ReadRules(root string) ([]Rule, error) {
 	}
 
 	var rules []Rule
-	err := filepath.Walk(rulesDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() {
+	err := filepath.WalkDir(rulesDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
 			return err
 		}
 		if !strings.HasSuffix(path, ".mdc") {

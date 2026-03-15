@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/dpopsuev/locus/internal/model"
 )
 
 // LSPDeepAnalyzer uses a single gopls connection for all DeepAnalyzer
@@ -35,7 +37,7 @@ func (a *LSPDeepAnalyzer) CallGraph(_ string, opts CallGraphOpts) (*CallGraph, e
 
 	depth := opts.Depth
 	if depth <= 0 {
-		depth = 10
+		depth = DefaultCallGraphDepth
 	}
 
 	var roots []string
@@ -50,7 +52,7 @@ func (a *LSPDeepAnalyzer) CallGraph(_ string, opts CallGraphOpts) (*CallGraph, e
 				continue
 			}
 			for _, sym := range syms {
-				if (sym.Kind == 12 || sym.Kind == 6) && isExported(sym.Name) {
+				if (sym.Kind == int(model.SymbolFunction) || sym.Kind == int(model.SymbolMethod)) && isExported(sym.Name) {
 					if !seen[sym.Name] {
 						seen[sym.Name] = true
 						roots = append(roots, sym.Name)
@@ -116,7 +118,7 @@ func (a *LSPDeepAnalyzer) CallGraph(_ string, opts CallGraphOpts) (*CallGraph, e
 	for _, n := range nodeSet {
 		nodes = append(nodes, n)
 	}
-	return &CallGraph{Nodes: nodes, Edges: edges, Layer: "lsp"}, nil
+	return &CallGraph{Nodes: nodes, Edges: edges, Layer: LayerLSP}, nil
 }
 
 // DataFlowTrace uses callHierarchy to trace data flow from an entry,
@@ -129,7 +131,7 @@ func (a *LSPDeepAnalyzer) DataFlowTrace(_ string, entry string, maxDepth int) (*
 	defer cleanup()
 
 	if maxDepth <= 0 {
-		maxDepth = 8
+		maxDepth = DefaultDataFlowDepth
 	}
 
 	nodeMap := make(map[string]DataFlowNode)
@@ -142,7 +144,7 @@ func (a *LSPDeepAnalyzer) DataFlowTrace(_ string, entry string, maxDepth int) (*
 	if err != nil || item == nil {
 		return &DataFlow{
 			Nodes: []DataFlowNode{{Name: entry, Kind: "entry"}},
-			Layer: "lsp",
+			Layer: LayerLSP,
 		}, nil
 	}
 
@@ -196,7 +198,7 @@ func (a *LSPDeepAnalyzer) DataFlowTrace(_ string, entry string, maxDepth int) (*
 	for _, n := range nodeMap {
 		nodes = append(nodes, n)
 	}
-	return &DataFlow{Nodes: nodes, Edges: edges, Layer: "lsp"}, nil
+	return &DataFlow{Nodes: nodes, Edges: edges, Layer: LayerLSP}, nil
 }
 
 // DetectStateMachines uses documentSymbol to find const groups and
@@ -220,7 +222,7 @@ func (a *LSPDeepAnalyzer) DetectStateMachines(_ string) ([]StateMachine, error) 
 
 		// Look for const groups that might represent state enums
 		for _, sym := range syms {
-			if sym.Kind != 14 { // Constant
+			if sym.Kind != int(model.SymbolConstant) {
 				continue
 			}
 			if len(sym.Children) < 2 {

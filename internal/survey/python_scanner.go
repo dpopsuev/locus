@@ -164,7 +164,7 @@ func discoverPythonPackages(root string) []string {
 		}
 
 		base := d.Name()
-		if shouldSkipPythonDir(base) {
+		if ShouldSkipPythonDir(base) {
 			return filepath.SkipDir
 		}
 
@@ -191,19 +191,6 @@ func discoverPythonPackages(root string) []string {
 	return packages
 }
 
-func shouldSkipPythonDir(name string) bool {
-	skip := []string{
-		"__pycache__", ".git", ".hg", ".svn", ".tox", ".nox", ".mypy_cache",
-		".pytest_cache", ".ruff_cache", "node_modules", "venv", ".venv",
-		"env", ".env", "dist", "build", ".eggs", "*.egg-info",
-	}
-	for _, s := range skip {
-		if name == s || strings.HasSuffix(name, ".egg-info") {
-			return true
-		}
-	}
-	return strings.HasPrefix(name, ".")
-}
 
 func hasPythonFiles(dir string) bool {
 	entries, err := os.ReadDir(dir)

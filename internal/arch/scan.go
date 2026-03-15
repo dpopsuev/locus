@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"golang.org/x/mod/modfile"
@@ -14,6 +16,36 @@ import (
 	"github.com/dpopsuev/locus/internal/model"
 	"github.com/dpopsuev/locus/internal/survey"
 )
+
+// ScanIntent controls what level of analysis to perform.
+type ScanIntent string
+
+const (
+	// IntentArchitecture performs structure-only analysis (L0): survey, arch model, LOC.
+	IntentArchitecture ScanIntent = "architecture"
+	// IntentCoupling adds coupling analysis (L1): cycles, import depth, hot spots, API surfaces.
+	IntentCoupling ScanIntent = "coupling"
+	// IntentHealth adds churn and nesting (L2): git history, tree-sitter depth, file hotspots.
+	IntentHealth ScanIntent = "health"
+	// IntentFull adds coverage, authors, and anchors (L3).
+	IntentFull ScanIntent = "full"
+)
+
+// ScanLevel returns the numeric level for an intent (0-3).
+func (i ScanIntent) ScanLevel() int {
+	switch i {
+	case IntentArchitecture:
+		return 0
+	case IntentCoupling:
+		return 1
+	case IntentHealth:
+		return 2
+	case IntentFull:
+		return 3
+	default:
+		return 2 // default to health for backward compat
+	}
+}
 
 // ScanOpts controls the behavior of ScanAndBuild.
 type ScanOpts struct {
@@ -28,7 +60,28 @@ type ScanOpts struct {
 	Authors         bool
 	Budget          int
 	Format          string // "json", "md", "mermaid"
+	Intent          ScanIntent
+	Since           string // git ref to diff against (e.g. HEAD~1) for incremental scan
 }
+
+const (
+	// MinFanInHotSpot is the minimum fan-in count for a hot spot.
+	MinFanInHotSpot = 3
+	// MinChurnHotSpot is the minimum churn count for a hot spot.
+	MinChurnHotSpot = 5
+	// MinNestingHotSpot is the minimum nesting depth for a hot spot.
+	MinNestingHotSpot = 4
+	// DefaultGroupingDepth is the default component grouping depth.
+	DefaultGroupingDepth = 2
+	// MaxDepthSearch is the max depth evaluated for suggested depth.
+	MaxDepthSearch = 5
+	// MaxAuthorsPerPackage is the max authors returned per package.
+	MaxAuthorsPerPackage = 5
+	// MaxFileHotSpots is the max file hotspots returned.
+	MaxFileHotSpots = 50
+	// MaxHotSpotsMarkdown is the max hotspots displayed in markdown output.
+	MaxHotSpotsMarkdown = 10
+)
 
 // HotSpot identifies a component with high fan-in, high churn, and/or deep nesting.
 type HotSpot struct {
@@ -60,8 +113,23 @@ type ContextReport struct {
 
 // ScanAndBuild scans any repository and produces a ContextReport.
 // It requires no .mos directory -- all inputs come from the source tree and git.
+// The opts.Intent field controls how deep the analysis goes:
+//
+//	L0 (architecture): structure + LOC
+//	L1 (coupling):     L0 + cycles, import depth, hot spots, API surfaces
+//	L2 (health):       L1 + churn, nesting, git history (default)
+//	L3 (full):         L2 + coverage, authors, anchors
 func ScanAndBuild(root string, opts ScanOpts) (*ContextReport, error) {
+	level := opts.Intent.ScanLevel()
+
+	// --- L0: structure ---
 	sc := &survey.AutoScanner{Override: opts.ScannerOverride}
+
+	// Incremental scan: if Since is set, identify changed packages and merge.
+	if opts.Since != "" {
+		return incrementalScan(root, opts, sc)
+	}
+
 	proj, err := sc.Scan(root)
 	if err != nil {
 		return nil, fmt.Errorf("survey scan: %w", err)
@@ -89,20 +157,20 @@ func ScanAndBuild(root string, opts ScanOpts) (*ContextReport, error) {
 		if len(groups) == 0 {
 			d := depth
 			if d == 0 {
-				d = 2
+				d = DefaultGroupingDepth
 			}
 			groups = InferDefaultGroups(proj, modPath, d)
 		}
 		syncOpts.Groups = groups
 	}
 
-	if opts.ChurnDays > 0 {
+	// Churn is only computed at L2+.
+	if level >= 2 && opts.ChurnDays > 0 {
 		syncOpts.ChurnData = ComputeChurn(root, opts.ChurnDays, modPath)
 	}
 
 	archModel := ProjectToArchModel(proj, syncOpts)
 	applyLOC(root, proj, modPath, &archModel)
-	applyNestingDepth(root, modPath, &archModel)
 
 	report := &ContextReport{
 		Project:      proj,
@@ -112,15 +180,34 @@ func ScanAndBuild(root string, opts ScanOpts) (*ContextReport, error) {
 	}
 
 	report.SuggestedDepth = computeSuggestedDepth(proj, modPath, len(archModel.Services))
-	report.HotSpots = computeHotSpots(archModel)
-	report.Cycles = DetectCycles(archModel.Edges)
+
+	if level < 1 {
+		return report, nil
+	}
+
+	// --- L1: coupling ---
+	spots := computeHotSpots(archModel)
+	if spots == nil {
+		spots = []HotSpot{}
+	}
+	report.HotSpots = spots
+
+	cycles := DetectCycles(archModel.Edges)
+	if cycles == nil {
+		cycles = []Cycle{}
+	}
+	report.Cycles = cycles
 	report.ImportDepth = ComputeImportDepth(archModel.Edges)
 	report.APISurfaces = ComputeAPISurface(archModel)
 	report.BoundaryCrossings = DetectBoundaryCrossings(archModel, nil)
 
-	if opts.IncludeCoverage {
-		report.Coverage, _ = RunGoCoverage(root, modPath)
+	if level < 2 {
+		return report, nil
 	}
+
+	// --- L2: health (churn, nesting, git history) ---
+	applyNestingDepth(root, modPath, &archModel)
+	report.Architecture = archModel
 
 	gitDays := opts.GitDays
 	if gitDays <= 0 {
@@ -130,15 +217,79 @@ func ScanAndBuild(root string, opts ScanOpts) (*ContextReport, error) {
 		report.RecentCommits = RecentCommits(root, gitDays, modPath)
 		report.FileHotSpots = FileHotSpots(root, gitDays)
 	}
+
+	if level < 3 {
+		return report, nil
+	}
+
+	// --- L3: full (coverage, authors, anchors) ---
+	if opts.IncludeCoverage {
+		report.Coverage, _ = RunGoCoverage(root, modPath)
+	}
 	if opts.Authors {
 		report.Authors = AuthorOwnership(root, modPath)
 	}
-
 	if proj.Language == model.LangGo {
 		report.Anchors = extractProjectAnchors(root, proj, modPath)
 	}
 
 	return report, nil
+}
+
+// incrementalScan performs a full scan but is aware of what changed since a ref.
+// Currently does a full scan but marks the report with the since ref for downstream use.
+// Future: partial package re-scan + merge with cached baseline.
+func incrementalScan(root string, opts ScanOpts, _ *survey.AutoScanner) (*ContextReport, error) {
+	changedPkgs := changedPackages(root, opts.Since)
+
+	// Full scan for now — incremental merge requires cached baseline.
+	opts.Since = "" // prevent recursion
+	report, err := ScanAndBuild(root, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	// Mark changed packages in the report for downstream consumers.
+	changedSet := make(map[string]bool, len(changedPkgs))
+	for _, p := range changedPkgs {
+		changedSet[p] = true
+	}
+	for i := range report.Architecture.Services {
+		if changedSet[report.Architecture.Services[i].Name] {
+			report.Architecture.Services[i].Changed = true
+		}
+	}
+
+	return report, nil
+}
+
+// changedPackages returns package directories with changes since the given git ref.
+func changedPackages(root, since string) []string {
+	cmd := exec.Command("git", "diff", "--name-only", since+"..HEAD")
+	cmd.Dir = root
+	out, err := cmd.Output()
+	if err != nil {
+		return nil
+	}
+
+	pkgSet := make(map[string]bool)
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if line == "" {
+			continue
+		}
+		dir := filepath.Dir(line)
+		if dir == "." {
+			dir = "(root)"
+		}
+		pkgSet[filepath.ToSlash(dir)] = true
+	}
+
+	pkgs := make([]string, 0, len(pkgSet))
+	for p := range pkgSet {
+		pkgs = append(pkgs, p)
+	}
+	sort.Strings(pkgs)
+	return pkgs
 }
 
 func extractProjectAnchors(root string, proj *model.Project, modPath string) []SemanticAnchor {
@@ -183,7 +334,7 @@ func computeHotSpots(m ArchModel) []HotSpot {
 	var spots []HotSpot
 	for _, s := range m.Services {
 		fi := fanIn[s.Name]
-		if fi >= 3 && (s.Churn >= 5 || s.MaxNesting >= 4) {
+		if fi >= MinFanInHotSpot && (s.Churn >= MinChurnHotSpot || s.MaxNesting >= MinNestingHotSpot) {
 			spots = append(spots, HotSpot{
 				Component: s.Name,
 				FanIn:     fi,
@@ -201,7 +352,7 @@ func computeSuggestedDepth(proj *model.Project, modPath string, flatCount int) i
 	}
 	bestDepth := 0
 	bestCount := flatCount
-	for d := 1; d <= 5; d++ {
+	for d := 1; d <= MaxDepthSearch; d++ {
 		groups := InferDefaultGroups(proj, modPath, d)
 		grouped := make(map[string]bool)
 		ungrouped := 0
@@ -256,6 +407,12 @@ func DetectProjectPath(root string) string {
 		}
 	}
 
+	if data, err := os.ReadFile(filepath.Join(root, "pyproject.toml")); err == nil {
+		if name := parsePyprojectName(data); name != "" {
+			return name
+		}
+	}
+
 	if data, err := os.ReadFile(filepath.Join(root, "package.json")); err == nil {
 		if name := parsePackageJSONName(data); name != "" {
 			return name
@@ -263,6 +420,28 @@ func DetectProjectPath(root string) string {
 	}
 
 	return fallback
+}
+
+func parsePyprojectName(data []byte) string {
+	inProject := false
+	for _, line := range strings.Split(string(data), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "[project]" {
+			inProject = true
+			continue
+		}
+		if strings.HasPrefix(trimmed, "[") {
+			inProject = false
+			continue
+		}
+		if inProject && strings.HasPrefix(trimmed, "name") {
+			parts := strings.SplitN(trimmed, "=", 2)
+			if len(parts) == 2 {
+				return strings.Trim(strings.TrimSpace(parts[1]), `"'`)
+			}
+		}
+	}
+	return ""
 }
 
 func parseCargoProjectName(data []byte) string {

@@ -183,7 +183,7 @@ func findSourceFiles(root string) ([]string, error) {
 		}
 		if d.IsDir() {
 			base := d.Name()
-			if base == "vendor" || base == "testdata" || strings.HasPrefix(base, ".") {
+			if ShouldSkipDir(base) {
 				return filepath.SkipDir
 			}
 			return nil

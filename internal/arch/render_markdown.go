@@ -32,8 +32,8 @@ func RenderMarkdown(report *ContextReport) string {
 		copy(spots, report.HotSpots)
 		sort.Slice(spots, func(i, j int) bool { return spots[i].Churn > spots[j].Churn })
 		n := len(spots)
-		if n > 10 {
-			n = 10
+		if n > MaxHotSpotsMarkdown {
+			n = MaxHotSpotsMarkdown
 		}
 		for _, s := range spots[:n] {
 			nest := ""

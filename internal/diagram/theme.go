@@ -15,12 +15,23 @@ const (
 	Fatal
 )
 
+const (
+	// FatalFanIn is the minimum fan-in for Fatal health classification.
+	FatalFanIn = 5
+	// FatalChurn is the minimum churn for Fatal health classification.
+	FatalChurn = 15
+	// SickFanIn is the minimum fan-in for Sick health classification.
+	SickFanIn = 3
+	// SickChurn is the minimum churn for Sick health classification.
+	SickChurn = 8
+)
+
 // ClassifyHealth returns a health level based on fan-in and churn.
 func ClassifyHealth(fanIn, churn int) Health {
-	if fanIn >= 5 && churn >= 15 {
+	if fanIn >= FatalFanIn && churn >= FatalChurn {
 		return Fatal
 	}
-	if fanIn >= 3 && churn >= 8 {
+	if fanIn >= SickFanIn && churn >= SickChurn {
 		return Sick
 	}
 	return Healthy

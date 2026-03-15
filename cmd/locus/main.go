@@ -79,7 +79,7 @@ var scanCmd = &cobra.Command{
 			path = args[0]
 		}
 		proto := newProto()
-		report, err := proto.ScanProject(cmd.Context(), path, protocol.ScanOpts{
+		result, err := proto.ScanProject(cmd.Context(), path, protocol.ScanOpts{
 			Scanner:         scanFlags.scanner,
 			Depth:           scanFlags.depth,
 			ChurnDays:       scanFlags.churnDays,
@@ -92,7 +92,7 @@ var scanCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		return renderReport(report, scanFlags.format)
+		return renderReport(result.Report, scanFlags.format)
 	},
 }
 
@@ -153,7 +153,7 @@ Supports GitHub HTTPS, SSH, and shorthand URLs:
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		proto := newProto()
-		report, err := proto.CodographRemote(cmd.Context(), args[0], protocol.RemoteOpts{
+		result, err := proto.CodographRemote(cmd.Context(), args[0], protocol.RemoteOpts{
 			Ref:    codographFlags.ref,
 			Keep:   codographFlags.keep,
 			Depth:  codographFlags.depth,
@@ -162,7 +162,7 @@ Supports GitHub HTTPS, SSH, and shorthand URLs:
 		if err != nil {
 			return err
 		}
-		return renderReport(report, codographFlags.format)
+		return renderReport(result.Report, codographFlags.format)
 	},
 }
 
@@ -333,7 +333,7 @@ Examples:
 			path = "."
 		}
 		proto := newProto()
-		report, err := proto.ScanProject(cmd.Context(), path, protocol.ScanOpts{
+		result, err := proto.ScanProject(cmd.Context(), path, protocol.ScanOpts{
 			Scanner:   diagramFlags.scanner,
 			Depth:     diagramFlags.depth,
 			ChurnDays: diagramFlags.churnDays,
@@ -342,7 +342,7 @@ Examples:
 			return err
 		}
 
-		in := diagram.Input{Report: report, Root: path}
+		in := diagram.Input{Report: result.Report, Root: path}
 
 		if diagramFlags.diagramType == "churn" {
 			hist, _ := proto.GetHistory(cmd.Context(), path, 20)

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -18,6 +19,21 @@ import (
 	"github.com/dpopsuev/locus/internal/cursor"
 	"github.com/dpopsuev/locus/internal/history"
 	"github.com/dpopsuev/locus/internal/remote"
+)
+
+// Error messages used across protocol methods.
+var (
+	ErrComponentRequired     = errors.New("component is required")
+	ErrBeforeSHARequired     = errors.New("before_sha is required")
+	ErrURLRequired           = errors.New("url is required")
+	ErrBothBranchesRequired  = errors.New("both branch_a and branch_b are required")
+	ErrOldestOrStepsRequired = errors.New("either oldest_ref or steps is required")
+)
+
+const (
+	errScanFailed     = "scan failed: %w"
+	errNoCachedScan   = "no cached scan for SHA %s — run scan_local first"
+	errNoCachedReport = "no cached report for cache_key %q — run scan_remote first"
 )
 
 // Protocol encapsulates all Locus business logic.
@@ -52,6 +68,8 @@ type ScanOpts struct {
 	GitDays         int
 	Authors         bool
 	Format          string // "json", "md", "mermaid", "summary" — rendering is caller's job
+	Intent          string // architecture, coupling, health (default), full
+	Since           string // git ref to diff against for incremental scan
 }
 
 // RemoteOpts controls a remote codograph.
@@ -61,6 +79,7 @@ type RemoteOpts struct {
 	Depth     int
 	ChurnDays int
 	Budget    int
+	Intent    string
 }
 
 // BranchDiffResult wraps branch metadata with the diff.
@@ -94,9 +113,28 @@ type SuggestDepthResult struct {
 	Reasoning      string `json:"reasoning"`
 }
 
+// ScanResult wraps a scan report with its cache key and SHA.
+type ScanResult struct {
+	Report   *arch.ContextReport `json:"report"`
+	CacheKey string              `json:"cache_key"`
+	SHA      string              `json:"sha"`
+}
+
+// RenderScanSummary returns a compact ~50 token summary of a scan result.
+func RenderScanSummary(r *ScanResult) string {
+	report := r.Report
+	return fmt.Sprintf("Scanned %s: %d components, %d edges, %d cycles, scanner=%s\ncache_key: %s",
+		report.ModulePath,
+		len(report.Architecture.Services),
+		len(report.Architecture.Edges),
+		len(report.Cycles),
+		report.Scanner,
+		r.CacheKey)
+}
+
 // --- Operations ---
 
-func (p *Protocol) ScanProject(_ context.Context, path string, opts ScanOpts) (*arch.ContextReport, error) {
+func (p *Protocol) ScanProject(_ context.Context, path string, opts ScanOpts) (*ScanResult, error) {
 	path = p.resolvePath(path)
 	churnDays := opts.ChurnDays
 	if churnDays == 0 {
@@ -105,7 +143,7 @@ func (p *Protocol) ScanProject(_ context.Context, path string, opts ScanOpts) (*
 
 	sha := cache.ResolveHEAD(path)
 	if cached, hit, err := p.cache.Get(path, sha); err == nil && hit {
-		return cached, nil
+		return &ScanResult{Report: cached, CacheKey: path + "@" + sha, SHA: sha}, nil
 	}
 
 	report, err := arch.ScanAndBuild(path, arch.ScanOpts{
@@ -118,23 +156,25 @@ func (p *Protocol) ScanProject(_ context.Context, path string, opts ScanOpts) (*
 		Budget:          opts.Budget,
 		GitDays:         opts.GitDays,
 		Authors:         opts.Authors,
+		Intent:          arch.ScanIntent(opts.Intent),
+		Since:           opts.Since,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("scan failed: %w", err)
+		return nil, fmt.Errorf(errScanFailed, err)
 	}
 	if sha != "" {
 		p.cache.Put(path, sha, report)
 		abs, _ := filepath.Abs(path)
 		_ = history.Record(p.cache, p.historyDir, history.Local, abs, sha, report)
 	}
-	return report, nil
+	return &ScanResult{Report: report, CacheKey: path + "@" + sha, SHA: sha}, nil
 }
 
 func (p *Protocol) SuggestDepth(_ context.Context, path string) (*SuggestDepthResult, error) {
 	path = p.resolvePath(path)
 	report, err := arch.ScanAndBuild(path, arch.ScanOpts{ExcludeTests: true})
 	if err != nil {
-		return nil, fmt.Errorf("scan failed: %w", err)
+		return nil, fmt.Errorf(errScanFailed, err)
 	}
 	r := &SuggestDepthResult{
 		SuggestedDepth: report.SuggestedDepth,
@@ -150,9 +190,9 @@ func (p *Protocol) SuggestDepth(_ context.Context, path string) (*SuggestDepthRe
 	return r, nil
 }
 
-func (p *Protocol) GetHotSpots(_ context.Context, path string, churnDays, topN int) ([]arch.HotSpot, error) {
+func (p *Protocol) GetHotSpots(_ context.Context, path string, churnDays, topN int, cacheKey ...string) ([]arch.HotSpot, error) {
 	path = p.resolvePath(path)
-	report, err := p.getOrScan(path)
+	report, err := p.getOrScan(path, cacheKey...)
 	if err != nil {
 		return nil, err
 	}
@@ -168,12 +208,12 @@ func (p *Protocol) GetHotSpots(_ context.Context, path string, churnDays, topN i
 	return spots, nil
 }
 
-func (p *Protocol) GetDependencies(_ context.Context, path, component string) (*DepResult, error) {
+func (p *Protocol) GetDependencies(_ context.Context, path, component string, cacheKey ...string) (*DepResult, error) {
 	path = p.resolvePath(path)
 	if component == "" {
-		return nil, fmt.Errorf("component is required")
+		return nil, ErrComponentRequired
 	}
-	report, err := p.getOrScan(path)
+	report, err := p.getOrScan(path, cacheKey...)
 	if err != nil {
 		return nil, err
 	}
@@ -190,9 +230,9 @@ func (p *Protocol) GetDependencies(_ context.Context, path, component string) (*
 	return result, nil
 }
 
-func (p *Protocol) GetCouplingTable(_ context.Context, path, sortBy string, topN int) (string, error) {
+func (p *Protocol) GetCouplingTable(_ context.Context, path, sortBy string, topN int, cacheKey ...string) (string, error) {
 	path = p.resolvePath(path)
-	report, err := p.getOrScan(path)
+	report, err := p.getOrScan(path, cacheKey...)
 	if err != nil {
 		return "", err
 	}
@@ -202,9 +242,9 @@ func (p *Protocol) GetCouplingTable(_ context.Context, path, sortBy string, topN
 	return arch.RenderCouplingTable(report, sortBy, topN), nil
 }
 
-func (p *Protocol) GetEdgeList(_ context.Context, path, component string) (string, error) {
+func (p *Protocol) GetEdgeList(_ context.Context, path, component string, cacheKey ...string) (string, error) {
 	path = p.resolvePath(path)
-	report, err := p.getOrScan(path)
+	report, err := p.getOrScan(path, cacheKey...)
 	if err != nil {
 		return "", err
 	}
@@ -218,9 +258,9 @@ type CycleReport struct {
 	LayerViolations []arch.LayerViolation `json:"layer_violations,omitempty"`
 }
 
-func (p *Protocol) GetCycles(_ context.Context, path string, layers []string) (*CycleReport, error) {
+func (p *Protocol) GetCycles(_ context.Context, path string, layers []string, cacheKey ...string) (*CycleReport, error) {
 	path = p.resolvePath(path)
-	report, err := p.getOrScan(path)
+	report, err := p.getOrScan(path, cacheKey...)
 	if err != nil {
 		return nil, err
 	}
@@ -234,6 +274,512 @@ func (p *Protocol) GetCycles(_ context.Context, path string, layers []string) (*
 		r.LayerViolations = report.LayerViolations
 	}
 	return r, nil
+}
+
+// ViolationReport holds architecture violation detection results.
+type ViolationReport struct {
+	Layers     []string             `json:"layers"`
+	Violations []arch.LayerViolation `json:"violations"`
+	Cycles     []arch.Cycle         `json:"cycles,omitempty"`
+	Summary    string               `json:"summary"`
+}
+
+func (p *Protocol) GetViolations(_ context.Context, path string, layers []string, cacheKey ...string) (*ViolationReport, error) {
+	path = p.resolvePath(path)
+	report, err := p.getOrScan(path, cacheKey...)
+	if err != nil {
+		return nil, err
+	}
+
+	// Auto-detect layers from import depth if none provided.
+	if len(layers) == 0 {
+		layers = inferLayerOrder(report)
+	}
+
+	violations := arch.CheckLayerPurity(report.Architecture.Edges, layers)
+
+	summary := fmt.Sprintf("%d layer(s), %d violation(s), %d cycle(s)",
+		len(layers), len(violations), len(report.Cycles))
+	if len(violations) == 0 {
+		summary = fmt.Sprintf("Clean architecture: %d layer(s), 0 violations", len(layers))
+	}
+
+	return &ViolationReport{
+		Layers:     layers,
+		Violations: violations,
+		Cycles:     report.Cycles,
+		Summary:    summary,
+	}, nil
+}
+
+// inferLayerOrder derives a layer ordering from import depth analysis.
+// Components at depth 0 (no imports) are the bottom layer; higher depth = higher layer.
+func inferLayerOrder(report *arch.ContextReport) []string {
+	depths := report.ImportDepth
+	if depths == nil {
+		depths = arch.ComputeImportDepth(report.Architecture.Edges)
+	}
+
+	// Group components by depth.
+	layerMap := make(map[int][]string)
+	for _, svc := range report.Architecture.Services {
+		d := depths[svc.Name]
+		layerMap[d] = append(layerMap[d], svc.Name)
+	}
+
+	// Collect unique depth levels, sorted.
+	depthLevels := make([]int, 0, len(layerMap))
+	for d := range layerMap {
+		depthLevels = append(depthLevels, d)
+	}
+	sort.Ints(depthLevels)
+
+	// Flatten: bottom (depth 0) first, top (highest depth) last.
+	var layers []string
+	for _, d := range depthLevels {
+		comps := layerMap[d]
+		sort.Strings(comps)
+		layers = append(layers, comps...)
+	}
+	return layers
+}
+
+// CallerSite represents a single call site for a symbol.
+type CallerSite struct {
+	Caller    string `json:"caller"`
+	CallerPkg string `json:"caller_pkg"`
+	Line      int    `json:"line,omitempty"`
+}
+
+// CallersReport holds all call sites for a given symbol.
+type CallersReport struct {
+	Symbol  string       `json:"symbol"`
+	Callers []CallerSite `json:"callers"`
+	Summary string       `json:"summary"`
+}
+
+func (p *Protocol) GetCallers(_ context.Context, path, symbol string, cacheKey ...string) (*CallersReport, error) {
+	path = p.resolvePath(path)
+	if symbol == "" {
+		return nil, ErrComponentRequired
+	}
+
+	da := analysis.NewDeepFallback(path)
+	cg, err := da.CallGraph(path, analysis.CallGraphOpts{Depth: analysis.DefaultCallGraphDepth})
+	if err != nil {
+		return nil, fmt.Errorf("call graph: %w", err)
+	}
+
+	var callers []CallerSite
+	for _, edge := range cg.Edges {
+		if edge.Callee == symbol {
+			callers = append(callers, CallerSite{
+				Caller:    edge.Caller,
+				CallerPkg: edge.CallerPkg,
+				Line:      edge.Line,
+			})
+		}
+	}
+
+	summary := fmt.Sprintf("%d caller(s) of %s", len(callers), symbol)
+	return &CallersReport{Symbol: symbol, Callers: callers, Summary: summary}, nil
+}
+
+// --- Cross-repo comparison ---
+
+// CrossRepoReport holds comparison results between two repos.
+type CrossRepoReport struct {
+	Overlap    []string `json:"overlap"`
+	OnlyInA    []string `json:"only_in_a"`
+	OnlyInB    []string `json:"only_in_b"`
+	NewCycles  int      `json:"new_cycles_if_merged"`
+	Summary    string   `json:"summary"`
+}
+
+func (p *Protocol) GetCrossRepo(_ context.Context, pathA, pathB string, cacheKeyA, cacheKeyB string) (*CrossRepoReport, error) {
+	reportA, err := p.getOrScan(p.resolvePath(pathA), cacheKeyA)
+	if err != nil {
+		return nil, fmt.Errorf("repo A: %w", err)
+	}
+	reportB, err := p.getOrScan(p.resolvePath(pathB), cacheKeyB)
+	if err != nil {
+		return nil, fmt.Errorf("repo B: %w", err)
+	}
+
+	setA := make(map[string]bool)
+	for _, s := range reportA.Architecture.Services {
+		setA[s.Name] = true
+	}
+	setB := make(map[string]bool)
+	for _, s := range reportB.Architecture.Services {
+		setB[s.Name] = true
+	}
+
+	var overlap, onlyA, onlyB []string
+	for n := range setA {
+		if setB[n] {
+			overlap = append(overlap, n)
+		} else {
+			onlyA = append(onlyA, n)
+		}
+	}
+	for n := range setB {
+		if !setA[n] {
+			onlyB = append(onlyB, n)
+		}
+	}
+	sort.Strings(overlap)
+	sort.Strings(onlyA)
+	sort.Strings(onlyB)
+
+	// Simulate merge: combine edges and detect new cycles.
+	allEdges := append(reportA.Architecture.Edges, reportB.Architecture.Edges...)
+	mergedCycles := arch.DetectCycles(allEdges)
+	existingCycles := len(reportA.Cycles) + len(reportB.Cycles)
+	newCycles := len(mergedCycles) - existingCycles
+	if newCycles < 0 {
+		newCycles = 0
+	}
+
+	summary := fmt.Sprintf("%d shared, %d only-A, %d only-B, %d new cycles if merged",
+		len(overlap), len(onlyA), len(onlyB), newCycles)
+
+	return &CrossRepoReport{
+		Overlap: overlap, OnlyInA: onlyA, OnlyInB: onlyB,
+		NewCycles: newCycles, Summary: summary,
+	}, nil
+}
+
+// --- Analysis presets ---
+
+const (
+	PresetArchReview = "architecture_review"
+	PresetHealthCheck = "health_check"
+	PresetOnboarding  = "onboarding"
+	PresetPrePR       = "pre_pr"
+)
+
+func (p *Protocol) RunPreset(ctx context.Context, path, preset string, cacheKey ...string) (string, error) {
+	path = p.resolvePath(path)
+	report, err := p.getOrScan(path, cacheKey...)
+	if err != nil {
+		return "", err
+	}
+
+	var b strings.Builder
+	switch preset {
+	case PresetArchReview:
+		fmt.Fprintf(&b, "# Architecture Review: %s\n\n", report.ModulePath)
+		fmt.Fprintf(&b, "%d components, %d edges, %d cycles\n\n", len(report.Architecture.Services), len(report.Architecture.Edges), len(report.Cycles))
+		spots := report.HotSpots
+		if len(spots) > 5 {
+			spots = spots[:5]
+		}
+		if len(spots) > 0 {
+			b.WriteString("## Hot Spots\n")
+			for _, s := range spots {
+				fmt.Fprintf(&b, "- %s (churn:%d, fan-in:%d)\n", s.Component, s.Churn, s.FanIn)
+			}
+		}
+		if len(report.Cycles) > 0 {
+			b.WriteString("\n## Cycles\n")
+			for i, c := range report.Cycles {
+				if i >= 3 {
+					fmt.Fprintf(&b, "... and %d more\n", len(report.Cycles)-3)
+					break
+				}
+				fmt.Fprintf(&b, "- %s\n", strings.Join(c, " → "))
+			}
+		}
+
+	case PresetHealthCheck:
+		fmt.Fprintf(&b, "# Health Check: %s\n\n", report.ModulePath)
+		spots := report.HotSpots
+		if len(spots) > 5 {
+			spots = spots[:5]
+		}
+		for _, s := range spots {
+			fmt.Fprintf(&b, "- %s (churn:%d, fan-in:%d)\n", s.Component, s.Churn, s.FanIn)
+		}
+		if len(spots) == 0 {
+			b.WriteString("No hot spots detected.\n")
+		}
+
+	case PresetOnboarding:
+		fmt.Fprintf(&b, "# Onboarding: %s\n\n", report.ModulePath)
+		fmt.Fprintf(&b, "%d components, scanner=%s\n\n", len(report.Architecture.Services), report.Scanner)
+		b.WriteString("## Top Components\n")
+		n := len(report.Architecture.Services)
+		if n > 10 {
+			n = 10
+		}
+		for _, s := range report.Architecture.Services[:n] {
+			fmt.Fprintf(&b, "- %s (%d LOC)\n", s.Name, s.LOC)
+		}
+
+	case PresetPrePR:
+		fmt.Fprintf(&b, "# Pre-PR Review: %s\n\n", report.ModulePath)
+		fmt.Fprintf(&b, "%d components, %d cycles, %d violations\n",
+			len(report.Architecture.Services), len(report.Cycles), len(report.LayerViolations))
+
+	default:
+		return "", fmt.Errorf("unknown preset %q (valid: %s, %s, %s, %s)",
+			preset, PresetArchReview, PresetHealthCheck, PresetOnboarding, PresetPrePR)
+	}
+	return b.String(), nil
+}
+
+// --- Component drill-down ---
+
+// ComponentDetail holds single-component analysis data.
+type ComponentDetail struct {
+	Name      string   `json:"name"`
+	LOC       int      `json:"loc"`
+	Symbols   []string `json:"symbols,omitempty"`
+	Imports   []string `json:"imports,omitempty"`
+	Importers []string `json:"importers,omitempty"`
+	Churn     int      `json:"churn"`
+	Health    string   `json:"health"`
+}
+
+func (p *Protocol) GetComponentDetail(_ context.Context, path, name string, cacheKey ...string) (*ComponentDetail, error) {
+	path = p.resolvePath(path)
+	if name == "" {
+		return nil, ErrComponentRequired
+	}
+	report, err := p.getOrScan(path, cacheKey...)
+	if err != nil {
+		return nil, err
+	}
+
+	var svc *arch.ArchService
+	for i := range report.Architecture.Services {
+		if report.Architecture.Services[i].Name == name {
+			svc = &report.Architecture.Services[i]
+			break
+		}
+	}
+	if svc == nil {
+		return nil, fmt.Errorf("component %q not found", name)
+	}
+
+	var imports, importers []string
+	for _, e := range report.Architecture.Edges {
+		if e.From == name {
+			imports = append(imports, e.To)
+		}
+		if e.To == name {
+			importers = append(importers, e.From)
+		}
+	}
+
+	syms := svc.Symbols
+	if len(syms) > 20 {
+		syms = syms[:20]
+	}
+
+	fi := 0
+	for _, e := range report.Architecture.Edges {
+		if e.To == name {
+			fi++
+		}
+	}
+	health := "healthy"
+	if fi >= arch.MinFanInHotSpot && svc.Churn >= arch.MinChurnHotSpot {
+		health = "sick"
+	}
+
+	return &ComponentDetail{
+		Name: name, LOC: svc.LOC, Symbols: syms,
+		Imports: imports, Importers: importers,
+		Churn: svc.Churn, Health: health,
+	}, nil
+}
+
+// --- Natural language query ---
+
+// QueryResult holds the answer to a natural language architecture question.
+type QueryResult struct {
+	Query      string `json:"query"`
+	Action     string `json:"resolved_action"`
+	Answer     any    `json:"answer"`
+}
+
+func (p *Protocol) AnswerQuery(ctx context.Context, path, query string, cacheKey ...string) (*QueryResult, error) {
+	path = p.resolvePath(path)
+	q := strings.ToLower(query)
+
+	type pattern struct {
+		keywords []string
+		action   string
+	}
+	patterns := []pattern{
+		{[]string{"risk", "hot"}, "coupling view=hot_spots"},
+		{[]string{"cycle", "circular"}, "cycles"},
+		{[]string{"depend", "import", "who uses"}, "deps"},
+		{[]string{"violat", "layer"}, "violations"},
+		{[]string{"change", "diff", "what changed"}, "scan_diff"},
+		{[]string{"overview", "architect"}, "preset=architecture_review"},
+		{[]string{"health", "status"}, "preset=health_check"},
+		{[]string{"onboard", "getting started"}, "preset=onboarding"},
+	}
+
+	for _, pat := range patterns {
+		for _, kw := range pat.keywords {
+			if strings.Contains(q, kw) {
+				switch {
+				case strings.HasPrefix(pat.action, "coupling"):
+					report, err := p.getOrScan(path, cacheKey...)
+					if err != nil {
+						return nil, err
+					}
+					return &QueryResult{Query: query, Action: pat.action, Answer: report.HotSpots}, nil
+				case pat.action == "cycles":
+					r, err := p.GetCycles(ctx, path, nil, cacheKey...)
+					if err != nil {
+						return nil, err
+					}
+					return &QueryResult{Query: query, Action: pat.action, Answer: r}, nil
+				case pat.action == "violations":
+					r, err := p.GetViolations(ctx, path, nil, cacheKey...)
+					if err != nil {
+						return nil, err
+					}
+					return &QueryResult{Query: query, Action: pat.action, Answer: r}, nil
+				default:
+					return &QueryResult{
+						Query:  query,
+						Action: pat.action,
+						Answer: fmt.Sprintf("Suggested action: analysis %s", pat.action),
+					}, nil
+				}
+			}
+		}
+	}
+
+	return &QueryResult{
+		Query:  query,
+		Action: "none",
+		Answer: "No matching pattern. Try: riskiest, cycles, violations, health, overview, what changed",
+	}, nil
+}
+
+// GenerateHints returns follow-up action suggestions based on analysis findings.
+func GenerateHints(report *arch.ContextReport) []string {
+	var hints []string
+	if len(report.Cycles) > 0 {
+		hints = append(hints, fmt.Sprintf("Found %d cycle(s) — try: analysis action=violations", len(report.Cycles)))
+	}
+	if len(report.HotSpots) > 0 {
+		hints = append(hints, fmt.Sprintf("Found %d hot spot(s) — try: analysis action=component component=%s", len(report.HotSpots), report.HotSpots[0].Component))
+	}
+	if len(report.LayerViolations) > 0 {
+		hints = append(hints, fmt.Sprintf("Found %d layer violation(s) — try: render_diagram type=layers", len(report.LayerViolations)))
+	}
+	return hints
+}
+
+// ScanDiffReport holds structural differences between two cached scans.
+type ScanDiffReport struct {
+	BeforeSHA         string   `json:"before_sha"`
+	AfterSHA          string   `json:"after_sha"`
+	AddedComponents   []string `json:"added_components,omitempty"`
+	RemovedComponents []string `json:"removed_components,omitempty"`
+	AddedEdges        int      `json:"added_edges"`
+	RemovedEdges      int      `json:"removed_edges"`
+	LOCBefore         int      `json:"loc_before"`
+	LOCAfter          int      `json:"loc_after"`
+	LOCDelta          int      `json:"loc_delta"`
+	Summary           string   `json:"summary"`
+}
+
+func (p *Protocol) GetScanDiff(_ context.Context, path, beforeSHA, afterSHA string) (*ScanDiffReport, error) {
+	path = p.resolvePath(path)
+
+	if afterSHA == "" {
+		afterSHA = cache.ResolveHEAD(path)
+	}
+	if beforeSHA == "" {
+		return nil, ErrBeforeSHARequired
+	}
+
+	before, hit, err := p.cache.Get(path, beforeSHA)
+	if err != nil || !hit {
+		return nil, fmt.Errorf(errNoCachedScan, beforeSHA)
+	}
+	after, hit, err := p.cache.Get(path, afterSHA)
+	if err != nil || !hit {
+		return nil, fmt.Errorf(errNoCachedScan, afterSHA)
+	}
+
+	beforeSet := make(map[string]bool)
+	for _, s := range before.Architecture.Services {
+		beforeSet[s.Name] = true
+	}
+	afterSet := make(map[string]bool)
+	for _, s := range after.Architecture.Services {
+		afterSet[s.Name] = true
+	}
+
+	var added, removed []string
+	for name := range afterSet {
+		if !beforeSet[name] {
+			added = append(added, name)
+		}
+	}
+	for name := range beforeSet {
+		if !afterSet[name] {
+			removed = append(removed, name)
+		}
+	}
+	sort.Strings(added)
+	sort.Strings(removed)
+
+	beforeEdges := make(map[[2]string]bool)
+	for _, e := range before.Architecture.Edges {
+		beforeEdges[[2]string{e.From, e.To}] = true
+	}
+	afterEdges := make(map[[2]string]bool)
+	for _, e := range after.Architecture.Edges {
+		afterEdges[[2]string{e.From, e.To}] = true
+	}
+	addedEdges, removedEdges := 0, 0
+	for e := range afterEdges {
+		if !beforeEdges[e] {
+			addedEdges++
+		}
+	}
+	for e := range beforeEdges {
+		if !afterEdges[e] {
+			removedEdges++
+		}
+	}
+
+	locBefore, locAfter := 0, 0
+	for _, s := range before.Architecture.Services {
+		locBefore += s.LOC
+	}
+	for _, s := range after.Architecture.Services {
+		locAfter += s.LOC
+	}
+
+	summary := fmt.Sprintf("%d→%d components (%+d), %d→%d edges (%+d), %d→%d LOC (%+d)",
+		len(before.Architecture.Services), len(after.Architecture.Services), len(added)-len(removed),
+		len(before.Architecture.Edges), len(after.Architecture.Edges), addedEdges-removedEdges,
+		locBefore, locAfter, locAfter-locBefore)
+
+	return &ScanDiffReport{
+		BeforeSHA:         beforeSHA,
+		AfterSHA:          afterSHA,
+		AddedComponents:   added,
+		RemovedComponents: removed,
+		AddedEdges:        addedEdges,
+		RemovedEdges:      removedEdges,
+		LOCBefore:         locBefore,
+		LOCAfter:          locAfter,
+		LOCDelta:          locAfter - locBefore,
+		Summary:           summary,
+	}, nil
 }
 
 // CoverageReport holds per-component coverage data.
@@ -266,9 +812,9 @@ type APISurfaceReport struct {
 	Crossings []arch.BoundaryCrossing `json:"crossings,omitempty"`
 }
 
-func (p *Protocol) GetAPISurface(_ context.Context, path string, trusted []string) (*APISurfaceReport, error) {
+func (p *Protocol) GetAPISurface(_ context.Context, path string, trusted []string, cacheKey ...string) (*APISurfaceReport, error) {
 	path = p.resolvePath(path)
-	report, err := p.getOrScan(path)
+	report, err := p.getOrScan(path, cacheKey...)
 	if err != nil {
 		return nil, err
 	}
@@ -291,9 +837,16 @@ func (p *Protocol) ValidateArchitecture(_ context.Context, path, desiredState, f
 	return arch.ValidateArchitecture(*desired, report.Architecture), nil
 }
 
-func (p *Protocol) CodographRemote(ctx context.Context, url string, opts RemoteOpts) (*arch.ContextReport, error) {
+// RemoteResult wraps a remote scan report with its cache key.
+type RemoteResult struct {
+	Report   *arch.ContextReport `json:"report"`
+	CacheKey string              `json:"cache_key"`
+	RefSHA   string              `json:"ref_sha"`
+}
+
+func (p *Protocol) CodographRemote(ctx context.Context, url string, opts RemoteOpts) (*RemoteResult, error) {
 	if url == "" {
-		return nil, fmt.Errorf("url is required")
+		return nil, ErrURLRequired
 	}
 	result, err := remote.Codograph(ctx, url, remote.Opts{
 		Ref:       opts.Ref,
@@ -301,6 +854,7 @@ func (p *Protocol) CodographRemote(ctx context.Context, url string, opts RemoteO
 		Depth:     opts.Depth,
 		ChurnDays: opts.ChurnDays,
 		Budget:    opts.Budget,
+		Intent:    opts.Intent,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("remote codography: %w", err)
@@ -308,7 +862,11 @@ func (p *Protocol) CodographRemote(ctx context.Context, url string, opts RemoteO
 	cacheKey := remote.CacheKey(url, result.RefSHA)
 	_ = p.cache.Put(cacheKey, result.RefSHA, result.Report)
 	_ = history.Record(p.cache, p.historyDir, history.Remote, remote.NormalizeURL(url), result.RefSHA, result.Report)
-	return result.Report, nil
+	return &RemoteResult{
+		Report:   result.Report,
+		CacheKey: cacheKey,
+		RefSHA:   result.RefSHA,
+	}, nil
 }
 
 func (p *Protocol) GetHistory(_ context.Context, path string, last int) ([]history.EntrySummary, error) {
@@ -337,7 +895,7 @@ func (p *Protocol) DiffCodographs(_ context.Context, path string) (*history.Codo
 func (p *Protocol) DiffBranches(_ context.Context, path, branchA, branchB string) (*BranchDiffResult, error) {
 	path = p.resolvePath(path)
 	if branchA == "" || branchB == "" {
-		return nil, fmt.Errorf("both branch_a and branch_b are required")
+		return nil, ErrBothBranchesRequired
 	}
 	reportA, err := p.scanBranch(path, branchA)
 	if err != nil {
@@ -369,12 +927,12 @@ func (p *Protocol) GetConventions(_ context.Context, path string) (*analysis.Con
 	return analysis.DetectConventions(path)
 }
 
-func (p *Protocol) GetImpact(_ context.Context, path, component string) (*ImpactResult, error) {
+func (p *Protocol) GetImpact(_ context.Context, path, component string, cacheKey ...string) (*ImpactResult, error) {
 	path = p.resolvePath(path)
 	if component == "" {
-		return nil, fmt.Errorf("component is required")
+		return nil, ErrComponentRequired
 	}
-	report, err := p.getOrScan(path)
+	report, err := p.getOrScan(path, cacheKey...)
 	if err != nil {
 		return nil, err
 	}
@@ -401,14 +959,39 @@ func (p *Protocol) Workspaces() []string {
 
 // --- helpers ---
 
-func (p *Protocol) getOrScan(path string) (*arch.ContextReport, error) {
+// GetCachedReport retrieves a report stored under a cache key (e.g. from scan_remote).
+func (p *Protocol) GetCachedReport(cacheKey string) (*arch.ContextReport, error) {
+	if idx := strings.LastIndex(cacheKey, "@"); idx >= 0 {
+		sha := cacheKey[idx+1:]
+		if report, hit, err := p.cache.Get(cacheKey, sha); err == nil && hit {
+			return report, nil
+		}
+	}
+	return nil, fmt.Errorf(errNoCachedReport, cacheKey)
+}
+
+func (p *Protocol) getOrScan(path string, cacheKeys ...string) (*arch.ContextReport, error) {
+	// If a cache key is provided, resolve from cache directly.
+	for _, ck := range cacheKeys {
+		if ck == "" {
+			continue
+		}
+		if idx := strings.LastIndex(ck, "@"); idx >= 0 {
+			sha := ck[idx+1:]
+			if report, hit, err := p.cache.Get(ck, sha); err == nil && hit {
+				return report, nil
+			}
+		}
+		return nil, fmt.Errorf(errNoCachedReport, ck)
+	}
+
 	sha := cache.ResolveHEAD(path)
 	if cached, hit, _ := p.cache.Get(path, sha); hit {
 		return cached, nil
 	}
 	r, err := arch.ScanAndBuild(path, arch.ScanOpts{ExcludeTests: true, ChurnDays: 30})
 	if err != nil {
-		return nil, fmt.Errorf("scan failed: %w", err)
+		return nil, fmt.Errorf(errScanFailed, err)
 	}
 	if sha != "" {
 		p.cache.Put(path, sha, r)
@@ -605,7 +1188,7 @@ func listCommits(repoPath, oldest, newest string, limit int) ([]CommitMeta, erro
 	} else if limit > 0 {
 		args = append(args, "-n", strconv.Itoa(limit), newest)
 	} else {
-		return nil, fmt.Errorf("either oldest_ref or steps is required")
+		return nil, ErrOldestOrStepsRequired
 	}
 
 	cmd := exec.Command("git", args...)
@@ -766,9 +1349,10 @@ func RenderEvolutionTable(r *EvolutionResult) string {
 		if s.Diff != nil {
 			delta = s.Diff.Summary
 		}
+		const maxCommitMsg = 40
 		msg := s.Message
-		if len(msg) > 40 {
-			msg = msg[:37] + "..."
+		if len(msg) > maxCommitMsg {
+			msg = msg[:maxCommitMsg-3] + "..."
 		}
 		fmt.Fprintf(&b, "| %d | %s | %s | %s | %d | %d | %d | %s |\n",
 			s.Index, s.ShortSHA, s.Date, msg,

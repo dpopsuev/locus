@@ -160,7 +160,7 @@ func (a *TreeSitterDeepAnalyzer) CallGraph(_ string, opts CallGraphOpts) (*CallG
 		nodes = append(nodes, n)
 	}
 
-	return &CallGraph{Nodes: nodes, Edges: edges, Layer: "treesitter"}, nil
+	return &CallGraph{Nodes: nodes, Edges: edges, Layer: LayerTreeSitter}, nil
 }
 
 // DataFlowTrace implements DeepAnalyzer using memoized recursive DFS.
@@ -339,7 +339,7 @@ func (a *TreeSitterDeepAnalyzer) DataFlowTrace(_ string, entry string, maxDepth 
 		Nodes:      nodes,
 		Edges:      edges,
 		Boundaries: boundaries,
-		Layer:      "treesitter",
+		Layer:      LayerTreeSitter,
 	}, nil
 }
 

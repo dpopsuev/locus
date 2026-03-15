@@ -22,13 +22,17 @@ func renderDependency(in Input, opts Options) string {
 	b.WriteString("graph TD\n")
 	b.WriteString(rt.ClassDefs() + "\n")
 
+	enrichSet := parseEnrich(opts.Enrich)
+
 	for _, s := range m.Services {
 		if opts.Scope != "" && s.Name != opts.Scope && !isEdgeNeighbor(m.Edges, opts.Scope, s.Name) {
 			continue
 		}
 		id := mermaidID(s.Name)
 		label := s.Name
-		if s.Churn > 0 {
+		if len(enrichSet) > 0 {
+			label += enrichLabel(s, fi[s.Name], enrichSet)
+		} else if s.Churn > 0 {
 			label += fmt.Sprintf(" [churn:%d]", s.Churn)
 		}
 		h := ClassifyHealth(fi[s.Name], churnMap[s.Name])
@@ -53,6 +57,37 @@ func renderDependency(in Input, opts Options) string {
 	}
 
 	return b.String()
+}
+
+func parseEnrich(enrich string) map[string]bool {
+	if enrich == "" {
+		return nil
+	}
+	set := make(map[string]bool)
+	for _, s := range strings.Split(enrich, ",") {
+		s = strings.TrimSpace(s)
+		if s != "" {
+			set[s] = true
+		}
+	}
+	return set
+}
+
+func enrichLabel(s arch.ArchService, fi int, enrichSet map[string]bool) string {
+	var parts []string
+	if enrichSet["loc"] && s.LOC > 0 {
+		parts = append(parts, fmt.Sprintf("%d LOC", s.LOC))
+	}
+	if enrichSet["fan_in"] {
+		parts = append(parts, fmt.Sprintf("fan-in:%d", fi))
+	}
+	if enrichSet["churn"] && s.Churn > 0 {
+		parts = append(parts, fmt.Sprintf("churn:%d", s.Churn))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "\\n" + strings.Join(parts, " | ")
 }
 
 func isEdgeNeighbor(edges []arch.ArchEdge, scope, name string) bool {

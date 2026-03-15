@@ -18,6 +18,7 @@ type Options struct {
 	Entry        string // entry point function name (sequence, dataflow, callgraph)
 	ExportedOnly bool   // only exported functions (callgraph)
 	Theme        string // "light" | "dark" | "natural" (default)
+	Enrich       string // comma-separated metrics to show on node labels: loc, fan_in, churn
 }
 
 // Input bundles everything the renderers may need. Not every renderer
@@ -66,6 +67,8 @@ func Render(in Input, opts Options) (string, error) {
 		return renderCallGraph(in, opts)
 	case "state":
 		return renderState(in, opts)
+	case "zones":
+		return renderZones(in, opts), nil
 	default:
 		return "", fmt.Errorf("unknown diagram type %q (use: %s)", opts.Type, strings.Join(Types(), ", "))
 	}
@@ -76,6 +79,6 @@ func Types() []string {
 	return []string{
 		"dependency", "c4", "coupling", "churn", "layers", "tree",
 		"classes", "sequence", "er",
-		"dataflow", "callgraph", "state",
+		"dataflow", "callgraph", "state", "zones",
 	}
 }

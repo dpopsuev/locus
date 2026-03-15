@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dpopsuev/locus/internal/model"
 	"github.com/dpopsuev/locus/internal/survey"
 )
 
@@ -26,7 +27,7 @@ func (a *LSPAnalyzer) timeout() time.Duration {
 	if a.Timeout > 0 {
 		return a.Timeout
 	}
-	return 30 * time.Second
+	return time.Duration(DefaultLSPTimeout) * time.Second
 }
 
 func (a *LSPAnalyzer) Classes(root string) ([]ClassInfo, error) {
@@ -379,7 +380,7 @@ func (c *lspConn) findCallHierarchyItem(root, name string) (*callHierarchyItem, 
 	}
 	// Find exact match
 	for _, s := range symbols {
-		if s.Name == name && (s.Kind == 12 || s.Kind == 6) { // Function or Method
+		if s.Name == name && (s.Kind == int(model.SymbolFunction) || s.Kind == int(model.SymbolMethod)) {
 			prepResult, err := c.request("textDocument/prepareCallHierarchy", map[string]any{
 				"textDocument": map[string]string{"uri": s.Location.URI},
 				"position": map[string]int{

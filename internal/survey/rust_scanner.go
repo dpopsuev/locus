@@ -139,8 +139,7 @@ func (s *RustScanner) extractRustSymbols(crateDir string, ns *model.Namespace) {
 			return err
 		}
 		if d.IsDir() {
-			base := d.Name()
-			if base == "target" || strings.HasPrefix(base, ".") {
+			if ShouldSkipDir(d.Name()) {
 				return filepath.SkipDir
 			}
 			return nil

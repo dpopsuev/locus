@@ -58,9 +58,7 @@ func (s *TypeScriptScanner) Scan(root string) (*model.Project, error) {
 			return err
 		}
 		if d.IsDir() {
-			base := d.Name()
-			if base == "node_modules" || base == "dist" || base == "build" ||
-				base == ".next" || base == "coverage" || strings.HasPrefix(base, ".") {
+			if ShouldSkipTSDir(d.Name()) {
 				return filepath.SkipDir
 			}
 			return nil

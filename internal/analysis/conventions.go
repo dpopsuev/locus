@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/dpopsuev/locus/internal/survey"
 )
 
 // Convention represents a detected coding convention.
@@ -36,17 +38,15 @@ func DetectConventions(root string) (*ConventionReport, error) {
 	testSuffixes := []string{"_test.go", "test_", ".spec.ts", ".spec.js", "_test.py"}
 	configNames := []string{".yaml", ".yml", ".toml", ".json", "config.", ".config"}
 
-	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			if os.IsNotExist(err) {
 				return nil
 			}
 			return err
 		}
-		if info.IsDir() {
-			// Skip hidden and vendor
-			base := filepath.Base(path)
-			if strings.HasPrefix(base, ".") || base == "vendor" || base == "node_modules" {
+		if d.IsDir() {
+			if survey.ShouldSkipDir(d.Name()) {
 				return filepath.SkipDir
 			}
 			return nil

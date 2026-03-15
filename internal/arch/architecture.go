@@ -20,6 +20,7 @@ type ArchService struct {
 	LOC        int     `json:"loc,omitempty"`
 	MaxNesting int     `json:"max_nesting,omitempty"`
 	AvgNesting float64 `json:"avg_nesting,omitempty"`
+	Changed    bool    `json:"changed,omitempty"`
 }
 
 // ArchEdge represents a dependency edge in an architecture artifact.

@@ -42,8 +42,7 @@ func (s *GoScanner) Scan(root string) (*model.Project, error) {
 		}
 
 		if d.IsDir() {
-			base := d.Name()
-			if base == "vendor" || base == "testdata" || strings.HasPrefix(base, ".") {
+			if ShouldSkipDir(d.Name()) {
 				return filepath.SkipDir
 			}
 			return nil

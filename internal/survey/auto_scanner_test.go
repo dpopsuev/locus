@@ -90,6 +90,38 @@ func TestAutoScannerAutoDetectsGo(t *testing.T) {
 	}
 }
 
+func TestAutoScannerAutoDetectsPython(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "pyproject.toml"), []byte("[project]\nname = \"myapp\"\n"), 0o644)
+	pkgDir := filepath.Join(dir, "myapp")
+	os.MkdirAll(pkgDir, 0o755)
+	os.WriteFile(filepath.Join(pkgDir, "__init__.py"), []byte(""), 0o644)
+	os.WriteFile(filepath.Join(pkgDir, "main.py"), []byte("def run():\n    pass\n"), 0o644)
+
+	sc := &survey.AutoScanner{}
+	proj, err := sc.Scan(dir)
+	if err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+	if proj.Language != model.LangPython {
+		t.Errorf("language = %v, want LangPython", proj.Language)
+	}
+	if len(proj.Namespaces) == 0 {
+		t.Error("expected at least one namespace")
+	}
+}
+
+func TestAutoScannerUnknownLanguageFallback(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "main.rb"), []byte("puts 'hello'\n"), 0o644)
+
+	sc := &survey.AutoScanner{}
+	_, err := sc.Scan(dir)
+	if err != nil {
+		t.Fatalf("scan should not fail on unknown language: %v", err)
+	}
+}
+
 func TestDefaultLSPServer(t *testing.T) {
 	tests := []struct {
 		lang model.Language

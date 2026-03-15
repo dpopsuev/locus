@@ -19,6 +19,7 @@ type Opts struct {
 	Depth     int
 	ChurnDays int
 	Budget    int
+	Intent    string
 }
 
 type Result struct {
@@ -60,6 +61,7 @@ func Codograph(ctx context.Context, repoURL string, opts Opts) (*Result, error) 
 		Depth:        opts.Depth,
 		ChurnDays:    churnDays,
 		Budget:       opts.Budget,
+		Intent:       arch.ScanIntent(opts.Intent),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("scan %s: %w", repoURL, err)

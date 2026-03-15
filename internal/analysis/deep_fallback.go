@@ -13,6 +13,7 @@ import (
 // which analyzer produced the data.
 type DeepFallbackAnalyzer struct {
 	lsp   DeepAnalyzer
+	goast DeepAnalyzer
 	ts    DeepAnalyzer
 	regex DeepAnalyzer
 }
@@ -22,6 +23,14 @@ type DeepFallbackAnalyzer struct {
 func NewDeepFallback(root string) *DeepFallbackAnalyzer {
 	f := &DeepFallbackAnalyzer{
 		regex: &RegexDeepAnalyzer{},
+	}
+	// Language-specific AST analyzers — auto-detected.
+	if ga := NewGoASTDeep(root); ga != nil {
+		f.goast = ga
+	} else if pa := NewPythonDeep(root); pa != nil {
+		f.goast = pa
+	} else if ta := NewTypeScriptDeep(root); ta != nil {
+		f.goast = ta
 	}
 	// Tree-sitter deep analyzer uses ParsedProject
 	if ts, err := NewTreeSitterDeep(root); err == nil {
@@ -45,6 +54,11 @@ func (f *DeepFallbackAnalyzer) CallGraph(root string, opts CallGraphOpts) (*Call
 			return r, nil
 		}
 	}
+	if f.goast != nil {
+		if r, err := f.goast.CallGraph(root, opts); err == nil && len(r.Edges) > 0 {
+			return r, nil
+		}
+	}
 	if f.ts != nil {
 		if r, err := f.ts.CallGraph(root, opts); err == nil && len(r.Edges) > 0 {
 			return r, nil
@@ -59,6 +73,11 @@ func (f *DeepFallbackAnalyzer) DataFlowTrace(root, entry string, depth int) (*Da
 			return r, nil
 		}
 	}
+	if f.goast != nil {
+		if r, err := f.goast.DataFlowTrace(root, entry, depth); err == nil && len(r.Edges) > 0 {
+			return r, nil
+		}
+	}
 	if f.ts != nil {
 		if r, err := f.ts.DataFlowTrace(root, entry, depth); err == nil && len(r.Edges) > 0 {
 			return r, nil
@@ -70,6 +89,11 @@ func (f *DeepFallbackAnalyzer) DataFlowTrace(root, entry string, depth int) (*Da
 func (f *DeepFallbackAnalyzer) DetectStateMachines(root string) ([]StateMachine, error) {
 	if f.lsp != nil {
 		if r, err := f.lsp.DetectStateMachines(root); err == nil && len(r) > 0 {
+			return r, nil
+		}
+	}
+	if f.goast != nil {
+		if r, err := f.goast.DetectStateMachines(root); err == nil && len(r) > 0 {
 			return r, nil
 		}
 	}

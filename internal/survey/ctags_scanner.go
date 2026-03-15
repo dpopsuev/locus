@@ -131,12 +131,12 @@ func mapCtagsKind(kind string) model.SymbolKind {
 func extractCIncludes(root string) *model.DependencyGraph {
 	deps := model.NewDependencyGraph()
 
-	_ = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+	_ = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return nil
 		}
-		if info.IsDir() {
-			if info.Name() == ".git" || info.Name() == ".mos" || info.Name() == "vendor" {
+		if d.IsDir() {
+			if ShouldSkipDir(d.Name()) {
 				return filepath.SkipDir
 			}
 			return nil
