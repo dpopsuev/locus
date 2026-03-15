@@ -43,6 +43,7 @@ const (
 	ActionPreset      = "preset"
 	ActionComponent   = "component"
 	ActionQuery       = "query"
+	ActionSearch      = "search"
 )
 
 // Coupling view names.
@@ -329,6 +330,12 @@ func (h *handler) handleAnalysis(ctx context.Context, req *sdkmcp.CallToolReques
 		return text(r), nil, nil
 	case ActionComponent:
 		r, err := h.proto.GetComponentDetail(ctx, in.Path, in.Component, in.CacheKey)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
+	case ActionSearch:
+		r, err := h.proto.SearchComponents(ctx, in.Path, in.Query, in.CacheKey)
 		if err != nil {
 			return nil, nil, err
 		}

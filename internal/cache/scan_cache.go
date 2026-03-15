@@ -105,15 +105,16 @@ func (c *ScanCache) Put(repoPath, sha string, report *arch.ContextReport) error 
 
 // Invalidate removes all cached entries for a repo.
 func (c *ScanCache) Invalidate(repoPath string) error {
-	dir := filepath.Join(c.root, repoHash(repoPath))
+	dir := filepath.Join(c.root, RepoHash(repoPath))
 	return os.RemoveAll(dir)
 }
 
 func (c *ScanCache) entryPath(repoPath, sha string) string {
-	return filepath.Join(c.root, repoHash(repoPath), sha+".json.gz")
+	return filepath.Join(c.root, RepoHash(repoPath), sha+".json.gz")
 }
 
-func repoHash(repoPath string) string {
+// RepoHash returns a deterministic hash for a repository path.
+func RepoHash(repoPath string) string {
 	abs, err := filepath.Abs(repoPath)
 	if err != nil {
 		abs = repoPath

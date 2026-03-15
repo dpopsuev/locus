@@ -24,8 +24,39 @@ type Store interface {
 	ResolveHEAD(repoPath string) string
 	ResolveBranch(repoPath, ref string) (string, error)
 
+	// Project registry
+	ListProjects(ctx context.Context) ([]ProjectInfo, error)
+	UpsertProject(ctx context.Context, info ProjectInfo) error
+
+	// Component metadata
+	PutComponentMeta(ctx context.Context, project, sha string, meta []ComponentMeta) error
+	ListComponentMeta(ctx context.Context, project, sha string) ([]ComponentMeta, error)
+	SearchComponents(ctx context.Context, project, sha, query string) ([]ComponentMeta, error)
+
 	// Lifecycle
 	Close() error
+}
+
+// ProjectInfo tracks a scanned project in the registry.
+type ProjectInfo struct {
+	Path       string    `json:"path"`
+	Name       string    `json:"name"`
+	Language   string    `json:"language"`
+	LastSHA    string    `json:"last_sha"`
+	LastScan   time.Time `json:"last_scan"`
+	Components int       `json:"components"`
+}
+
+// ComponentMeta holds auto-generated metadata for a single component.
+type ComponentMeta struct {
+	Name        string   `json:"name"`
+	Role        string   `json:"role"`
+	Keywords    []string `json:"keywords"`
+	Description string   `json:"description"`
+	Layer       int      `json:"layer"`
+	Health      string   `json:"health"`
+	LOC         int      `json:"loc"`
+	FanIn       int      `json:"fan_in"`
 }
 
 // HistoryEntry summarizes a single scan event in the history log.

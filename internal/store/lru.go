@@ -104,6 +104,26 @@ func (s *LRUStore) evictLocked() {
 
 // All other methods delegate to inner.
 
+func (s *LRUStore) ListProjects(ctx context.Context) ([]ProjectInfo, error) {
+	return s.inner.ListProjects(ctx)
+}
+
+func (s *LRUStore) UpsertProject(ctx context.Context, info ProjectInfo) error {
+	return s.inner.UpsertProject(ctx, info)
+}
+
+func (s *LRUStore) PutComponentMeta(ctx context.Context, project, sha string, meta []ComponentMeta) error {
+	return s.inner.PutComponentMeta(ctx, project, sha, meta)
+}
+
+func (s *LRUStore) ListComponentMeta(ctx context.Context, project, sha string) ([]ComponentMeta, error) {
+	return s.inner.ListComponentMeta(ctx, project, sha)
+}
+
+func (s *LRUStore) SearchComponents(ctx context.Context, project, sha, query string) ([]ComponentMeta, error) {
+	return s.inner.SearchComponents(ctx, project, sha, query)
+}
+
 func (s *LRUStore) RecordScan(ctx context.Context, source, repoPath, sha string, report *arch.ContextReport) error {
 	return s.inner.RecordScan(ctx, source, repoPath, sha, report)
 }

@@ -343,6 +343,13 @@ func inferLayerOrder(report *arch.ContextReport) []string {
 	return layers
 }
 
+// SearchComponents queries component metadata by keywords.
+func (p *Protocol) SearchComponents(_ context.Context, path, query string, cacheKey ...string) ([]locusstore.ComponentMeta, error) {
+	path = p.resolvePath(path)
+	sha := p.store.ResolveHEAD(path)
+	return p.store.SearchComponents(context.Background(), path, sha, query)
+}
+
 // CallerSite represents a single call site for a symbol.
 type CallerSite struct {
 	Caller    string `json:"caller"`
