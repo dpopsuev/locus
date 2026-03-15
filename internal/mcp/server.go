@@ -105,11 +105,16 @@ func NewServer(s store.Store, workspaceRoots []string, version string) (*sdkmcp.
 	srv := sdkmcp.NewServer(
 		&sdkmcp.Implementation{Name: "locus", Version: version},
 		&sdkmcp.ServerOptions{
-			Instructions: "Locus is a spatial context bus for AI agents. " +
-				"Point it at any repository to get architecture, dependency graph, churn, hot spots, and symbols. " +
-				"Results are cached by git HEAD SHA. Use codograph scan_local to analyze a repo, " +
-				"dependencies coupling with view=hot_spots for risk areas, " +
-				"and codograph scan_remote for GitHub repos you don't have locally.",
+			Instructions: "Locus is a spatial context bus for AI agents. Point it at any repository to get architecture, " +
+				"dependency graph, churn, hot spots, and symbols. Results are cached by git HEAD SHA. " +
+				"Workflow: codograph status to check cache, then scan_local (or scan_remote) which returns a cache_key. " +
+				"Pass cache_key to analysis and render_diagram to avoid re-scanning. " +
+				"Use intent param for scan depth: architecture (fast), coupling, health (default), full. " +
+				"Output: default ~50 token summary; format=json for full; format=summary for <500 tokens; format=facts for assertions. " +
+				"Key actions: analysis coupling view=hot_spots (risk), analysis violations (layer checks), " +
+				"analysis drift (desired-state validation), analysis search (find by keyword), " +
+				"analysis preset=architecture_review (one-call summary). " +
+				"codograph set_desired_state to persist architecture rules. render_diagram type=zones for zone overview.",
 		},
 	)
 	h := &handler{proto: proto}
@@ -118,8 +123,10 @@ func NewServer(s store.Store, workspaceRoots []string, version string) (*sdkmcp.
 	triage.AddTool(reg, srv, triage.ToolMeta{
 		Name: "codograph",
 		Description: "Scan and compare repository architectures. " +
-			"Actions: scan_local (full codebase context), scan_remote (GitHub via shallow clone), " +
-			"history (past scans, set diff=true to compare latest two), diff (compare two git branches).",
+			"Actions: scan_local (codebase scan, use intent for depth), scan_remote (GitHub via shallow clone), " +
+			"history (past scans, diff=true to compare), diff (compare branches), " +
+			"status (check cache + workspaces), set_desired_state (persist layer rules), get_desired_state (read rules). " +
+			"Scan returns cache_key for downstream tools. Use intent=architecture for fast structure-only scans.",
 		Keywords:   []string{"scan", "architecture", "overview", "remote", "github", "history", "diff", "branch", "compare"},
 		Categories: []string{"architecture", "onboarding", "comparison"},
 		Rationale: map[string]string{
@@ -133,11 +140,14 @@ func NewServer(s store.Store, workspaceRoots []string, version string) (*sdkmcp.
 	triage.AddTool(reg, srv, triage.ToolMeta{
 		Name: "analysis",
 		Description: "Analyze component dependencies, impact, and coupling. " +
-			"Actions: deps (fan-in/fan-out for a component), impact (transitive blast radius), " +
-			"coupling (coupling table, view=hot_spots for risk areas, view=edges for edge list), " +
-			"violations (detect upward layer imports — auto-detects layers or pass layers param). " +
-			"Use analysis=coverage for test coverage, analysis=api_surface for exported symbols, " +
-			"analysis=conventions for coding patterns, analysis=gaps for undocumented/under-tested components.",
+			"Actions: deps (fan-in/fan-out), impact (blast radius), coupling (table, view=hot_spots/edges), " +
+			"cycles (dependency cycles), violations (layer purity), scan_diff (compare two SHAs), " +
+			"callers (reverse symbol lookup), cross_repo (compare two repos), " +
+			"drift (check against desired state), suggest_architecture (infer rules from code), " +
+			"search (find components by keyword), component (single-package drill-down), " +
+			"preset (architecture_review/health_check/onboarding/pre_pr), query (natural language). " +
+			"Also: coverage, api_surface, conventions, gaps. " +
+			"Pass cache_key from scan_remote to avoid re-scanning. format=summary for <500 tokens.",
 		Keywords:   []string{"depend", "import", "impact", "blast", "coupling", "fan", "upstream", "downstream", "cycle", "circular", "loop", "coverage", "convention", "gap"},
 		Categories: []string{"dependencies", "refactoring", "performance", "architecture"},
 		Rationale: map[string]string{
@@ -212,7 +222,7 @@ type codographActionInput struct {
 
 type analysisActionInput struct {
 	Action   string `json:"action" jsonschema:"required,deps | impact | coupling | cycles | violations | scan_diff | coverage | api_surface | conventions | gaps"`
-	Path     string `json:"path" jsonschema:"required,absolute path to local repository"`
+	Path     string `json:"path,omitempty" jsonschema:"absolute path to local repository (defaults to workspace root)"`
 	CacheKey string `json:"cache_key,omitempty" jsonschema:"cache key from scan_remote (use instead of path for remote repos)"`
 
 	Component string   `json:"component,omitempty" jsonschema:"component path for deps/impact/coupling edges"`
