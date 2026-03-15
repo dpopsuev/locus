@@ -323,13 +323,15 @@ cmd/locus,internal/history,1
 These produce large output best viewed interactively. Run to generate for any repository:
 
 ```bash
-locus diagram . --type classes --theme natural          # class diagram with health colors
-locus diagram . --type classes --exported-only           # exported symbols only
-locus diagram . --type er --theme natural                # entity-relationship
-locus diagram . --type sequence --entry ScanAndBuild     # call trace from entry point
-locus diagram . --type callgraph --entry ScanProject     # function call graph
-locus diagram . --type dataflow --entry main             # DFD with trust boundaries
-locus diagram . --type state                             # state machine detection
+locus diagram . --type zones --theme natural             # architecture zones with health
+locus diagram . --type classes --theme natural           # class diagram with health colors
+locus diagram . --type classes --exported-only            # exported symbols only
+locus diagram . --type er --theme natural                 # entity-relationship
+locus diagram . --type sequence --entry ScanAndBuild      # call trace from entry point
+locus diagram . --type callgraph --entry ScanProject      # function call graph
+locus diagram . --type dataflow --entry main              # DFD with trust boundaries
+locus diagram . --type state                              # state machine detection
+locus diagram . --type dependency --enrich loc,fan_in     # metrics on node labels
 ```
 
 ## Packages
@@ -344,8 +346,10 @@ locus diagram . --type state                             # state machine detecti
 | `internal/diagram` | 14 | 32 | Mermaid diagram renderers for all 12 diagram types with theming. |
 | `internal/survey` | 12 | 20 | Language-specific scanners: Go, Rust, Python, TypeScript, C/C++, LSP, ctags. |
 | `internal/model` | 45 | 3 | Data model: `Project`, `Namespace`, `File`, `Symbol`, `DependencyGraph`. |
-| `internal/cache` | 5 | 4 | Scan cache keyed by git HEAD SHA. Repeated scans are instant. |
-| `internal/history` | 12 | 8 | Codograph history: record, list, diff between snapshots. |
+| `internal/store` | — | new | Hexagonal storage port: `Store` interface + FilesystemStore adapter + LRU decorator. |
+| `internal/config` | — | new | Backend selection and dependency wiring from env vars. |
+| `internal/cache` | 5 | 4 | Filesystem scan cache keyed by git HEAD SHA (wrapped by Store). |
+| `internal/history` | 12 | 8 | Codograph history: record, list, diff between snapshots (wrapped by Store). |
 | `internal/remote` | 6 | 3 | Shallow-clone remote repos, scan, cache by URL+SHA. |
 | `internal/cursor` | 4 | 2 | Read `.cursor/rules` and `.cursor/skills` from workspaces. |
 | `internal/triage` | 6 | 3 | Intent-to-tool routing. Pure keyword matching, no LLM. |
@@ -354,10 +358,22 @@ locus diagram . --type state                             # state machine detecti
 
 | Tool | Description |
 |---|---|
-| `codograph` | Scan and compare repository architectures. Actions: `scan_local` (full codebase context), `scan_remote` (GitHub via shallow clone), `history` (past scans, diff=true to compare), `diff` (compare git branches). |
-| `analysis` | Analyze component dependencies, impact, and coupling. Actions: `deps` (fan-in/fan-out), `impact` (blast radius), `coupling` (table, view=hot_spots/edges). Use analysis=coverage for test coverage, analysis=api_surface for exported symbols, analysis=conventions for coding patterns, analysis=gaps for undocumented/under-tested components. |
-| `render_diagram` | Mermaid diagrams: dependency, c4, coupling, churn, layers, tree, classes, sequence, er. Use `theme` (light/dark/natural). |
+| `codograph` | Scan and compare repository architectures. Actions: `scan_local`, `scan_remote`, `history`, `diff`, `status`, `set_desired_state`, `get_desired_state`. Use `intent` for scan depth (architecture/coupling/health/full). Returns `cache_key` for downstream tools. |
+| `analysis` | 16 analysis actions: `deps`, `impact`, `coupling` (view=hot_spots/edges), `cycles`, `violations`, `scan_diff`, `callers`, `cross_repo`, `drift`, `suggest_architecture`, `search`, `component`, `preset` (architecture_review/health_check/onboarding/pre_pr), `query` (natural language), `coverage`, `api_surface`, `conventions`, `gaps`. Pass `cache_key` from scan to avoid re-scanning. `format=summary` for <500 tokens. |
+| `render_diagram` | 13 diagram types: dependency, c4, coupling, churn, layers, tree, zones, classes, sequence, er, dataflow, callgraph, state. `format=facts` for plain-text assertions. `enrich=loc,fan_in,churn` for metrics on nodes. `theme` (light/dark/natural). |
 | `triage` | Map natural language intent to ranked tool list (no LLM). |
+
+### Agent Workflow
+
+```
+codograph status            → check what's cached
+codograph scan_local        → returns cache_key + 50-token summary
+  intent=architecture       → fast structure-only scan
+  intent=health             → default, includes churn + nesting
+analysis coupling cache_key → risk areas without re-scanning
+render_diagram type=zones   → architecture overview
+analysis drift              → check against desired state
+```
 
 ## Triage
 
@@ -403,10 +419,10 @@ All tools grouped by category:
 
 | Language | Scanner | Symbols | Dependencies |
 |---|---|---|---|
-| Go | `go/ast` native | functions, types, methods, interfaces | import graph with call-site coupling |
+| Go | `go/ast` native | functions, types, methods, interfaces | import graph + call graph (GoAST analyzer) |
 | Rust | Cargo.toml + regex | functions, structs, traits, impls | crate dependency graph |
-| Python | AST regex + pyproject.toml | functions, classes | import graph |
-| TypeScript | package.json + regex | functions, classes, interfaces | import/require graph |
+| Python | tree-sitter-python | functions, classes, async functions | import graph + call graph (PythonDeep analyzer) |
+| TypeScript | tree-sitter-typescript | functions, classes, arrow functions | import graph + call graph (TypeScriptDeep analyzer) |
 | C/C++ | `#include` + ctags | functions, structs, typedefs | include graph |
 | Any | LSP (gopls, etc.) | workspace/symbol | references |
 | Any | ctags (universal) | all ctags kinds | import heuristics |
@@ -457,6 +473,7 @@ shapes:
 
 | Variable | Default | Description |
 |---|---|---|
+| `LOCUS_STORE` | `filesystem` | Storage backend: `filesystem` |
 | `LOCUS_CACHE_DIR` | `~/.locus/cache` | Scan cache directory |
 | `LOCUS_HISTORY_DIR` | `~/.locus/history` | Codograph history directory |
 | `LOCUS_TRANSPORT` | `stdio` | Transport: `stdio`, `http` |
