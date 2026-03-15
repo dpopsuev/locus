@@ -15,25 +15,17 @@ import (
 
 	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/arch"
-	"github.com/dpopsuev/locus/internal/cache"
+	"github.com/dpopsuev/locus/internal/config"
 	"github.com/dpopsuev/locus/internal/diagram"
-	"github.com/dpopsuev/locus/internal/history"
 	locusmcp "github.com/dpopsuev/locus/internal/mcp"
 	"github.com/dpopsuev/locus/internal/protocol"
-	"github.com/dpopsuev/locus/internal/store"
 	"github.com/dpopsuev/locus/internal/triage"
 )
 
 var Version = "dev"
 
-func newStore() store.Store {
-	sc := cache.New(envOr("LOCUS_CACHE_DIR", cache.DefaultCacheDir()))
-	histDir := envOr("LOCUS_HISTORY_DIR", history.DefaultHistoryDir())
-	return store.NewFilesystem(sc, histDir)
-}
-
 func newProto() *protocol.Protocol {
-	return protocol.NewWithPathMapper(newStore(), nil, os.Getenv("LOCUS_PATH_MAP"))
+	return protocol.NewWithPathMapper(config.NewStore(), nil, os.Getenv("LOCUS_PATH_MAP"))
 }
 
 func envOr(key, fallback string) string {
@@ -122,7 +114,7 @@ Tools: scan_project, get_dependencies, get_impact, get_coupling_table,
 			cwd, _ := os.Getwd()
 			roots = []string{cwd}
 		}
-		srv, _ := locusmcp.NewServer(newStore(), roots, Version)
+		srv, _ := locusmcp.NewServer(config.NewStore(), roots, Version)
 		if serveFlags.transport == "http" {
 			handler := sdkmcp.NewStreamableHTTPHandler(
 				func(r *http.Request) *sdkmcp.Server { return srv },
@@ -490,7 +482,7 @@ Examples:
   locus triage --category performance`,
 	Args: cobra.MaximumNArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		_, reg := locusmcp.NewServer(newStore(), nil, Version)
+		_, reg := locusmcp.NewServer(config.NewStore(), nil, Version)
 
 		if triageFlags.list {
 			tools := reg.List()
