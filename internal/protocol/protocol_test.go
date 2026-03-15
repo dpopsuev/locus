@@ -10,7 +10,12 @@ import (
 
 	"github.com/dpopsuev/locus/internal/arch"
 	"github.com/dpopsuev/locus/internal/cache"
+	"github.com/dpopsuev/locus/internal/store"
 )
+
+func testStore(cacheDir, histDir string) store.Store {
+	return store.NewFilesystem(cache.New(cacheDir), histDir)
+}
 
 func TestResolvePath_Empty(t *testing.T) {
 	p := &Protocol{workspaces: []string{"/tmp"}}
@@ -63,8 +68,7 @@ func TestHealth_ReturnsStructuredChecks(t *testing.T) {
 	histDir := filepath.Join(t.TempDir(), "history")
 	wsDir := t.TempDir()
 
-	sc := cache.New(cacheDir)
-	p := New(sc, histDir, []string{wsDir})
+	p := New(testStore(cacheDir, histDir), []string{wsDir})
 
 	result := p.Health(context.Background())
 
@@ -244,8 +248,7 @@ func TestGetViolations_AutoDetectLayers(t *testing.T) {
 	}
 
 	cacheDir := filepath.Join(t.TempDir(), "cache")
-	sc := cache.New(cacheDir)
-	p := New(sc, t.TempDir(), []string{repoPath})
+	p := New(testStore(cacheDir, t.TempDir()), []string{repoPath})
 
 	report, err := p.GetViolations(context.Background(), repoPath, nil)
 	if err != nil {
@@ -270,8 +273,7 @@ func TestGetViolations_ExplicitLayers(t *testing.T) {
 	}
 
 	cacheDir := filepath.Join(t.TempDir(), "cache")
-	sc := cache.New(cacheDir)
-	p := New(sc, t.TempDir(), []string{repoPath})
+	p := New(testStore(cacheDir, t.TempDir()), []string{repoPath})
 
 	// Use explicit layers — model is low, mcp is high.
 	layers := []string{"model", "survey", "arch", "analysis", "protocol", "mcp"}
@@ -289,9 +291,8 @@ func TestGetViolations_ExplicitLayers(t *testing.T) {
 }
 
 func TestGetScanDiff(t *testing.T) {
-	cacheDir := filepath.Join(t.TempDir(), "cache")
-	sc := cache.New(cacheDir)
-	p := New(sc, t.TempDir(), nil)
+	s := testStore(filepath.Join(t.TempDir(), "cache"), t.TempDir())
+	p := New(s, nil)
 
 	beforeReport := &arch.ContextReport{
 		Architecture: arch.ArchModel{
@@ -318,8 +319,8 @@ func TestGetScanDiff(t *testing.T) {
 		},
 	}
 
-	_ = sc.Put("/repo", "sha1", beforeReport)
-	_ = sc.Put("/repo", "sha2", afterReport)
+	_ = s.PutReport(context.Background(), "/repo", "sha1", beforeReport)
+	_ = s.PutReport(context.Background(), "/repo", "sha2", afterReport)
 
 	diff, err := p.GetScanDiff(context.Background(), "/repo", "sha1", "sha2")
 	if err != nil {
@@ -341,9 +342,8 @@ func TestGetScanDiff(t *testing.T) {
 }
 
 func TestGetCachedReport_RoundTrip(t *testing.T) {
-	cacheDir := filepath.Join(t.TempDir(), "cache")
-	sc := cache.New(cacheDir)
-	p := New(sc, t.TempDir(), nil)
+	s := testStore(filepath.Join(t.TempDir(), "cache"), t.TempDir())
+	p := New(s, nil)
 
 	// Simulate a remote scan: store a report under a cache key.
 	fakeKey := "remote:https://github.com/example/repo@abc123def456"
@@ -352,7 +352,7 @@ func TestGetCachedReport_RoundTrip(t *testing.T) {
 		ModulePath: "github.com/example/repo",
 		Scanner:    "go",
 	}
-	if err := sc.Put(fakeKey, fakeSHA, report); err != nil {
+	if err := s.PutReport(context.Background(), fakeKey, fakeSHA, report); err != nil {
 		t.Fatalf("put: %v", err)
 	}
 
@@ -390,8 +390,7 @@ func TestRunPreset(t *testing.T) {
 		t.Skip("not in a git repo")
 	}
 
-	sc := cache.New(filepath.Join(t.TempDir(), "cache"))
-	p := New(sc, t.TempDir(), []string{repoPath})
+	p := New(testStore(filepath.Join(t.TempDir(), "cache"), t.TempDir()), []string{repoPath})
 
 	for _, preset := range []string{PresetArchReview, PresetHealthCheck, PresetOnboarding, PresetPrePR} {
 		out, err := p.RunPreset(context.Background(), repoPath, preset)
@@ -411,9 +410,8 @@ func TestRunPreset(t *testing.T) {
 }
 
 func TestGetComponentDetail(t *testing.T) {
-	cacheDir := filepath.Join(t.TempDir(), "cache")
-	sc := cache.New(cacheDir)
-	p := New(sc, t.TempDir(), nil)
+	s := testStore(filepath.Join(t.TempDir(), "cache"), t.TempDir())
+	p := New(s, nil)
 
 	report := &arch.ContextReport{
 		Architecture: arch.ArchModel{
@@ -427,7 +425,7 @@ func TestGetComponentDetail(t *testing.T) {
 			},
 		},
 	}
-	_ = sc.Put("/repo", "sha1", report)
+	_ = s.PutReport(context.Background(), "/repo", "sha1", report)
 
 	detail, err := p.GetComponentDetail(context.Background(), "/repo", "pkg_a", "")
 	if err != nil {
@@ -448,8 +446,7 @@ func TestAnswerQuery(t *testing.T) {
 		t.Skip("not in a git repo")
 	}
 
-	sc := cache.New(filepath.Join(t.TempDir(), "cache"))
-	p := New(sc, t.TempDir(), []string{repoPath})
+	p := New(testStore(filepath.Join(t.TempDir(), "cache"), t.TempDir()), []string{repoPath})
 
 	tests := []struct {
 		query  string

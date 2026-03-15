@@ -11,9 +11,9 @@ import (
 
 	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/arch"
-	"github.com/dpopsuev/locus/internal/cache"
 	"github.com/dpopsuev/locus/internal/diagram"
 	"github.com/dpopsuev/locus/internal/protocol"
+	"github.com/dpopsuev/locus/internal/store"
 	"github.com/dpopsuev/locus/internal/triage"
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -93,9 +93,9 @@ var DiagramMinIntent = map[string]string{
 	DiagramZones:      string(arch.IntentCoupling),
 }
 
-func NewServer(sc *cache.ScanCache, historyDir string, workspaceRoots []string, version string) (*sdkmcp.Server, *triage.Registry) {
+func NewServer(s store.Store, workspaceRoots []string, version string) (*sdkmcp.Server, *triage.Registry) {
 	pathMap := os.Getenv("LOCUS_PATH_MAP")
-	proto := protocol.NewWithPathMapper(sc, historyDir, workspaceRoots, pathMap)
+	proto := protocol.NewWithPathMapper(s, workspaceRoots, pathMap)
 	srv := sdkmcp.NewServer(
 		&sdkmcp.Implementation{Name: "locus", Version: version},
 		&sdkmcp.ServerOptions{

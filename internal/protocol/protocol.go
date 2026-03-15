@@ -15,10 +15,10 @@ import (
 
 	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/arch"
-	"github.com/dpopsuev/locus/internal/cache"
 	"github.com/dpopsuev/locus/internal/cursor"
 	"github.com/dpopsuev/locus/internal/history"
 	"github.com/dpopsuev/locus/internal/remote"
+	locusstore "github.com/dpopsuev/locus/internal/store"
 )
 
 // Error messages used across protocol methods.
@@ -39,21 +39,20 @@ const (
 // Protocol encapsulates all Locus business logic.
 // Both CLI and MCP are thin wrappers around this.
 type Protocol struct {
-	cache      *cache.ScanCache
-	historyDir string
+	store      locusstore.Store
 	workspaces []string
 	pathMapper *PathMapper
 }
 
-func New(sc *cache.ScanCache, historyDir string, workspaces []string) *Protocol {
-	return NewWithPathMapper(sc, historyDir, workspaces, "")
+func New(s locusstore.Store, workspaces []string) *Protocol {
+	return NewWithPathMapper(s, workspaces, "")
 }
 
 // NewWithPathMapper creates a Protocol with optional path mapping for containerized runs.
 // pathMapSpec is the LOCUS_PATH_MAP env value (host:container pairs, comma-separated). Empty means no mapping.
-func NewWithPathMapper(sc *cache.ScanCache, historyDir string, workspaces []string, pathMapSpec string) *Protocol {
+func NewWithPathMapper(s locusstore.Store, workspaces []string, pathMapSpec string) *Protocol {
 	pm := NewPathMapper(pathMapSpec)
-	return &Protocol{cache: sc, historyDir: historyDir, workspaces: workspaces, pathMapper: pm}
+	return &Protocol{store: s, workspaces: workspaces, pathMapper: pm}
 }
 
 // ScanOpts controls a local scan.
@@ -141,8 +140,8 @@ func (p *Protocol) ScanProject(_ context.Context, path string, opts ScanOpts) (*
 		churnDays = 30
 	}
 
-	sha := cache.ResolveHEAD(path)
-	if cached, hit, err := p.cache.Get(path, sha); err == nil && hit {
+	sha := p.store.ResolveHEAD(path)
+	if cached, hit, err := p.store.GetReport(context.Background(),path, sha); err == nil && hit {
 		return &ScanResult{Report: cached, CacheKey: path + "@" + sha, SHA: sha}, nil
 	}
 
@@ -163,9 +162,9 @@ func (p *Protocol) ScanProject(_ context.Context, path string, opts ScanOpts) (*
 		return nil, fmt.Errorf(errScanFailed, err)
 	}
 	if sha != "" {
-		p.cache.Put(path, sha, report)
+		p.store.PutReport(context.Background(),path, sha, report)
 		abs, _ := filepath.Abs(path)
-		_ = history.Record(p.cache, p.historyDir, history.Local, abs, sha, report)
+		_ = p.store.RecordScan(context.Background(), string(history.Local), abs, sha, report)
 	}
 	return &ScanResult{Report: report, CacheKey: path + "@" + sha, SHA: sha}, nil
 }
@@ -697,17 +696,17 @@ func (p *Protocol) GetScanDiff(_ context.Context, path, beforeSHA, afterSHA stri
 	path = p.resolvePath(path)
 
 	if afterSHA == "" {
-		afterSHA = cache.ResolveHEAD(path)
+		afterSHA = p.store.ResolveHEAD(path)
 	}
 	if beforeSHA == "" {
 		return nil, ErrBeforeSHARequired
 	}
 
-	before, hit, err := p.cache.Get(path, beforeSHA)
+	before, hit, err := p.store.GetReport(context.Background(),path, beforeSHA)
 	if err != nil || !hit {
 		return nil, fmt.Errorf(errNoCachedScan, beforeSHA)
 	}
-	after, hit, err := p.cache.Get(path, afterSHA)
+	after, hit, err := p.store.GetReport(context.Background(),path, afterSHA)
 	if err != nil || !hit {
 		return nil, fmt.Errorf(errNoCachedScan, afterSHA)
 	}
@@ -860,8 +859,8 @@ func (p *Protocol) CodographRemote(ctx context.Context, url string, opts RemoteO
 		return nil, fmt.Errorf("remote codography: %w", err)
 	}
 	cacheKey := remote.CacheKey(url, result.RefSHA)
-	_ = p.cache.Put(cacheKey, result.RefSHA, result.Report)
-	_ = history.Record(p.cache, p.historyDir, history.Remote, remote.NormalizeURL(url), result.RefSHA, result.Report)
+	_ = p.store.PutReport(context.Background(),cacheKey, result.RefSHA, result.Report)
+	_ = p.store.RecordScan(context.Background(), string(history.Remote), remote.NormalizeURL(url), result.RefSHA, result.Report)
 	return &RemoteResult{
 		Report:   result.Report,
 		CacheKey: cacheKey,
@@ -875,17 +874,33 @@ func (p *Protocol) GetHistory(_ context.Context, path string, last int) ([]histo
 	if last <= 0 {
 		last = 10
 	}
-	return history.List(p.historyDir, abs, last)
+	entries, err := p.store.ListHistory(context.Background(), abs, last)
+	if err != nil {
+		return nil, err
+	}
+	// Convert locusstore.HistoryEntry to history.EntrySummary for backward compat.
+	summaries := make([]history.EntrySummary, len(entries))
+	for i, e := range entries {
+		summaries[i] = history.EntrySummary{
+			Timestamp:  e.Timestamp,
+			HeadSHA:    e.SHA,
+			Source:     history.Source(e.Source),
+			RepoPath:   e.RepoPath,
+			Components: e.Components,
+			Edges:      e.Edges,
+		}
+	}
+	return summaries, nil
 }
 
 func (p *Protocol) DiffCodographs(_ context.Context, path string) (*history.CodographDiff, error) {
 	path = p.resolvePath(path)
 	abs, _ := filepath.Abs(path)
-	prev, err := history.GetReport(p.cache, p.historyDir, abs, -2)
+	prev, err := p.store.GetHistoryReport(context.Background(), abs, -2)
 	if err != nil {
 		return nil, fmt.Errorf("get previous codograph: %w", err)
 	}
-	latest, err := history.GetReport(p.cache, p.historyDir, abs, -1)
+	latest, err := p.store.GetHistoryReport(context.Background(), abs, -1)
 	if err != nil {
 		return nil, fmt.Errorf("get latest codograph: %w", err)
 	}
@@ -963,7 +978,7 @@ func (p *Protocol) Workspaces() []string {
 func (p *Protocol) GetCachedReport(cacheKey string) (*arch.ContextReport, error) {
 	if idx := strings.LastIndex(cacheKey, "@"); idx >= 0 {
 		sha := cacheKey[idx+1:]
-		if report, hit, err := p.cache.Get(cacheKey, sha); err == nil && hit {
+		if report, hit, err := p.store.GetReport(context.Background(),cacheKey, sha); err == nil && hit {
 			return report, nil
 		}
 	}
@@ -978,15 +993,15 @@ func (p *Protocol) getOrScan(path string, cacheKeys ...string) (*arch.ContextRep
 		}
 		if idx := strings.LastIndex(ck, "@"); idx >= 0 {
 			sha := ck[idx+1:]
-			if report, hit, err := p.cache.Get(ck, sha); err == nil && hit {
+			if report, hit, err := p.store.GetReport(context.Background(),ck, sha); err == nil && hit {
 				return report, nil
 			}
 		}
 		return nil, fmt.Errorf(errNoCachedReport, ck)
 	}
 
-	sha := cache.ResolveHEAD(path)
-	if cached, hit, _ := p.cache.Get(path, sha); hit {
+	sha := p.store.ResolveHEAD(path)
+	if cached, hit, _ := p.store.GetReport(context.Background(),path, sha); hit {
 		return cached, nil
 	}
 	r, err := arch.ScanAndBuild(path, arch.ScanOpts{ExcludeTests: true, ChurnDays: 30})
@@ -994,17 +1009,17 @@ func (p *Protocol) getOrScan(path string, cacheKeys ...string) (*arch.ContextRep
 		return nil, fmt.Errorf(errScanFailed, err)
 	}
 	if sha != "" {
-		p.cache.Put(path, sha, r)
+		p.store.PutReport(context.Background(),path, sha, r)
 	}
 	return r, nil
 }
 
 func (p *Protocol) scanBranch(repoPath, ref string) (*arch.ContextReport, error) {
-	sha, err := cache.ResolveBranch(repoPath, ref)
+	sha, err := p.store.ResolveBranch(repoPath, ref)
 	if err != nil {
 		return nil, err
 	}
-	if cached, hit, _ := p.cache.Get(repoPath, sha); hit {
+	if cached, hit, _ := p.store.GetReport(context.Background(),repoPath, sha); hit {
 		return cached, nil
 	}
 	currentBranch := getCurrentBranch(repoPath)
@@ -1020,7 +1035,7 @@ func (p *Protocol) scanBranch(repoPath, ref string) (*arch.ContextReport, error)
 	if err != nil {
 		return nil, err
 	}
-	p.cache.Put(repoPath, sha, report)
+	p.store.PutReport(context.Background(),repoPath, sha, report)
 	return report, nil
 }
 
@@ -1092,8 +1107,11 @@ type HealthCheck struct {
 func (p *Protocol) Health(_ context.Context) *HealthResult {
 	r := &HealthResult{OK: true}
 
-	r.Checks = append(r.Checks, checkDir("cache_dir", p.cache.Root()))
-	r.Checks = append(r.Checks, checkDir("history_dir", p.historyDir))
+	// Health checks for filesystem-backed stores.
+	if fs, ok := p.store.(*locusstore.FilesystemStore); ok {
+		r.Checks = append(r.Checks, checkDir("cache_dir", fs.CacheRoot()))
+		r.Checks = append(r.Checks, checkDir("history_dir", fs.HistoryDir()))
+	}
 	r.Checks = append(r.Checks, checkGit())
 	for _, ws := range p.workspaces {
 		r.Checks = append(r.Checks, checkDir("workspace:"+ws, ws))
@@ -1264,7 +1282,7 @@ func (p *Protocol) Evolution(_ context.Context, opts EvolutionOpts) (*EvolutionR
 	var prevReport *arch.ContextReport
 
 	for i, commit := range commits {
-		report, cached, cacheErr := p.cache.Get(path, commit.SHA)
+		report, cached, cacheErr := p.store.GetReport(context.Background(),path, commit.SHA)
 		if cacheErr != nil || !cached {
 			if !needsRestore {
 				needsRestore = true
@@ -1280,7 +1298,7 @@ func (p *Protocol) Evolution(_ context.Context, opts EvolutionOpts) (*EvolutionR
 			if err != nil {
 				return nil, fmt.Errorf("scan %s: %w", commit.SHA[:8], err)
 			}
-			_ = p.cache.Put(path, commit.SHA, report)
+			_ = p.store.PutReport(context.Background(),path, commit.SHA, report)
 		}
 
 		step := EvolutionStep{
