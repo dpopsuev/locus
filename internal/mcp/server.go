@@ -23,7 +23,10 @@ const (
 	ActionScanLocal  = "scan_local"
 	ActionScanRemote = "scan_remote"
 	ActionHistory    = "history"
-	ActionDiff       = "diff"
+	ActionDiff            = "diff"
+	ActionSetDesiredState = "set_desired_state"
+	ActionGetDesiredState = "get_desired_state"
+	ActionStatus          = "status"
 )
 
 // Analysis action names.
@@ -44,6 +47,8 @@ const (
 	ActionComponent   = "component"
 	ActionQuery       = "query"
 	ActionSearch      = "search"
+	ActionDrift       = "drift"
+	ActionSuggestArch = "suggest_architecture"
 )
 
 // Coupling view names.
@@ -200,7 +205,8 @@ type codographActionInput struct {
 	Last int  `json:"last,omitempty" jsonschema:"number of history entries to return"`
 	Diff bool `json:"diff,omitempty" jsonschema:"if true, compare latest two scans (history)"`
 
-	BranchA string `json:"branch_a,omitempty" jsonschema:"first branch to compare (diff)"`
+	Layers  []string `json:"layers,omitempty" jsonschema:"ordered layer names for desired state"`
+	BranchA string   `json:"branch_a,omitempty" jsonschema:"first branch to compare (diff)"`
 	BranchB string `json:"branch_b,omitempty" jsonschema:"second branch to compare (diff)"`
 }
 
@@ -252,6 +258,27 @@ func (h *handler) handleCodograph(ctx context.Context, req *sdkmcp.CallToolReque
 		return h.handleDiffBranches(ctx, req, diffBranchesInput{
 			Path: in.Path, BranchA: in.BranchA, BranchB: in.BranchB,
 		})
+	case ActionSetDesiredState:
+		ds := &store.DesiredState{Layers: in.Layers}
+		if err := h.proto.SetDesiredState(ctx, in.Path, ds); err != nil {
+			return nil, nil, err
+		}
+		return text("desired state saved"), nil, nil
+	case ActionGetDesiredState:
+		ds, err := h.proto.GetDesiredState(ctx, in.Path)
+		if err != nil {
+			return nil, nil, err
+		}
+		if ds == nil {
+			return text("no desired state configured"), nil, nil
+		}
+		return jsonResult(ds)
+	case ActionStatus:
+		r, err := h.proto.Status(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
 	default:
 		return nil, nil, fmt.Errorf("unknown codograph action %q (valid: %s, %s, %s, %s)",
 			in.Action, ActionScanLocal, ActionScanRemote, ActionHistory, ActionDiff)
@@ -330,6 +357,18 @@ func (h *handler) handleAnalysis(ctx context.Context, req *sdkmcp.CallToolReques
 		return text(r), nil, nil
 	case ActionComponent:
 		r, err := h.proto.GetComponentDetail(ctx, in.Path, in.Component, in.CacheKey)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
+	case ActionDrift:
+		r, err := h.proto.GetDrift(ctx, in.Path, in.CacheKey)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
+	case ActionSuggestArch:
+		r, err := h.proto.SuggestArchitecture(ctx, in.Path, in.CacheKey)
 		if err != nil {
 			return nil, nil, err
 		}

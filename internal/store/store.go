@@ -33,6 +33,10 @@ type Store interface {
 	ListComponentMeta(ctx context.Context, project, sha string) ([]ComponentMeta, error)
 	SearchComponents(ctx context.Context, project, sha, query string) ([]ComponentMeta, error)
 
+	// Desired state
+	GetDesiredState(ctx context.Context, project string) (*DesiredState, error)
+	PutDesiredState(ctx context.Context, project string, state *DesiredState) error
+
 	// Lifecycle
 	Close() error
 }
@@ -57,6 +61,28 @@ type ComponentMeta struct {
 	Health      string   `json:"health"`
 	LOC         int      `json:"loc"`
 	FanIn       int      `json:"fan_in"`
+}
+
+// DesiredState defines architecture rules for a project.
+type DesiredState struct {
+	Layers      []string           `json:"layers" yaml:"layers"`
+	Boundaries  []BoundaryRule     `json:"boundaries,omitempty" yaml:"boundaries"`
+	Constraints []HealthConstraint `json:"constraints,omitempty" yaml:"constraints"`
+}
+
+// BoundaryRule defines an allowed or denied dependency path.
+type BoundaryRule struct {
+	FromPattern string `json:"from_pattern" yaml:"from_pattern"`
+	ToPattern   string `json:"to_pattern" yaml:"to_pattern"`
+	Allow       bool   `json:"allow" yaml:"allow"`
+}
+
+// HealthConstraint sets limits on a component's metrics.
+type HealthConstraint struct {
+	Component  string `json:"component" yaml:"component"`
+	MaxFanIn   int    `json:"max_fan_in,omitempty" yaml:"max_fan_in"`
+	MaxChurn   int    `json:"max_churn,omitempty" yaml:"max_churn"`
+	MaxNesting int    `json:"max_nesting,omitempty" yaml:"max_nesting"`
 }
 
 // HistoryEntry summarizes a single scan event in the history log.

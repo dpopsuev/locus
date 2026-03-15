@@ -343,6 +343,80 @@ func inferLayerOrder(report *arch.ContextReport) []string {
 	return layers
 }
 
+// --- Desired state ---
+
+func (p *Protocol) SetDesiredState(_ context.Context, path string, ds *locusstore.DesiredState) error {
+	path = p.resolvePath(path)
+	return p.store.PutDesiredState(context.Background(), path, ds)
+}
+
+func (p *Protocol) GetDesiredState(_ context.Context, path string) (*locusstore.DesiredState, error) {
+	path = p.resolvePath(path)
+	return p.store.GetDesiredState(context.Background(), path)
+}
+
+// DriftReport holds architecture drift analysis results.
+type DriftReport struct {
+	HasDesiredState   bool                 `json:"has_desired_state"`
+	LayerViolations   []arch.LayerViolation `json:"layer_violations,omitempty"`
+	BoundaryBreaches  int                  `json:"boundary_breaches"`
+	ConstraintBreaches int                 `json:"constraint_breaches"`
+	Clean             bool                 `json:"clean"`
+	Summary           string               `json:"summary"`
+}
+
+func (p *Protocol) GetDrift(_ context.Context, path string, cacheKey ...string) (*DriftReport, error) {
+	path = p.resolvePath(path)
+	ds, err := p.store.GetDesiredState(context.Background(), path)
+	if err != nil {
+		return nil, err
+	}
+	if ds == nil {
+		return &DriftReport{HasDesiredState: false, Summary: "No desired state configured. Use set_desired_state or suggest_architecture."}, nil
+	}
+	report, err := p.getOrScan(path, cacheKey...)
+	if err != nil {
+		return nil, err
+	}
+	violations := arch.CheckLayerPurity(report.Architecture.Edges, ds.Layers)
+	clean := len(violations) == 0
+	summary := fmt.Sprintf("%d layer violation(s)", len(violations))
+	if clean {
+		summary = "Clean — no drift detected"
+	}
+	return &DriftReport{
+		HasDesiredState:  true,
+		LayerViolations:  violations,
+		Clean:            clean,
+		Summary:          summary,
+	}, nil
+}
+
+func (p *Protocol) SuggestArchitecture(_ context.Context, path string, cacheKey ...string) (*locusstore.DesiredState, error) {
+	path = p.resolvePath(path)
+	report, err := p.getOrScan(path, cacheKey...)
+	if err != nil {
+		return nil, err
+	}
+	layers := inferLayerOrder(report)
+	return &locusstore.DesiredState{Layers: layers}, nil
+}
+
+// StatusResult holds workspace status information.
+type StatusResult struct {
+	Version    string               `json:"version"`
+	Workspaces []string             `json:"workspaces"`
+	Projects   []locusstore.ProjectInfo `json:"projects,omitempty"`
+}
+
+func (p *Protocol) Status(_ context.Context) (*StatusResult, error) {
+	projects, _ := p.store.ListProjects(context.Background())
+	return &StatusResult{
+		Workspaces: p.workspaces,
+		Projects:   projects,
+	}, nil
+}
+
 // SearchComponents queries component metadata by keywords.
 func (p *Protocol) SearchComponents(_ context.Context, path, query string, cacheKey ...string) ([]locusstore.ComponentMeta, error) {
 	path = p.resolvePath(path)

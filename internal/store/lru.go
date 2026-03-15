@@ -124,6 +124,14 @@ func (s *LRUStore) SearchComponents(ctx context.Context, project, sha, query str
 	return s.inner.SearchComponents(ctx, project, sha, query)
 }
 
+func (s *LRUStore) GetDesiredState(ctx context.Context, project string) (*DesiredState, error) {
+	return s.inner.GetDesiredState(ctx, project)
+}
+
+func (s *LRUStore) PutDesiredState(ctx context.Context, project string, state *DesiredState) error {
+	return s.inner.PutDesiredState(ctx, project, state)
+}
+
 func (s *LRUStore) RecordScan(ctx context.Context, source, repoPath, sha string, report *arch.ContextReport) error {
 	return s.inner.RecordScan(ctx, source, repoPath, sha, report)
 }

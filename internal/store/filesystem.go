@@ -207,6 +207,38 @@ func (f *FilesystemStore) SearchComponents(_ context.Context, project, sha, quer
 	return out, nil
 }
 
+func (f *FilesystemStore) GetDesiredState(_ context.Context, project string) (*DesiredState, error) {
+	p := f.desiredStatePath(project)
+	data, err := os.ReadFile(p)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var ds DesiredState
+	if err := json.Unmarshal(data, &ds); err != nil {
+		return nil, err
+	}
+	return &ds, nil
+}
+
+func (f *FilesystemStore) PutDesiredState(_ context.Context, project string, state *DesiredState) error {
+	p := f.desiredStatePath(project)
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(p, data, 0o644)
+}
+
+func (f *FilesystemStore) desiredStatePath(project string) string {
+	return filepath.Join(f.sc.Root(), cache.RepoHash(project), "desired-state.json")
+}
+
 func (f *FilesystemStore) metaPath(project, sha string) string {
 	return filepath.Join(f.sc.Root(), cache.RepoHash(project), sha+"-meta.json")
 }
