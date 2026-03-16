@@ -41,18 +41,11 @@ const (
 type Protocol struct {
 	db         store.Store
 	workspaces []string
-	pathMapper *PathMapper
 }
 
+// New creates a Protocol with the given store and workspace roots.
 func New(s store.Store, workspaces []string) *Protocol {
-	return NewWithPathMapper(s, workspaces, "")
-}
-
-// NewWithPathMapper creates a Protocol with optional path mapping for containerized runs.
-// pathMapSpec is the LOCUS_PATH_MAP env value (host:container pairs, comma-separated). Empty means no mapping.
-func NewWithPathMapper(s store.Store, workspaces []string, pathMapSpec string) *Protocol {
-	pm := NewPathMapper(pathMapSpec)
-	return &Protocol{db: s, workspaces: workspaces, pathMapper: pm}
+	return &Protocol{db: s, workspaces: workspaces}
 }
 
 // ScanOpts controls a local scan.
@@ -1210,11 +1203,6 @@ func (p *Protocol) resolvePath(path string) string {
 			return p.workspaces[0]
 		}
 		return "."
-	}
-
-	// Translate host path to container path when running in a container.
-	if p.pathMapper != nil {
-		path = p.pathMapper.ToContainer(path)
 	}
 
 	abs, err := filepath.Abs(path)

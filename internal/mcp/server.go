@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"os"
 	"strings"
 	"time"
 
@@ -100,8 +99,7 @@ var DiagramMinIntent = map[string]string{
 }
 
 func NewServer(s store.Store, workspaceRoots []string, version string) (*sdkmcp.Server, *triage.Registry) {
-	pathMap := os.Getenv("LOCUS_PATH_MAP")
-	proto := protocol.NewWithPathMapper(s, workspaceRoots, pathMap)
+	proto := protocol.New(s, workspaceRoots)
 	srv := sdkmcp.NewServer(
 		&sdkmcp.Implementation{Name: "locus", Version: version},
 		&sdkmcp.ServerOptions{

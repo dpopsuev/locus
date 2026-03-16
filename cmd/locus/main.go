@@ -26,7 +26,7 @@ import (
 var Version = "dev"
 
 func newProto() *protocol.Protocol {
-	return protocol.NewWithPathMapper(config.NewStore(), nil, os.Getenv("LOCUS_PATH_MAP"))
+	return protocol.New(config.NewStore(), nil)
 }
 
 func envOr(key, fallback string) string {

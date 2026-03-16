@@ -8,35 +8,11 @@ Spatial context bus for AI agents. Point it at any repository and get architectu
 
 ## Quick Start
 
-### Container (recommended)
-
-The container is the distribution format — versioned, self-contained, ephemeral. The agent spawns it via stdio, it scans the mounted workspace, and dies when the session ends.
-
-```json
-{
-  "mcpServers": {
-    "locus": {
-      "command": "podman",
-      "args": ["run", "--rm", "-i",
-        "-v", "locus-data:/data",
-        "-v", "/home/you/Workspace:/workspace:ro",
-        "quay.io/dpopsuev/locus:v0.7.0",
-        "serve"
-      ]
-    }
-  }
-}
-```
-
-The image bundles Go, gopls, universal-ctags, and tree-sitter grammars — fully self-contained. `--rm` means no container cleanup. Cache persists in the `locus-data` volume across sessions.
-
-### Binary
-
 ```bash
 go install github.com/dpopsuev/locus/cmd/locus@latest
-locus serve                           # stdio (Cursor, Claude Desktop)
-locus serve --transport http          # Streamable HTTP on :8081
 ```
+
+### MCP Configuration (Cursor / Claude Desktop)
 
 ```json
 {
@@ -49,26 +25,7 @@ locus serve --transport http          # Streamable HTTP on :8081
 }
 ```
 
-### HTTP mode (cache server)
-
-For serving cached analysis to remote agents without local filesystem access:
-
-```bash
-podman run -d --name locus \
-  -p 8081:8081 \
-  -v locus-data:/data \
-  quay.io/dpopsuev/locus:v0.7.0
-```
-
-```json
-{
-  "mcpServers": {
-    "locus": {
-      "url": "http://localhost:8081/"
-    }
-  }
-}
-```
+Locus runs as a local stdio process — full filesystem access, native Go toolchain, warm module cache. No containers, no mounts, no path mapping.
 
 ## The Problem
 
