@@ -1,4 +1,4 @@
-.PHONY: build build-image build-image-slim push-image run restart version test vet lint
+.PHONY: build build-image build-image-slim push-image run restart version test vet lint release
 
 VERSION ?= $(shell git describe --tags --always --dirty)
 
@@ -39,3 +39,11 @@ run:
 	@sleep 1 && podman logs locus 2>&1 | tail -3
 
 restart: build-image run
+
+release:
+	@test -n "$(V)" || (echo "usage: make release V=v0.8.0" && exit 1)
+	sed -i 's|quay.io/dpopsuev/locus:[^ "]*|quay.io/dpopsuev/locus:$(V)|g' README.md
+	git add README.md && git commit -m "release: $(V)" || true
+	git tag $(V)
+	$(MAKE) build-image VERSION=$(V)
+	git push origin main --tags
