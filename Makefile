@@ -35,7 +35,7 @@ run:
 	podman run -d --name locus -p 8081:8081 \
 		-v $(LOCUS_DATA):/data \
 		-v $(LOCUS_WORKSPACE):/workspace:ro \
-		quay.io/dpopsuev/locus:latest
+		quay.io/dpopsuev/locus:$(VERSION)
 	@sleep 1 && podman logs locus 2>&1 | tail -3
 
 restart: build-image run

@@ -16,7 +16,7 @@ podman run -d --name locus \
   -p 8081:8081 \
   -v locus-data:/data \
   -v ~/Workspace:/workspace:ro \
-  quay.io/dpopsuev/locus:latest
+  quay.io/dpopsuev/locus:v0.7.0
 ```
 
 ### Binary
