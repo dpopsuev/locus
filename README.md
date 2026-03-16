@@ -105,55 +105,59 @@ graph TD
     classDef healthy fill:#38A169,stroke:#38A169,color:#FFFFFF
     classDef sick fill:#D69E2E,stroke:#D69E2E,color:#FFFFFF
     classDef violation_edge stroke:#E53E3E
-    _["."]:::healthy
-    cmd_locus["cmd/locus [churn:10]"]:::entry
-    internal_analysis["internal/analysis [churn:16]"]:::fatal
-    internal_arch["internal/arch [churn:21]"]:::fatal
-    internal_cache["internal/cache [churn:4]"]:::healthy
-    internal_cursor["internal/cursor [churn:2]"]:::healthy
-    internal_diagram["internal/diagram [churn:32]"]:::healthy
+    cmd_locus["cmd/locus [churn:15]"]:::entry
+    internal_analysis["internal/analysis [churn:29]"]:::fatal
+    internal_arch["internal/arch [churn:27]"]:::fatal
+    internal_cache["internal/cache [churn:5]"]:::healthy
+    internal_config["internal/config [churn:1]"]:::healthy
+    internal_cursor["internal/cursor [churn:3]"]:::healthy
+    internal_diagram["internal/diagram [churn:38]"]:::healthy
     internal_history["internal/history [churn:8]"]:::sick
-    internal_mcp["internal/mcp [churn:12]"]:::healthy
+    internal_mcp["internal/mcp [churn:19]"]:::healthy
     internal_model["internal/model [churn:3]"]:::healthy
-    internal_protocol["internal/protocol [churn:11]"]:::healthy
-    internal_remote["internal/remote [churn:3]"]:::healthy
-    internal_survey["internal/survey [churn:20]"]:::sick
+    internal_protocol["internal/protocol [churn:22]"]:::healthy
+    internal_remote["internal/remote [churn:4]"]:::healthy
+    internal_store["internal/store [churn:11]"]:::sick
+    internal_survey["internal/survey [churn:31]"]:::healthy
     internal_triage["internal/triage [churn:3]"]:::healthy
-    cmd_locus -->|"1"| internal_analysis
-    cmd_locus -->|"1"| internal_arch
-    cmd_locus -->|"1"| internal_cache
-    cmd_locus -->|"1"| internal_diagram
-    cmd_locus -->|"1"| internal_history
+    cmd_locus -->|"2"| internal_analysis
+    cmd_locus -->|"5"| internal_arch
+    cmd_locus -->|"1"| internal_config
+    cmd_locus -->|"15"| internal_diagram
     cmd_locus -->|"1"| internal_mcp
-    cmd_locus -->|"1"| internal_protocol
-    cmd_locus -->|"1"| internal_triage
-    internal_analysis -->|"1"| internal_model
-    internal_analysis -->|"4"| internal_survey
-    internal_arch -->|"1"| internal_analysis
-    internal_arch -->|"2"| internal_model
-    internal_arch -->|"1"| internal_survey
-    internal_cache -->|"2"| internal_arch
-    internal_diagram -->|"7"| internal_analysis
-    internal_diagram -->|"5"| internal_arch
-    internal_diagram -->|"2"| internal_history
-    internal_history -->|"4"| internal_arch
-    internal_history -->|"2"| internal_cache
-    internal_mcp -->|"1"| internal_analysis
-    internal_mcp -->|"1"| internal_arch
-    internal_mcp -->|"1"| internal_cache
-    internal_mcp -->|"1"| internal_diagram
-    internal_mcp -->|"1"| internal_protocol
-    internal_mcp -->|"1"| internal_triage
-    internal_model -->|"1"| internal_model
-    internal_protocol -->|"1"| internal_analysis
-    internal_protocol -->|"3"| internal_arch
-    internal_protocol -->|"2"| internal_cache
-    internal_protocol -->|"1"| internal_cursor
-    internal_protocol -->|"1"| internal_history
-    internal_protocol -->|"1"| internal_remote
-    internal_remote -->|"1"| internal_arch
-    internal_survey -->|"17"| internal_model
-    internal_survey -->|"7"| internal_survey
+    cmd_locus -->|"29"| internal_protocol
+    cmd_locus -->|"8"| internal_triage
+    internal_analysis -->|"6"| internal_model
+    internal_analysis -->|"5"| internal_survey
+    internal_arch -->|"4"| internal_analysis
+    internal_arch -->|"22"| internal_model
+    internal_arch -->|"4"| internal_survey
+    internal_cache -->|"1"| internal_arch
+    internal_config -->|"2"| internal_cache
+    internal_config -->|"1"| internal_history
+    internal_config -->|"4"| internal_store
+    internal_diagram -->|"45"| internal_analysis
+    internal_diagram -->|"24"| internal_arch
+    internal_diagram -->|"4"| internal_history
+    internal_history -->|"13"| internal_arch
+    internal_history -->|"3"| internal_cache
+    internal_mcp -->|"2"| internal_analysis
+    internal_mcp -->|"8"| internal_arch
+    internal_mcp -->|"17"| internal_diagram
+    internal_mcp -->|"53"| internal_protocol
+    internal_mcp -->|"3"| internal_store
+    internal_mcp -->|"11"| internal_triage
+    internal_protocol -->|"12"| internal_analysis
+    internal_protocol -->|"61"| internal_arch
+    internal_protocol -->|"4"| internal_cursor
+    internal_protocol -->|"12"| internal_history
+    internal_protocol -->|"12"| internal_remote
+    internal_protocol -->|"34"| internal_store
+    internal_remote -->|"9"| internal_arch
+    internal_store -->|"5"| internal_arch
+    internal_store -->|"7"| internal_cache
+    internal_store -->|"9"| internal_history
+    internal_survey -->|"46"| internal_model
 ```
 
 ### Layer Diagram
