@@ -345,14 +345,15 @@ func TestGetCachedReport_RoundTrip(t *testing.T) {
 	s := testStore(filepath.Join(t.TempDir(), "cache"), t.TempDir())
 	p := New(s, nil)
 
-	// Simulate a remote scan: store a report under a cache key.
-	fakeKey := "remote:https://github.com/example/repo@abc123def456"
+	// Simulate a remote scan: store with project path (without SHA), retrieve via cache key.
+	fakeProject := "remote:https://github.com/example/repo"
 	fakeSHA := "abc123def456"
+	fakeKey := fakeProject + "@" + fakeSHA
 	report := &arch.ContextReport{
 		ModulePath: "github.com/example/repo",
 		Scanner:    "go",
 	}
-	if err := s.PutReport(context.Background(), fakeKey, fakeSHA, report); err != nil {
+	if err := s.PutReport(context.Background(), fakeProject, fakeSHA, report); err != nil {
 		t.Fatalf("put: %v", err)
 	}
 
