@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -25,6 +27,10 @@ func (s *PackagesScanner) Scan(root string) (*model.Project, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Ensure Go modules are available. Handles container scans where the
+	// module cache is empty but the workspace is mounted read-only.
+	ensureGoModules(absRoot)
 
 	cfg := &packages.Config{
 		Mode: packages.NeedName | packages.NeedFiles | packages.NeedImports |
@@ -281,4 +287,28 @@ func enclosingFuncName(pkg *packages.Package, pos token.Pos) string {
 		}
 	}
 	return ""
+}
+
+// ensureGoModules runs go mod download (or go work download) to populate
+// the module cache. Handles container deployments where the workspace is
+// :ro but Go toolchain can write to its own module cache.
+// Errors are silently ignored — PackagesScanner falls back to GoScanner.
+func ensureGoModules(root string) {
+	// Vendor mode — modules already local.
+	if _, err := os.Stat(filepath.Join(root, "vendor")); err == nil {
+		return
+	}
+	// go.work — multi-module workspace.
+	if _, err := os.Stat(filepath.Join(root, "go.work")); err == nil {
+		cmd := exec.Command("go", "work", "download")
+		cmd.Dir = root
+		_ = cmd.Run()
+		return
+	}
+	// go.mod — standard module.
+	if _, err := os.Stat(filepath.Join(root, "go.mod")); err == nil {
+		cmd := exec.Command("go", "mod", "download")
+		cmd.Dir = root
+		_ = cmd.Run()
+	}
 }

@@ -15,8 +15,6 @@ WORKDIR /
 RUN rm -rf /build
 ENV LOCUS_CACHE_DIR=/data/cache
 ENV LOCUS_HISTORY_DIR=/data/history
-ENV LOCUS_TRANSPORT=http
-ENV LOCUS_ADDR=:8081
 VOLUME /data
 EXPOSE 8081
 ENTRYPOINT ["locus", "serve"]

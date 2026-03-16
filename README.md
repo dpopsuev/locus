@@ -10,14 +10,25 @@ Spatial context bus for AI agents. Point it at any repository and get architectu
 
 ### Container (recommended)
 
-```bash
-# podman or docker -- mount your workspace for local scanning
-podman run -d --name locus \
-  -p 8081:8081 \
-  -v locus-data:/data \
-  -v ~/Workspace:/workspace:ro \
-  quay.io/dpopsuev/locus:v0.7.0
+The container is the distribution format — versioned, self-contained, ephemeral. The agent spawns it via stdio, it scans the mounted workspace, and dies when the session ends.
+
+```json
+{
+  "mcpServers": {
+    "locus": {
+      "command": "podman",
+      "args": ["run", "--rm", "-i",
+        "-v", "locus-data:/data",
+        "-v", "/home/you/Workspace:/workspace:ro",
+        "quay.io/dpopsuev/locus:v0.7.0",
+        "serve"
+      ]
+    }
+  }
+}
 ```
+
+The image bundles Go, gopls, universal-ctags, and tree-sitter grammars — fully self-contained. `--rm` means no container cleanup. Cache persists in the `locus-data` volume across sessions.
 
 ### Binary
 
@@ -26,10 +37,6 @@ go install github.com/dpopsuev/locus/cmd/locus@latest
 locus serve                           # stdio (Cursor, Claude Desktop)
 locus serve --transport http          # Streamable HTTP on :8081
 ```
-
-### MCP Configuration
-
-**Cursor / Claude Desktop (stdio -- local binary):**
 
 ```json
 {
@@ -42,7 +49,16 @@ locus serve --transport http          # Streamable HTTP on :8081
 }
 ```
 
-**Cursor / Claude Desktop (HTTP -- container):**
+### HTTP mode (cache server)
+
+For serving cached analysis to remote agents without local filesystem access:
+
+```bash
+podman run -d --name locus \
+  -p 8081:8081 \
+  -v locus-data:/data \
+  quay.io/dpopsuev/locus:v0.7.0
+```
 
 ```json
 {
