@@ -636,10 +636,7 @@ const maxSummaryCycles = 3
 func renderCyclesSummary(r *protocol.CycleReport) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%d cycle(s), %d violation(s)\n", len(r.Cycles), len(r.LayerViolations))
-	n := len(r.Cycles)
-	if n > maxSummaryCycles {
-		n = maxSummaryCycles
-	}
+	n := min(len(r.Cycles), maxSummaryCycles)
 	for i := 0; i < n; i++ {
 		fmt.Fprintf(&b, "  cycle: %s\n", strings.Join(r.Cycles[i], " → "))
 	}
@@ -668,10 +665,7 @@ func (h *handler) handleGetViolations(ctx context.Context, _ *sdkmcp.CallToolReq
 	if in.Format == FormatSummary {
 		var b strings.Builder
 		fmt.Fprintf(&b, "%s\n", report.Summary)
-		n := len(report.Violations)
-		if n > maxSummaryViolations {
-			n = maxSummaryViolations
-		}
+		n := min(len(report.Violations), maxSummaryViolations)
 		for i := 0; i < n; i++ {
 			v := report.Violations[i]
 			fmt.Fprintf(&b, "  %s → %s\n", v.From, v.To)

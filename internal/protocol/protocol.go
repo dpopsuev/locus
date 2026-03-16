@@ -493,10 +493,7 @@ func extractKeywords(s arch.ArchService) []string {
 		}
 	}
 	// First 10 exported symbol names.
-	n := len(s.Symbols)
-	if n > 10 {
-		n = 10
-	}
+	n := min(len(s.Symbols), 10)
 	for _, sym := range s.Symbols[:n] {
 		lower := strings.ToLower(sym)
 		if !seen[lower] {
@@ -606,10 +603,7 @@ func (p *Protocol) GetCrossRepo(ctx context.Context, pathA, pathB string, cacheK
 	allEdges := append(reportA.Architecture.Edges, reportB.Architecture.Edges...)
 	mergedCycles := arch.DetectCycles(allEdges)
 	existingCycles := len(reportA.Cycles) + len(reportB.Cycles)
-	newCycles := len(mergedCycles) - existingCycles
-	if newCycles < 0 {
-		newCycles = 0
-	}
+	newCycles := max(len(mergedCycles)-existingCycles, 0)
 
 	summary := fmt.Sprintf("%d shared, %d only-A, %d only-B, %d new cycles if merged",
 		len(overlap), len(onlyA), len(onlyB), newCycles)
@@ -679,10 +673,7 @@ func (p *Protocol) RunPreset(ctx context.Context, path, preset string, cacheKey 
 		fmt.Fprintf(&b, "# Onboarding: %s\n\n", report.ModulePath)
 		fmt.Fprintf(&b, "%d components, scanner=%s\n\n", len(report.Architecture.Services), report.Scanner)
 		b.WriteString("## Top Components\n")
-		n := len(report.Architecture.Services)
-		if n > 10 {
-			n = 10
-		}
+		n := min(len(report.Architecture.Services), 10)
 		for _, s := range report.Architecture.Services[:n] {
 			fmt.Fprintf(&b, "- %s (%d LOC)\n", s.Name, s.LOC)
 		}

@@ -7,39 +7,68 @@ import (
 	"github.com/dpopsuev/locus/internal/arch"
 )
 
-// Store is the port interface for all Locus persistence operations.
-// Protocol depends on this interface, never on concrete backends.
-// Adapters (filesystem, SQLite, LRU decorator) implement it.
-type Store interface {
-	// Reports — cached scan results keyed by (project path, git SHA).
+// --- Domain-specific port interfaces ---
+
+// ReportStore handles cached scan results keyed by (project path, git SHA).
+type ReportStore interface {
 	GetReport(ctx context.Context, project, sha string) (*arch.ContextReport, bool, error)
 	PutReport(ctx context.Context, project, sha string, report *arch.ContextReport) error
+}
 
-	// History — append-only log of scan events per project.
+// HistoryStore handles the append-only log of scan events per project.
+type HistoryStore interface {
 	RecordScan(ctx context.Context, source, repoPath, sha string, report *arch.ContextReport) error
 	ListHistory(ctx context.Context, repoPath string, limit int) ([]HistoryEntry, error)
 	GetHistoryReport(ctx context.Context, repoPath string, index int) (*arch.ContextReport, error)
+}
 
-	// Git helpers — resolve refs to SHAs. Implementations may cache or delegate to git CLI.
+// GitResolver resolves git refs to SHAs.
+type GitResolver interface {
 	ResolveHEAD(repoPath string) string
 	ResolveBranch(repoPath, ref string) (string, error)
+}
 
-	// Project registry
+// ProjectStore handles the global project registry.
+type ProjectStore interface {
 	ListProjects(ctx context.Context) ([]ProjectInfo, error)
 	UpsertProject(ctx context.Context, info ProjectInfo) error
+}
 
-	// Component metadata
+// ComponentStore handles per-component metadata and search.
+type ComponentStore interface {
 	PutComponentMeta(ctx context.Context, project, sha string, meta []ComponentMeta) error
 	ListComponentMeta(ctx context.Context, project, sha string) ([]ComponentMeta, error)
 	SearchComponents(ctx context.Context, project, sha, query string) ([]ComponentMeta, error)
+}
 
-	// Desired state
+// DesiredStateStore handles per-project architecture rules.
+type DesiredStateStore interface {
 	GetDesiredState(ctx context.Context, project string) (*DesiredState, error)
 	PutDesiredState(ctx context.Context, project string, state *DesiredState) error
+}
 
-	// Lifecycle
+// --- Composed interface ---
+
+// Store is the composed interface of all domain ports.
+// Protocol depends on this. Concrete adapters (FilesystemStore, LRUStore) implement it.
+type Store interface {
+	ReportStore
+	HistoryStore
+	GitResolver
+	ProjectStore
+	ComponentStore
+	DesiredStateStore
 	Close() error
 }
+
+// --- Compile-time checks ---
+
+var (
+	_ Store = (*FilesystemStore)(nil)
+	_ Store = (*LRUStore)(nil)
+)
+
+// --- Domain types ---
 
 // ProjectInfo tracks a scanned project in the registry.
 type ProjectInfo struct {
