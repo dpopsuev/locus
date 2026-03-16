@@ -25,7 +25,7 @@ go install github.com/dpopsuev/locus/cmd/locus@latest
 }
 ```
 
-Locus runs as a local stdio process — full filesystem access, native Go toolchain, warm module cache. No containers, no mounts, no path mapping.
+Locus runs as a local stdio process with full filesystem access and native Go toolchain.
 
 ## The Problem
 
