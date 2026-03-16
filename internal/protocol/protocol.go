@@ -120,15 +120,19 @@ type ScanResult struct {
 }
 
 // RenderScanSummary returns a compact ~50 token summary of a scan result.
-func RenderScanSummary(r *ScanResult) string {
+func RenderScanSummary(r *ScanResult, driftInfo string) string {
 	report := r.Report
-	return fmt.Sprintf("Scanned %s: %d components, %d edges, %d cycles, scanner=%s\ncache_key: %s",
+	summary := fmt.Sprintf("Scanned %s: %d components, %d edges, %d cycles, scanner=%s\ncache_key: %s",
 		report.ModulePath,
 		len(report.Architecture.Services),
 		len(report.Architecture.Edges),
 		len(report.Cycles),
 		report.Scanner,
 		r.CacheKey)
+	if driftInfo != "" {
+		summary += "\n" + driftInfo
+	}
+	return summary
 }
 
 // --- Operations ---
@@ -162,7 +166,8 @@ func (p *Protocol) ScanProject(ctx context.Context, path string, opts ScanOpts) 
 		return nil, fmt.Errorf(errScanFailed, err)
 	}
 	if sha != "" {
-		p.db.PutReport(ctx,path, sha, report)
+		p.db.PutReport(ctx, path, sha, report)
+		_ = p.db.PutComponentMeta(ctx, path, sha, generateComponentMeta(report))
 		abs, _ := filepath.Abs(path)
 		_ = p.db.RecordScan(ctx, string(history.Local), abs, sha, report)
 	}
@@ -415,6 +420,91 @@ func (p *Protocol) Status(ctx context.Context) (*StatusResult, error) {
 		Workspaces: p.workspaces,
 		Projects:   projects,
 	}, nil
+}
+
+// CheckDriftOnScan checks desired state against a scan report and returns a one-liner.
+// Returns empty string if no desired state exists.
+func (p *Protocol) CheckDriftOnScan(ctx context.Context, path string, report *arch.ContextReport) string {
+	path = p.resolvePath(path)
+	ds, err := p.db.GetDesiredState(ctx, path)
+	if err != nil || ds == nil || len(ds.Layers) == 0 {
+		return ""
+	}
+	violations := arch.CheckLayerPurity(report.Architecture.Edges, ds.Layers)
+	if len(violations) == 0 {
+		return "Architecture: clean"
+	}
+	return fmt.Sprintf("Architecture: %d violation(s)", len(violations))
+}
+
+// generateComponentMeta creates metadata for all components in a scan report.
+func generateComponentMeta(report *arch.ContextReport) []store.ComponentMeta {
+	depths := arch.ComputeImportDepth(report.Architecture.Edges)
+	fanIn := make(map[string]int)
+	for _, e := range report.Architecture.Edges {
+		fanIn[e.To]++
+	}
+
+	meta := make([]store.ComponentMeta, 0, len(report.Architecture.Services))
+	for _, s := range report.Architecture.Services {
+		role := inferRole(s.Name)
+		keywords := extractKeywords(s)
+		health := "healthy"
+		if fanIn[s.Name] >= arch.MinFanInHotSpot && s.Churn >= arch.MinChurnHotSpot {
+			health = "sick"
+		}
+		meta = append(meta, store.ComponentMeta{
+			Name:        s.Name,
+			Role:        role,
+			Keywords:    keywords,
+			Description: fmt.Sprintf("%s with %d symbols, %d LOC", role, len(s.Symbols), s.LOC),
+			Layer:       depths[s.Name],
+			LOC:         s.LOC,
+			FanIn:       fanIn[s.Name],
+			Health:      health,
+		})
+	}
+	return meta
+}
+
+func inferRole(name string) string {
+	switch {
+	case strings.HasPrefix(name, "cmd/"):
+		return "entrypoint"
+	case strings.HasPrefix(name, "internal/"):
+		return "core"
+	case strings.HasPrefix(name, "pkg/"):
+		return "library"
+	case strings.Contains(name, "test"):
+		return "test"
+	default:
+		return "module"
+	}
+}
+
+func extractKeywords(s arch.ArchService) []string {
+	seen := make(map[string]bool)
+	var keywords []string
+	// Path segments as keywords.
+	for _, seg := range strings.Split(s.Name, "/") {
+		if seg != "" && !seen[seg] {
+			seen[seg] = true
+			keywords = append(keywords, seg)
+		}
+	}
+	// First 10 exported symbol names.
+	n := len(s.Symbols)
+	if n > 10 {
+		n = 10
+	}
+	for _, sym := range s.Symbols[:n] {
+		lower := strings.ToLower(sym)
+		if !seen[lower] {
+			seen[lower] = true
+			keywords = append(keywords, lower)
+		}
+	}
+	return keywords
 }
 
 // SearchComponents queries component metadata by keywords.

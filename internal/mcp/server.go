@@ -437,7 +437,8 @@ func (h *handler) handleScanProject(ctx context.Context, _ *sdkmcp.CallToolReque
 		}
 		return text(string(data)), nil, nil
 	default:
-		return text(protocol.RenderScanSummary(result)), nil, nil
+		driftInfo := h.proto.CheckDriftOnScan(ctx, in.Path, result.Report)
+		return text(protocol.RenderScanSummary(result, driftInfo)), nil, nil
 	}
 }
 
