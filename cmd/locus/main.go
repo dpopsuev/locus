@@ -1,13 +1,14 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 
 	"github.com/spf13/cobra"
 
@@ -114,17 +115,29 @@ Tools: scan_project, get_dependencies, get_impact, get_coupling_table,
 			cwd, _ := os.Getwd()
 			roots = []string{cwd}
 		}
-		srv, _ := locusmcp.NewServer(config.NewStore(), roots, Version)
+		s := config.NewStore()
+		defer s.Close()
+
+		ctx, stop := signal.NotifyContext(cmd.Context(), syscall.SIGTERM, syscall.SIGINT)
+		defer stop()
+
+		srv, _ := locusmcp.NewServer(s, roots, Version)
 		if serveFlags.transport == "http" {
 			handler := sdkmcp.NewStreamableHTTPHandler(
 				func(r *http.Request) *sdkmcp.Server { return srv },
 				nil,
 			)
 			slog.Info("locus server starting", "version", Version, "transport", "http", "addr", serveFlags.addr)
-			return http.ListenAndServe(serveFlags.addr, handler)
+			server := &http.Server{Addr: serveFlags.addr, Handler: handler}
+			go func() {
+				<-ctx.Done()
+				slog.Info("shutting down")
+				server.Close()
+			}()
+			return server.ListenAndServe()
 		}
 		slog.Info("locus server starting", "version", Version, "transport", "stdio")
-		return srv.Run(context.Background(), &sdkmcp.StdioTransport{})
+		return srv.Run(ctx, &sdkmcp.StdioTransport{})
 	},
 }
 

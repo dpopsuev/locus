@@ -1,4 +1,4 @@
-.PHONY: build build-image push-image run restart version test vet
+.PHONY: build build-image build-image-slim push-image run restart version test vet lint
 
 VERSION ?= $(shell git describe --tags --always --dirty)
 
@@ -14,8 +14,14 @@ test:
 vet:
 	go vet ./...
 
+lint:
+	golangci-lint run ./...
+
 build-image:
 	podman build --build-arg VERSION=$(VERSION) -t quay.io/dpopsuev/locus:$(VERSION) -t quay.io/dpopsuev/locus:latest .
+
+build-image-slim:
+	podman build -f Dockerfile.slim --build-arg VERSION=$(VERSION) -t quay.io/dpopsuev/locus:$(VERSION)-slim .
 
 push-image:
 	podman push quay.io/dpopsuev/locus:$(VERSION)
