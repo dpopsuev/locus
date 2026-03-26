@@ -131,8 +131,10 @@ func NormalizeURL(raw string) string {
 }
 
 // CacheKey returns a deterministic key for caching remote codographs.
+// Normalizes the URL so that shorthand (github.com/foo/bar) and full
+// (https://github.com/foo/bar) produce the same key. BUG-11.
 func CacheKey(repoURL, refSHA string) string {
-	return "remote:" + repoURL + "@" + refSHA
+	return "remote:" + NormalizeURL(repoURL) + "@" + refSHA
 }
 
 func resolveHEAD(dir string) string {

@@ -35,6 +35,13 @@ func DetectGaps(report *arch.ContextReport, root string) (*GapReport, error) {
 	for _, svc := range report.Architecture.Services {
 		comp := svc.Name
 		dir := componentDir(root, report.ModulePath, comp)
+		// Skip components outside the project root (e.g. GOPATH module cache). BUG-9.
+		if !strings.HasPrefix(dir, root) {
+			continue
+		}
+		if _, err := os.Stat(dir); os.IsNotExist(err) {
+			continue
+		}
 		entry := GapEntry{Component: comp}
 
 		hasTests := hasTestFiles(dir)
