@@ -158,6 +158,47 @@ export function startGame() {}
 	}
 }
 
+func TestTSScanSkipsImportType(t *testing.T) {
+	dir := setupTSProject(t, map[string]string{
+		"package.json": `{"name": "type-import-test"}`,
+		"src/core/types.ts": `import type { GlobeRenderer } from '../globe'
+
+export interface ModeContext {
+  globe: GlobeRenderer
+}
+`,
+		"src/globe/index.ts": `import type { Vec3 } from '../types'
+
+export class GlobeRenderer {}
+`,
+		"src/types.ts": `export type Vec3 = [number, number, number]
+`,
+	})
+
+	sc := &survey.TypeScriptScanner{}
+	proj, err := sc.Scan(dir)
+	if err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+
+	// core/types.ts uses `import type` from globe — this should NOT create
+	// a dependency edge because type-only imports are erased at compile time.
+	coreEdges := proj.DependencyGraph.EdgesFrom("src/core")
+	for _, e := range coreEdges {
+		if e.To == "src/globe" {
+			t.Errorf("import type should not create dependency edge: src/core -> src/globe")
+		}
+	}
+
+	// globe/index.ts uses `import type` from types — also should not create edge.
+	globeEdges := proj.DependencyGraph.EdgesFrom("src/globe")
+	for _, e := range globeEdges {
+		if e.To == "src" || e.To == "(root)" {
+			t.Errorf("import type should not create dependency edge: src/globe -> %s", e.To)
+		}
+	}
+}
+
 func TestTSScanSkipsNodeModules(t *testing.T) {
 	dir := setupTSProject(t, map[string]string{
 		"package.json":                 `{"name": "skip-test"}`,

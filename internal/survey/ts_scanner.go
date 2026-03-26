@@ -124,8 +124,12 @@ var (
 	reExportType      = regexp.MustCompile(`^\s*export\s+type\s+(\w+)\s*=`)
 	reExportEnum      = regexp.MustCompile(`^\s*export\s+(?:const\s+)?enum\s+(\w+)`)
 
-	reImportFrom = regexp.MustCompile(`(?:import|export)\s+.*?\s+from\s+['"]([^'"]+)['"]`)
-	reImportSide = regexp.MustCompile(`^\s*import\s+['"]([^'"]+)['"]`)
+	// Match value imports but NOT type-only imports.
+	// `import type { X } from '...'` and `export type { X } from '...'` are
+	// compile-time only (erased by TypeScript) and should not create dependency edges.
+	reImportFrom     = regexp.MustCompile(`(?:import|export)\s+.*?\s+from\s+['"]([^'"]+)['"]`)
+	reImportTypeOnly = regexp.MustCompile(`^\s*(?:import|export)\s+type\s+\{`)
+	reImportSide     = regexp.MustCompile(`^\s*import\s+['"]([^'"]+)['"]`)
 )
 
 func (s *TypeScriptScanner) extractExports(line string, ns *model.Namespace, seen map[string]bool) {
@@ -145,6 +149,12 @@ func (s *TypeScriptScanner) extractExports(line string, ns *model.Namespace, see
 }
 
 func (s *TypeScriptScanner) extractImportEdge(line, fromDir, root string, externalPkgs map[string]bool, graph *model.DependencyGraph) {
+	// Skip type-only imports — they are erased at compile time and
+	// don't create runtime dependencies. Prevents false-positive cycles.
+	if reImportTypeOnly.MatchString(line) {
+		return
+	}
+
 	var spec string
 	if m := reImportFrom.FindStringSubmatch(line); m != nil {
 		spec = m[1]
