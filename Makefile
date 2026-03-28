@@ -1,4 +1,4 @@
-.PHONY: build version test vet lint release
+.PHONY: build version test vet fmt lint preflight install-hooks
 
 VERSION ?= $(shell git describe --tags --always --dirty)
 
@@ -11,11 +11,25 @@ build:
 test:
 	go test ./... -count=1
 
+fmt:
+	go fmt ./...
+
 vet:
 	go vet ./...
 
 lint:
 	golangci-lint run ./...
+
+lint-new:
+	golangci-lint run --new-from-rev=HEAD ./...
+
+preflight: fmt vet lint test
+
+install-hooks:
+	@echo '#!/bin/sh' > .git/hooks/pre-commit
+	@echo 'make lint-new' >> .git/hooks/pre-commit
+	@chmod +x .git/hooks/pre-commit
+	@echo "pre-commit hook installed (runs make lint-new)"
 
 release:
 	@test -n "$(V)" || (echo "usage: make release V=v0.8.0" && exit 1)

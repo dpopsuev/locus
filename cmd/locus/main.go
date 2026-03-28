@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"strings"
 	"syscall"
 
@@ -24,6 +25,19 @@ import (
 )
 
 var Version = "dev"
+
+func versionString() string {
+	v := Version
+	if info, ok := debug.ReadBuildInfo(); ok {
+		for _, s := range info.Settings {
+			if s.Key == "vcs.revision" && len(s.Value) >= 7 {
+				v += " (" + s.Value[:7] + ")"
+				break
+			}
+		}
+	}
+	return v
+}
 
 func newProto() *protocol.Protocol {
 	return protocol.New(config.NewStore(), nil)
@@ -49,7 +63,7 @@ No ceremony required. No .mos directory. Just point and go.`,
 var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print the version",
-	Run:   func(cmd *cobra.Command, args []string) { fmt.Printf("locus %s\n", Version) },
+	Run:   func(cmd *cobra.Command, args []string) { fmt.Printf("locus %s\n", versionString()) },
 }
 
 var scanFlags struct {
