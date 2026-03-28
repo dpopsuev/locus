@@ -246,7 +246,7 @@ type analysisActionInput struct {
 	Format    string   `json:"format,omitempty" jsonschema:"output format: json (default) or summary (concise <500 tokens)"`
 	PathB     string   `json:"path_b,omitempty" jsonschema:"second repo path for cross_repo comparison"`
 	CacheKeyB string   `json:"cache_key_b,omitempty" jsonschema:"second cache key for cross_repo comparison"`
-	Preset    string   `json:"preset,omitempty" jsonschema:"preset name: architecture_review, health_check, onboarding, pre_pr"`
+	Preset    string   `json:"preset,omitempty" jsonschema:"preset name: architecture_review, health_check, onboarding, pre_pr, normative, pre_refactor, full_clinic"`
 	Query     string   `json:"query,omitempty" jsonschema:"natural language architecture question"`
 	Files     []string `json:"files,omitempty" jsonschema:"changed files for blast_radius analysis"`
 	Since     string   `json:"since,omitempty" jsonschema:"git ref for blast_radius (e.g. HEAD~1, main)"`

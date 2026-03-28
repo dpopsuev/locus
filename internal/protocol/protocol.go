@@ -743,10 +743,13 @@ func (p *Protocol) GetCrossRepo(ctx context.Context, pathA, pathB string, cacheK
 // --- Analysis presets ---
 
 const (
-	PresetArchReview = "architecture_review"
+	PresetArchReview  = "architecture_review"
 	PresetHealthCheck = "health_check"
 	PresetOnboarding  = "onboarding"
 	PresetPrePR       = "pre_pr"
+	PresetNormative   = "normative"
+	PresetPreRefactor = "pre_refactor"
+	PresetFullClinic  = "full_clinic"
 )
 
 func (p *Protocol) RunPreset(ctx context.Context, path, preset string, cacheKey ...string) (string, error) {
@@ -809,9 +812,109 @@ func (p *Protocol) RunPreset(ctx context.Context, path, preset string, cacheKey 
 		fmt.Fprintf(&b, "%d components, %d cycles, %d violations\n",
 			len(report.Architecture.Services), len(report.Cycles), len(report.LayerViolations))
 
+	case PresetNormative:
+		fmt.Fprintf(&b, "# Normative Analysis: %s\n\n", report.ModulePath)
+
+		// Import direction
+		idReport := ComputeImportDirection(report.Architecture.Edges, report.ImportDepth)
+		fmt.Fprintf(&b, "## Import Direction\n%s\n\n", idReport.Summary)
+		for i, v := range idReport.Violations {
+			if i >= 5 {
+				fmt.Fprintf(&b, "... and %d more\n", len(idReport.Violations)-5)
+				break
+			}
+			fmt.Fprintf(&b, "- [%s] %s → %s (depth %d→%d)\n", v.Severity, v.From, v.To, v.FromDepth, v.ToDepth)
+		}
+
+		// Trust boundaries
+		tbReport := ComputeTrustBoundaries(report.Architecture.Services, report.Architecture.Edges)
+		fmt.Fprintf(&b, "\n## Trust Boundaries\n%s\n", tbReport.Summary)
+
+		// Budgets (if desired state exists)
+		if desired, _ := p.db.GetDesiredState(ctx, path); desired != nil && len(desired.Constraints) > 0 {
+			budgetReport := ComputeBudgetViolations(report.Architecture.Services, report.Architecture.Edges, desired.Constraints)
+			fmt.Fprintf(&b, "\n## Budgets\n%s\n", budgetReport.Summary)
+		}
+
+	case PresetPreRefactor:
+		fmt.Fprintf(&b, "# Pre-Refactor Analysis: %s\n\n", report.ModulePath)
+
+		// Hot spots — where risk concentrates
+		spots := report.HotSpots
+		if len(spots) > 10 {
+			spots = spots[:10]
+		}
+		b.WriteString("## Hot Spots (churn × coupling)\n")
+		for _, s := range spots {
+			fmt.Fprintf(&b, "- %s (churn:%d, fan-in:%d)\n", s.Component, s.Churn, s.FanIn)
+		}
+
+		// Interface metrics
+		da := analysis.NewFallback(path)
+		if classes, err := da.Classes(path); err == nil {
+			impls, _ := da.Implements(path)
+			imReport := ComputeInterfaceMetrics(classes, impls)
+			fmt.Fprintf(&b, "\n## Interfaces\n%s\n", imReport.Summary)
+			for _, iface := range imReport.Interfaces {
+				if iface.IsOrphan {
+					fmt.Fprintf(&b, "- ⚠ ORPHAN: %s (%d methods, 0 implementors)\n", iface.Name, iface.MethodCount)
+				}
+			}
+		}
+
+		// Import direction violations
+		idReport := ComputeImportDirection(report.Architecture.Edges, report.ImportDepth)
+		if len(idReport.Violations) > 0 {
+			fmt.Fprintf(&b, "\n## Import Direction\n%s\n", idReport.Summary)
+		}
+
+	case PresetFullClinic:
+		fmt.Fprintf(&b, "# Full Clinic: %s\n\n", report.ModulePath)
+		fmt.Fprintf(&b, "%d components, %d edges\n\n", len(report.Architecture.Services), len(report.Architecture.Edges))
+
+		// Architecture
+		fmt.Fprintf(&b, "## Architecture\n")
+		fmt.Fprintf(&b, "- Cycles: %d\n", len(report.Cycles))
+		fmt.Fprintf(&b, "- Layer violations: %d\n", len(report.LayerViolations))
+
+		// Import direction
+		idReport := ComputeImportDirection(report.Architecture.Edges, report.ImportDepth)
+		fmt.Fprintf(&b, "- Import direction: %s\n", idReport.Summary)
+
+		// Trust boundaries
+		tbReport := ComputeTrustBoundaries(report.Architecture.Services, report.Architecture.Edges)
+		fmt.Fprintf(&b, "- Trust zones: %s\n", tbReport.Summary)
+
+		// Hot spots
+		spots := report.HotSpots
+		if len(spots) > 5 {
+			spots = spots[:5]
+		}
+		if len(spots) > 0 {
+			fmt.Fprintf(&b, "\n## Hot Spots\n")
+			for _, s := range spots {
+				fmt.Fprintf(&b, "- %s (churn:%d, fan-in:%d)\n", s.Component, s.Churn, s.FanIn)
+			}
+		}
+
+		// Interface metrics
+		da := analysis.NewFallback(path)
+		if classes, err := da.Classes(path); err == nil {
+			impls, _ := da.Implements(path)
+			imReport := ComputeInterfaceMetrics(classes, impls)
+			fmt.Fprintf(&b, "\n## Interfaces\n%s\n", imReport.Summary)
+		}
+
+		// Budgets
+		if desired, _ := p.db.GetDesiredState(ctx, path); desired != nil && len(desired.Constraints) > 0 {
+			budgetReport := ComputeBudgetViolations(report.Architecture.Services, report.Architecture.Edges, desired.Constraints)
+			fmt.Fprintf(&b, "\n## Budgets\n%s\n", budgetReport.Summary)
+		}
+
 	default:
-		return "", fmt.Errorf("unknown preset %q (valid: %s, %s, %s, %s)",
-			preset, PresetArchReview, PresetHealthCheck, PresetOnboarding, PresetPrePR)
+		return "", fmt.Errorf("unknown preset %q (valid: %s, %s, %s, %s, %s, %s, %s)",
+			preset, PresetArchReview, PresetHealthCheck, PresetOnboarding, PresetPrePR,
+			PresetNormative, PresetPreRefactor, PresetFullClinic)
 	}
 	return b.String(), nil
 }
