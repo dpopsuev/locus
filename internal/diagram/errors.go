@@ -12,4 +12,5 @@ var (
 	ErrNoEntryProvided      = errors.New("sequence diagram: no --entry provided and no entry points detected")
 	ErrNoCallsFound         = errors.New("no calls found from entry")
 	ErrUnknownDiagramType   = errors.New("unknown diagram type")
+	ErrHexaRolesRequired    = errors.New("hexagonal classification required — run hexa_validate first")
 )

@@ -757,6 +757,7 @@ const (
 	PresetNormative   = "normative"
 	PresetPreRefactor = "pre_refactor"
 	PresetFullClinic  = "full_clinic"
+	PresetCodeHealth  = "code_health"
 )
 
 func (p *Protocol) RunPreset(ctx context.Context, path, preset string, cacheKey ...string) (string, error) {
@@ -782,10 +783,12 @@ func (p *Protocol) RunPreset(ctx context.Context, path, preset string, cacheKey 
 		renderPresetPreRefactor(&b, path, report)
 	case PresetFullClinic:
 		p.renderPresetFullClinic(ctx, &b, path, report)
+	case PresetCodeHealth:
+		p.renderPresetCodeHealth(&b, path, report)
 	default:
-		return "", fmt.Errorf("%w %q (valid: %s, %s, %s, %s, %s, %s, %s)",
+		return "", fmt.Errorf("%w %q (valid: %s, %s, %s, %s, %s, %s, %s, %s)",
 			ErrUnknownPreset, preset, PresetArchReview, PresetHealthCheck, PresetOnboarding, PresetPrePR,
-			PresetNormative, PresetPreRefactor, PresetFullClinic)
+			PresetNormative, PresetPreRefactor, PresetFullClinic, PresetCodeHealth)
 	}
 	return b.String(), nil
 }
@@ -933,6 +936,47 @@ func (p *Protocol) renderPresetFullClinic(ctx context.Context, b *strings.Builde
 		budgetReport := ComputeBudgetViolations(report.Architecture.Services, report.Architecture.Edges, desired.Constraints)
 		fmt.Fprintf(b, "\n## Budgets\n%s\n", budgetReport.Summary)
 	}
+
+	// Code Health Clinic pillars
+	fa := analysis.NewFallback(path)
+	if classes, err := fa.Classes(path); err == nil {
+		impls, _ := fa.Implements(path)
+
+		patternReport := ComputePatternScan(report.Architecture.Services, report.Architecture.Edges, report.Cycles, classes, impls)
+		fmt.Fprintf(b, "\n## Patterns & Smells\n%s\n", patternReport.Summary)
+
+		hexaReport := ComputeHexaViolations(report.Architecture.Services, report.Architecture.Edges, classes)
+		fmt.Fprintf(b, "\n## Hexagonal Architecture\n%s\n", hexaReport.Summary)
+
+		hexaClass := ComputeHexaClassification(report.Architecture.Services, report.Architecture.Edges, classes)
+		solidReport := ComputeSOLIDScan(report.Architecture.Services, report.Architecture.Edges, classes, impls, hexaClass, path)
+		fmt.Fprintf(b, "\n## SOLID Principles\n%s\n", solidReport.Summary)
+	}
+
+	sqReport := ComputeSymbolQuality(report.Architecture.Services, report.Architecture.Edges)
+	fmt.Fprintf(b, "\n## Symbol Quality\n%s\n", sqReport.Summary)
+}
+
+func (p *Protocol) renderPresetCodeHealth(b *strings.Builder, path string, report *arch.ContextReport) {
+	fmt.Fprintf(b, "# Code Health Clinic: %s\n\n", report.ModulePath)
+	fmt.Fprintf(b, "%d components, %d edges\n\n", len(report.Architecture.Services), len(report.Architecture.Edges))
+
+	fa := analysis.NewFallback(path)
+	classes, _ := fa.Classes(path)
+	impls, _ := fa.Implements(path)
+
+	patternReport := ComputePatternScan(report.Architecture.Services, report.Architecture.Edges, report.Cycles, classes, impls)
+	fmt.Fprintf(b, "## Patterns & Smells\n%s\n\n", patternReport.Summary)
+
+	hexaReport := ComputeHexaViolations(report.Architecture.Services, report.Architecture.Edges, classes)
+	fmt.Fprintf(b, "## Hexagonal Architecture\n%s\n\n", hexaReport.Summary)
+
+	hexaClass := ComputeHexaClassification(report.Architecture.Services, report.Architecture.Edges, classes)
+	solidReport := ComputeSOLIDScan(report.Architecture.Services, report.Architecture.Edges, classes, impls, hexaClass, path)
+	fmt.Fprintf(b, "## SOLID Principles\n%s\n\n", solidReport.Summary)
+
+	sqReport := ComputeSymbolQuality(report.Architecture.Services, report.Architecture.Edges)
+	fmt.Fprintf(b, "## Symbol Quality\n%s\n", sqReport.Summary)
 }
 
 // --- Component drill-down ---
@@ -1429,6 +1473,66 @@ func (p *Protocol) GetTrustBoundaries(ctx context.Context, path string, cacheKey
 		return nil, err
 	}
 	return ComputeTrustBoundaries(report.Architecture.Services, report.Architecture.Edges), nil
+}
+
+// --- Code Health Clinic methods ---
+
+func (p *Protocol) GetHexaValidation(ctx context.Context, path string, cacheKey ...string) (*HexaValidationReport, error) {
+	path = p.resolvePath(path)
+	report, err := p.getOrScan(path, cacheKey...)
+	if err != nil {
+		return nil, err
+	}
+	fa := analysis.NewFallback(path)
+	classes, _ := fa.Classes(path)
+	return ComputeHexaViolations(report.Architecture.Services, report.Architecture.Edges, classes), nil
+}
+
+func (p *Protocol) GetSOLIDScan(ctx context.Context, path string, cacheKey ...string) (*SOLIDReport, error) {
+	path = p.resolvePath(path)
+	report, err := p.getOrScan(path, cacheKey...)
+	if err != nil {
+		return nil, err
+	}
+	fa := analysis.NewFallback(path)
+	classes, _ := fa.Classes(path)
+	impls, _ := fa.Implements(path)
+	hexaClass := ComputeHexaClassification(report.Architecture.Services, report.Architecture.Edges, classes)
+	return ComputeSOLIDScan(report.Architecture.Services, report.Architecture.Edges, classes, impls, hexaClass, path), nil
+}
+
+func (p *Protocol) GetSymbolQuality(_ context.Context, path string, cacheKey ...string) (*SymbolQualityReport, error) {
+	path = p.resolvePath(path)
+	report, err := p.getOrScan(path, cacheKey...)
+	if err != nil {
+		return nil, err
+	}
+	return ComputeSymbolQuality(report.Architecture.Services, report.Architecture.Edges), nil
+}
+
+func (p *Protocol) GetVocabMap(_ context.Context, path string, cacheKey ...string) (*VocabMapReport, error) {
+	path = p.resolvePath(path)
+	report, err := p.getOrScan(path, cacheKey...)
+	if err != nil {
+		return nil, err
+	}
+	return ComputeVocabMap(report.Architecture.Services), nil
+}
+
+func (p *Protocol) GetPatternScan(_ context.Context, path string, cacheKey ...string) (*PatternScanReport, error) {
+	path = p.resolvePath(path)
+	report, err := p.getOrScan(path, cacheKey...)
+	if err != nil {
+		return nil, err
+	}
+	fa := analysis.NewFallback(path)
+	classes, _ := fa.Classes(path)
+	impls, _ := fa.Implements(path)
+	return ComputePatternScan(report.Architecture.Services, report.Architecture.Edges, report.Cycles, classes, impls), nil
+}
+
+func (p *Protocol) GetPatternCatalog(filter string) *PatternCatalogReport {
+	return GetPatternCatalog(filter)
 }
 
 // Workspaces returns the configured workspace root paths.

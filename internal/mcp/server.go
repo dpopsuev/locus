@@ -70,6 +70,13 @@ const (
 	ActionModDependencies  = "mod_dependencies"
 	ActionSymbolBlast      = "symbol_blast"
 	ActionDiffIntelligence = "diff_intelligence"
+	ActionInterfaceMetrics = "interface_metrics"
+	ActionPatternScan      = "pattern_scan"
+	ActionPatternCatalog   = "pattern_catalog"
+	ActionHexaValidate     = "hexa_validate"
+	ActionSOLIDScan        = "solid_scan"
+	ActionSymbolQuality    = "symbol_quality"
+	ActionVocabMap         = "vocab_map"
 )
 
 // Coupling view names.
@@ -102,6 +109,7 @@ const (
 	DiagramState      = "state"
 	DiagramZones      = "zones"
 	DiagramInterfaces = "interfaces"
+	DiagramHexa       = "hexa"
 )
 
 // DiagramMinIntent maps diagram types to the minimum scan intent needed.
@@ -120,6 +128,7 @@ var DiagramMinIntent = map[string]string{
 	DiagramState:      string(arch.IntentHealth),
 	DiagramZones:      string(arch.IntentCoupling),
 	DiagramInterfaces: string(arch.IntentHealth),
+	DiagramHexa:       string(arch.IntentCoupling),
 }
 
 func NewServer(s store.Store, workspaceRoots []string, version string) (*sdkmcp.Server, *triage.Registry) {
@@ -243,7 +252,7 @@ type codographActionInput struct {
 }
 
 type analysisActionInput struct {
-	Action   string `json:"action" jsonschema:"required,deps | impact | coupling | cycles | violations | scan_diff | coverage | api_surface | conventions | gaps | blast_radius | import_direction | trust_boundaries | budgets | mod_dependencies | symbol_blast | diff_intelligence | interface_metrics"`
+	Action   string `json:"action" jsonschema:"required,deps | impact | coupling | cycles | violations | scan_diff | coverage | api_surface | conventions | gaps | blast_radius | import_direction | trust_boundaries | budgets | mod_dependencies | symbol_blast | diff_intelligence | interface_metrics | pattern_scan | pattern_catalog | hexa_validate | solid_scan | symbol_quality | vocab_map"`
 	Path     string `json:"path,omitempty" jsonschema:"absolute path to local repository (defaults to workspace root)"`
 	CacheKey string `json:"cache_key,omitempty" jsonschema:"cache key from scan_remote (use instead of path for remote repos)"`
 
@@ -261,10 +270,11 @@ type analysisActionInput struct {
 	Format    string   `json:"format,omitempty" jsonschema:"output format: json (default) or summary (concise <500 tokens)"`
 	PathB     string   `json:"path_b,omitempty" jsonschema:"second repo path for cross_repo comparison"`
 	CacheKeyB string   `json:"cache_key_b,omitempty" jsonschema:"second cache key for cross_repo comparison"`
-	Preset    string   `json:"preset,omitempty" jsonschema:"preset name: architecture_review, health_check, onboarding, pre_pr, normative, pre_refactor, full_clinic"`
+	Preset    string   `json:"preset,omitempty" jsonschema:"preset name: architecture_review, health_check, onboarding, pre_pr, normative, pre_refactor, full_clinic, code_health"`
 	Query     string   `json:"query,omitempty" jsonschema:"natural language architecture question"`
 	Files     []string `json:"files,omitempty" jsonschema:"changed files for blast_radius analysis"`
 	Since     string   `json:"since,omitempty" jsonschema:"git ref for blast_radius (e.g. HEAD~1, main)"`
+	Filter    string   `json:"filter,omitempty" jsonschema:"filter for pattern_catalog: pattern, smell, or name substring"`
 }
 
 // --- dispatchers ---
@@ -356,14 +366,14 @@ func (h *handler) handleAnalysis(ctx context.Context, req *sdkmcp.CallToolReques
 		ActionSuggestArch, ActionSearch, ActionQuery:
 		return h.dispatchAnalysisLookup(ctx, &in)
 	case ActionBlastRadius, ActionImportDirection, ActionTrustBoundaries,
-		ActionModDependencies, ActionBudgets, ActionSymbolBlast, ActionDiffIntelligence:
+		ActionModDependencies, ActionBudgets, ActionSymbolBlast, ActionDiffIntelligence,
+		ActionInterfaceMetrics:
 		return h.dispatchAnalysisAdvanced(ctx, &in)
+	case ActionPatternScan, ActionPatternCatalog, ActionHexaValidate,
+		ActionSOLIDScan, ActionSymbolQuality, ActionVocabMap:
+		return h.dispatchAnalysisClinic(ctx, &in)
 	default:
-		return nil, nil, fmt.Errorf("%w %q (valid: %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
-			ErrUnknownAnalysisAction, in.Action, ActionDeps, ActionImpact, ActionCoupling, ActionCycles,
-			ActionViolations, ActionScanDiff, ActionCoverage, ActionAPISurface, ActionConventions, ActionGaps,
-			ActionBlastRadius, ActionImportDirection, ActionTrustBoundaries, ActionBudgets, ActionModDependencies,
-			ActionSymbolBlast, ActionDiffIntelligence)
+		return nil, nil, fmt.Errorf("%w %q", ErrUnknownAnalysisAction, in.Action)
 	}
 }
 
@@ -488,8 +498,52 @@ func (h *handler) dispatchAnalysisAdvanced(ctx context.Context, in *analysisActi
 			return nil, nil, err
 		}
 		return jsonResult(r)
+	case ActionInterfaceMetrics:
+		r, err := h.proto.GetInterfaceMetrics(ctx, in.Path, in.CacheKey)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
 	default: // ActionDiffIntelligence
 		r, err := h.proto.GetDiffIntelligence(ctx, in.Path, in.Since, in.CacheKey)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
+	}
+}
+
+func (h *handler) dispatchAnalysisClinic(ctx context.Context, in *analysisActionInput) (*sdkmcp.CallToolResult, any, error) {
+	switch in.Action {
+	case ActionPatternScan:
+		r, err := h.proto.GetPatternScan(ctx, in.Path, in.CacheKey)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
+	case ActionPatternCatalog:
+		r := h.proto.GetPatternCatalog(in.Filter)
+		return jsonResult(r)
+	case ActionHexaValidate:
+		r, err := h.proto.GetHexaValidation(ctx, in.Path, in.CacheKey)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
+	case ActionSOLIDScan:
+		r, err := h.proto.GetSOLIDScan(ctx, in.Path, in.CacheKey)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
+	case ActionSymbolQuality:
+		r, err := h.proto.GetSymbolQuality(ctx, in.Path, in.CacheKey)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
+	default: // ActionVocabMap
+		r, err := h.proto.GetVocabMap(ctx, in.Path, in.CacheKey)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -836,8 +890,17 @@ func (h *handler) handleRenderDiagram(ctx context.Context, _ *sdkmcp.CallToolReq
 	// Tier 2/3 diagrams need analyzers — only available for local repos.
 	if path != "" {
 		switch in.Type {
-		case DiagramClasses, DiagramSequence, DiagramER, DiagramInterfaces:
+		case DiagramClasses, DiagramSequence, DiagramER, DiagramInterfaces, DiagramHexa:
 			input.Analyzer = analysis.NewFallback(path)
+		}
+		if in.Type == DiagramHexa {
+			fa := analysis.NewFallback(path)
+			classes, _ := fa.Classes(path)
+			hexaClass := protocol.ComputeHexaClassification(report.Architecture.Services, report.Architecture.Edges, classes)
+			input.HexaRoles = make(map[string]string, len(hexaClass.Components))
+			for _, c := range hexaClass.Components {
+				input.HexaRoles[c.Name] = string(c.Role)
+			}
 		}
 		switch in.Type {
 		case DiagramDataflow, DiagramCallgraph, DiagramState:

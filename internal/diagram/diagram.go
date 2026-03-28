@@ -32,6 +32,7 @@ type Input struct {
 	DeepAnalyzer  analysis.DeepAnalyzer
 	Root          string // repository root path (needed by Tier 2/3 renderers)
 	ResolvedTheme *ResolvedTheme
+	HexaRoles     map[string]string // component name → hexa role (domain, port, adapter, infra, app, entrypoint)
 }
 
 // Render dispatches to the appropriate renderer by type name.
@@ -73,6 +74,8 @@ func Render(in Input, opts Options) (string, error) {
 		return renderState(in, opts)
 	case "zones":
 		return renderZones(in, opts), nil
+	case "hexa":
+		return renderHexa(in, opts)
 	default:
 		return "", fmt.Errorf("%w %q (use: %s)", ErrUnknownDiagramType, opts.Type, strings.Join(Types(), ", "))
 	}
@@ -83,6 +86,6 @@ func Types() []string {
 	return []string{
 		"dependency", "c4", "coupling", "churn", "layers", "tree",
 		"classes", "interfaces", "sequence", "er",
-		"dataflow", "callgraph", "state", "zones",
+		"dataflow", "callgraph", "state", "zones", "hexa",
 	}
 }

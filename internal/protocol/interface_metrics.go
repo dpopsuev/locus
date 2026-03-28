@@ -30,7 +30,7 @@ func ComputeInterfaceMetrics(classes []analysis.ClassInfo, impls []analysis.Impl
 	// Step 1: Filter interfaces from ClassInfo.
 	ifaceMap := make(map[string]*InterfaceMetric)
 	for _, c := range classes {
-		if c.Kind != "interface" {
+		if c.Kind != classKindInterface {
 			continue
 		}
 		ifaceMap[c.Name] = &InterfaceMetric{
