@@ -53,6 +53,8 @@ const (
 	ActionTrustBoundaries  = "trust_boundaries"
 	ActionBudgets          = "budgets"
 	ActionModDependencies  = "mod_dependencies"
+	ActionSymbolBlast      = "symbol_blast"
+	ActionDiffIntelligence = "diff_intelligence"
 )
 
 // Coupling view names.
@@ -84,6 +86,7 @@ const (
 	DiagramCallgraph  = "callgraph"
 	DiagramState      = "state"
 	DiagramZones      = "zones"
+	DiagramInterfaces = "interfaces"
 )
 
 // DiagramMinIntent maps diagram types to the minimum scan intent needed.
@@ -101,6 +104,7 @@ var DiagramMinIntent = map[string]string{
 	DiagramCallgraph:  string(arch.IntentHealth),
 	DiagramState:      string(arch.IntentHealth),
 	DiagramZones:      string(arch.IntentCoupling),
+	DiagramInterfaces: string(arch.IntentHealth),
 }
 
 func NewServer(s store.Store, workspaceRoots []string, version string) (*sdkmcp.Server, *triage.Registry) {
@@ -224,7 +228,7 @@ type codographActionInput struct {
 }
 
 type analysisActionInput struct {
-	Action   string `json:"action" jsonschema:"required,deps | impact | coupling | cycles | violations | scan_diff | coverage | api_surface | conventions | gaps | blast_radius | import_direction | trust_boundaries | budgets | mod_dependencies"`
+	Action   string `json:"action" jsonschema:"required,deps | impact | coupling | cycles | violations | scan_diff | coverage | api_surface | conventions | gaps | blast_radius | import_direction | trust_boundaries | budgets | mod_dependencies | symbol_blast | diff_intelligence"`
 	Path     string `json:"path,omitempty" jsonschema:"absolute path to local repository (defaults to workspace root)"`
 	CacheKey string `json:"cache_key,omitempty" jsonschema:"cache key from scan_remote (use instead of path for remote repos)"`
 
@@ -430,11 +434,24 @@ func (h *handler) handleAnalysis(ctx context.Context, req *sdkmcp.CallToolReques
 			return nil, nil, err
 		}
 		return jsonResult(r)
+	case ActionSymbolBlast:
+		r, err := h.proto.GetSymbolBlastRadius(ctx, in.Path, in.Symbol, in.CacheKey)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
+	case ActionDiffIntelligence:
+		r, err := h.proto.GetDiffIntelligence(ctx, in.Path, in.Since, in.CacheKey)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
 	default:
-		return nil, nil, fmt.Errorf("unknown analysis action %q (valid: %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+		return nil, nil, fmt.Errorf("unknown analysis action %q (valid: %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
 			in.Action, ActionDeps, ActionImpact, ActionCoupling, ActionCycles,
 			ActionViolations, ActionScanDiff, ActionCoverage, ActionAPISurface, ActionConventions, ActionGaps,
-			ActionBlastRadius, ActionImportDirection, ActionTrustBoundaries, ActionBudgets, ActionModDependencies)
+			ActionBlastRadius, ActionImportDirection, ActionTrustBoundaries, ActionBudgets, ActionModDependencies,
+			ActionSymbolBlast, ActionDiffIntelligence)
 	}
 }
 
@@ -734,7 +751,7 @@ func (h *handler) handleScanDiff(ctx context.Context, _ *sdkmcp.CallToolRequest,
 
 type diagramInput struct {
 	Path         string `json:"path" jsonschema:"required,absolute path to local repository"`
-	Type         string `json:"type" jsonschema:"required,diagram type: dependency, c4, coupling, churn, layers, tree, classes, sequence, er"`
+	Type         string `json:"type" jsonschema:"required,diagram type: dependency, c4, coupling, churn, layers, tree, classes, sequence, er, interfaces"`
 	Scope        string `json:"scope,omitempty" jsonschema:"limit diagram to a sub-package or directory"`
 	Depth        int    `json:"depth,omitempty" jsonschema:"directory grouping depth for components"`
 	TopN         int    `json:"top_n,omitempty" jsonschema:"limit to top N components in diagram"`
@@ -782,7 +799,7 @@ func (h *handler) handleRenderDiagram(ctx context.Context, _ *sdkmcp.CallToolReq
 	// Tier 2/3 diagrams need analyzers — only available for local repos.
 	if path != "" {
 		switch in.Type {
-		case DiagramClasses, DiagramSequence, DiagramER:
+		case DiagramClasses, DiagramSequence, DiagramER, DiagramInterfaces:
 			input.Analyzer = analysis.NewFallback(path)
 		}
 		switch in.Type {

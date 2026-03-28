@@ -608,6 +608,44 @@ func (p *Protocol) GetInterfaceMetrics(ctx context.Context, path string, cacheKe
 	return ComputeInterfaceMetrics(classes, impls), nil
 }
 
+func (p *Protocol) GetSymbolBlastRadius(ctx context.Context, path, symbol string, cacheKey ...string) (*SymbolBlastReport, error) {
+	path = p.resolvePath(path)
+	if symbol == "" {
+		return nil, ErrComponentRequired
+	}
+	da := analysis.NewDeepFallback(path)
+	cg, err := da.CallGraph(path, analysis.CallGraphOpts{Depth: analysis.DefaultCallGraphDepth})
+	if err != nil {
+		return nil, fmt.Errorf("call graph: %w", err)
+	}
+	// Count unique packages from nodes for totalPkgs.
+	pkgs := make(map[string]bool)
+	for _, n := range cg.Nodes {
+		pkgs[n.Package] = true
+	}
+	return ComputeSymbolBlastRadius(cg.Edges, symbol, len(pkgs)), nil
+}
+
+func (p *Protocol) GetDiffIntelligence(ctx context.Context, path, since string, cacheKey ...string) (*DiffIntelligenceReport, error) {
+	path = p.resolvePath(path)
+	report, err := p.getOrScan(path, cacheKey...)
+	if err != nil {
+		return nil, err
+	}
+	// Get changed files.
+	changedFiles, err := changedFilesSince(path, since)
+	if err != nil {
+		return nil, fmt.Errorf("git diff: %w", err)
+	}
+	// Build call graph for symbol-level analysis.
+	da := analysis.NewDeepFallback(path)
+	cg, err := da.CallGraph(path, analysis.CallGraphOpts{Depth: analysis.DefaultCallGraphDepth})
+	if err != nil {
+		return nil, fmt.Errorf("call graph: %w", err)
+	}
+	return ComputeDiffIntelligence(changedFiles, report.ModulePath, cg), nil
+}
+
 func (p *Protocol) GetCallers(ctx context.Context, path, symbol string, cacheKey ...string) (*CallersReport, error) {
 	path = p.resolvePath(path)
 	if symbol == "" {

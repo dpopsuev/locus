@@ -57,6 +57,8 @@ func Render(in Input, opts Options) (string, error) {
 		return renderTree(in, opts), nil
 	case "classes":
 		return renderClasses(in, opts)
+	case "interfaces":
+		return renderInterfaces(in, opts)
 	case "sequence":
 		return renderSequence(in, opts)
 	case "er":
@@ -78,7 +80,7 @@ func Render(in Input, opts Options) (string, error) {
 func Types() []string {
 	return []string{
 		"dependency", "c4", "coupling", "churn", "layers", "tree",
-		"classes", "sequence", "er",
+		"classes", "interfaces", "sequence", "er",
 		"dataflow", "callgraph", "state", "zones",
 	}
 }
