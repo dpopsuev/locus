@@ -355,12 +355,15 @@ func (p *Protocol) GetDesiredState(ctx context.Context, path string) (*store.Des
 
 // DriftReport holds architecture drift analysis results.
 type DriftReport struct {
-	HasDesiredState   bool                 `json:"has_desired_state"`
-	LayerViolations   []arch.LayerViolation `json:"layer_violations,omitempty"`
-	BoundaryBreaches  int                  `json:"boundary_breaches"`
-	ConstraintBreaches int                 `json:"constraint_breaches"`
-	Clean             bool                 `json:"clean"`
-	Summary           string               `json:"summary"`
+	HasDesiredState    bool                  `json:"has_desired_state"`
+	LayerViolations    []arch.LayerViolation `json:"layer_violations,omitempty"`
+	BoundaryViolations []BoundaryViolation   `json:"boundary_violations,omitempty"`
+	BudgetViolations   []BudgetViolation     `json:"budget_violations,omitempty"`
+	BoundaryBreaches   int                   `json:"boundary_breaches"`
+	ConstraintBreaches int                   `json:"constraint_breaches"`
+	Score              float64               `json:"score"`
+	Clean              bool                  `json:"clean"`
+	Summary            string                `json:"summary"`
 }
 
 func (p *Protocol) GetDrift(ctx context.Context, path string, cacheKey ...string) (*DriftReport, error) {
@@ -376,18 +379,89 @@ func (p *Protocol) GetDrift(ctx context.Context, path string, cacheKey ...string
 	if err != nil {
 		return nil, err
 	}
-	violations := arch.CheckLayerPurity(report.Architecture.Edges, ds.Layers)
-	clean := len(violations) == 0
-	summary := fmt.Sprintf("%d layer violation(s)", len(violations))
-	if clean {
-		summary = "Clean — no drift detected"
+
+	// 1. Layer purity (existing).
+	layerViolations := arch.CheckLayerPurity(report.Architecture.Edges, ds.Layers)
+
+	// 2. Boundary rules (new).
+	boundaryViolations := CheckBoundaryRules(report.Architecture.Edges, ds.Boundaries)
+
+	// 3. Budget violations (new).
+	var budgetViolations []BudgetViolation
+	if len(ds.Constraints) > 0 {
+		budgetReport := ComputeBudgetViolations(
+			report.Architecture.Services,
+			report.Architecture.Edges,
+			ds.Constraints,
+		)
+		budgetViolations = budgetReport.Violations
 	}
+
+	// Compute compliance score.
+	totalViolations := len(layerViolations) + len(boundaryViolations) + len(budgetViolations)
+	totalChecks := len(report.Architecture.Edges) + len(ds.Boundaries) + countBudgetChecks(report.Architecture.Services, ds.Constraints)
+	score := 100.0
+	if totalChecks > 0 {
+		score = float64(totalChecks-totalViolations) / float64(totalChecks) * 100
+		if score < 0 {
+			score = 0
+		}
+	}
+
+	clean := totalViolations == 0
+
+	// Build summary.
+	var parts []string
+	if len(layerViolations) > 0 {
+		parts = append(parts, fmt.Sprintf("%d layer violation(s)", len(layerViolations)))
+	}
+	if len(boundaryViolations) > 0 {
+		parts = append(parts, fmt.Sprintf("%d boundary violation(s)", len(boundaryViolations)))
+	}
+	if len(budgetViolations) > 0 {
+		parts = append(parts, fmt.Sprintf("%d budget violation(s)", len(budgetViolations)))
+	}
+	summary := "Clean — no drift detected"
+	if !clean {
+		summary = strings.Join(parts, ", ") + fmt.Sprintf(" (score: %.1f%%)", score)
+	}
+
 	return &DriftReport{
-		HasDesiredState:  true,
-		LayerViolations:  violations,
-		Clean:            clean,
-		Summary:          summary,
+		HasDesiredState:    true,
+		LayerViolations:    layerViolations,
+		BoundaryViolations: boundaryViolations,
+		BudgetViolations:   budgetViolations,
+		BoundaryBreaches:   len(boundaryViolations),
+		ConstraintBreaches: len(budgetViolations),
+		Score:              score,
+		Clean:              clean,
+		Summary:            summary,
 	}, nil
+}
+
+// countBudgetChecks counts the number of budget checks that will be performed
+// for a given set of services and constraints (used for score calculation).
+func countBudgetChecks(services []arch.ArchService, constraints []store.HealthConstraint) int {
+	svcMap := make(map[string]bool, len(services))
+	for _, s := range services {
+		svcMap[s.Name] = true
+	}
+	count := 0
+	for _, c := range constraints {
+		if !svcMap[c.Component] {
+			continue
+		}
+		if c.MaxFanIn > 0 {
+			count++
+		}
+		if c.MaxChurn > 0 {
+			count++
+		}
+		if c.MaxNesting > 0 {
+			count++
+		}
+	}
+	return count
 }
 
 func (p *Protocol) SuggestArchitecture(ctx context.Context, path string, cacheKey ...string) (*store.DesiredState, error) {
