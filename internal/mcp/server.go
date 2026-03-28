@@ -51,6 +51,8 @@ const (
 	ActionBlastRadius      = "blast_radius"
 	ActionImportDirection  = "import_direction"
 	ActionTrustBoundaries  = "trust_boundaries"
+	ActionBudgets          = "budgets"
+	ActionModDependencies  = "mod_dependencies"
 )
 
 // Coupling view names.
@@ -147,7 +149,7 @@ func NewServer(s store.Store, workspaceRoots []string, version string) (*sdkmcp.
 			"drift (check against desired state), suggest_architecture (infer rules from code), " +
 			"search (find components by keyword), component (single-package drill-down), " +
 			"preset (architecture_review/health_check/onboarding/pre_pr), query (natural language). " +
-			"Also: coverage, api_surface, conventions, gaps. " +
+			"Also: coverage, api_surface, conventions, gaps, budgets (check health constraints). " +
 			"Pass cache_key from scan_remote to avoid re-scanning. format=summary for <500 tokens.",
 		Keywords:   []string{"depend", "import", "impact", "blast", "coupling", "fan", "upstream", "downstream", "cycle", "circular", "loop", "coverage", "convention", "gap"},
 		Categories: []string{"dependencies", "refactoring", "performance", "architecture"},
@@ -222,7 +224,7 @@ type codographActionInput struct {
 }
 
 type analysisActionInput struct {
-	Action   string `json:"action" jsonschema:"required,deps | impact | coupling | cycles | violations | scan_diff | coverage | api_surface | conventions | gaps | blast_radius | import_direction | trust_boundaries"`
+	Action   string `json:"action" jsonschema:"required,deps | impact | coupling | cycles | violations | scan_diff | coverage | api_surface | conventions | gaps | blast_radius | import_direction | trust_boundaries | budgets | mod_dependencies"`
 	Path     string `json:"path,omitempty" jsonschema:"absolute path to local repository (defaults to workspace root)"`
 	CacheKey string `json:"cache_key,omitempty" jsonschema:"cache key from scan_remote (use instead of path for remote repos)"`
 
@@ -416,11 +418,23 @@ func (h *handler) handleAnalysis(ctx context.Context, req *sdkmcp.CallToolReques
 			return nil, nil, err
 		}
 		return jsonResult(r)
+	case ActionModDependencies:
+		r, err := h.proto.GetModuleDependencies(ctx, in.Path, in.CacheKey)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
+	case ActionBudgets:
+		r, err := h.proto.GetBudgets(ctx, in.Path, in.CacheKey)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
 	default:
-		return nil, nil, fmt.Errorf("unknown analysis action %q (valid: %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+		return nil, nil, fmt.Errorf("unknown analysis action %q (valid: %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
 			in.Action, ActionDeps, ActionImpact, ActionCoupling, ActionCycles,
 			ActionViolations, ActionScanDiff, ActionCoverage, ActionAPISurface, ActionConventions, ActionGaps,
-			ActionBlastRadius, ActionImportDirection, ActionTrustBoundaries)
+			ActionBlastRadius, ActionImportDirection, ActionTrustBoundaries, ActionBudgets, ActionModDependencies)
 	}
 }
 

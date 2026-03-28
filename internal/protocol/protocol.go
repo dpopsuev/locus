@@ -520,6 +520,20 @@ type CallersReport struct {
 	Summary string       `json:"summary"`
 }
 
+func (p *Protocol) GetInterfaceMetrics(ctx context.Context, path string, cacheKey ...string) (*InterfaceMetricsReport, error) {
+	path = p.resolvePath(path)
+	fa := analysis.NewFallback(path)
+	classes, err := fa.Classes(path)
+	if err != nil {
+		return nil, fmt.Errorf("classes: %w", err)
+	}
+	impls, err := fa.Implements(path)
+	if err != nil {
+		return nil, fmt.Errorf("implements: %w", err)
+	}
+	return ComputeInterfaceMetrics(classes, impls), nil
+}
+
 func (p *Protocol) GetCallers(ctx context.Context, path, symbol string, cacheKey ...string) (*CallersReport, error) {
 	path = p.resolvePath(path)
 	if symbol == "" {
@@ -1127,6 +1141,19 @@ func (p *Protocol) GetGaps(ctx context.Context, path string) (*GapReport, error)
 	return DetectGaps(report, path)
 }
 
+func (p *Protocol) GetBudgets(ctx context.Context, path string, cacheKey ...string) (*BudgetReport, error) {
+	path = p.resolvePath(path)
+	report, err := p.getOrScan(path, cacheKey...)
+	if err != nil {
+		return nil, err
+	}
+	desired, _ := p.db.GetDesiredState(ctx, path)
+	if desired == nil || len(desired.Constraints) == 0 {
+		return &BudgetReport{Summary: "no budgets defined"}, nil
+	}
+	return ComputeBudgetViolations(report.Architecture.Services, report.Architecture.Edges, desired.Constraints), nil
+}
+
 func (p *Protocol) GetBlastRadius(ctx context.Context, path string, files []string, since string, cacheKey ...string) (*BlastRadiusReport, error) {
 	path = p.resolvePath(path)
 	report, err := p.getOrScan(path, cacheKey...)
@@ -1150,6 +1177,12 @@ func (p *Protocol) GetImportDirection(ctx context.Context, path string, cacheKey
 		return nil, err
 	}
 	return ComputeImportDirection(report.Architecture.Edges, report.ImportDepth), nil
+}
+
+func (p *Protocol) GetModuleDependencies(_ context.Context, path string, _ ...string) (*DependencyReport, error) {
+	path = p.resolvePath(path)
+	goModPath := filepath.Join(path, "go.mod")
+	return ComputeDependencies(goModPath)
 }
 
 func (p *Protocol) GetTrustBoundaries(ctx context.Context, path string, cacheKey ...string) (*TrustBoundaryReport, error) {
