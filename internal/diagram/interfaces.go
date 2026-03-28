@@ -11,7 +11,7 @@ import (
 // and the structs that implement them.
 func renderInterfaces(in Input, opts Options) (string, error) {
 	if in.Analyzer == nil {
-		return "", fmt.Errorf("interfaces diagram requires a TypeAnalyzer")
+		return "", ErrTypeAnalyzerRequired
 	}
 	classes, err := in.Analyzer.Classes(in.Root)
 	if err != nil {
@@ -24,42 +24,15 @@ func renderInterfaces(in Input, opts Options) (string, error) {
 	}
 
 	// Filter impl edges to only "implements" kind.
-	var implEdges []analysis.ImplEdge
-	for _, e := range impls {
-		if e.Kind == "implements" {
-			implEdges = append(implEdges, e)
-		}
-	}
+	implEdges := filterImplEdges(impls)
 
 	// Collect interfaces and their implementors.
-	interfaces := make(map[string]analysis.ClassInfo)
-	implementors := make(map[string]analysis.ClassInfo)
-
-	for _, c := range classes {
-		if c.Kind == "interface" {
-			interfaces[c.Name] = c
-		}
-	}
-
-	// Build a lookup for all classes by name.
-	classByName := make(map[string]analysis.ClassInfo)
-	for _, c := range classes {
-		classByName[c.Name] = c
-	}
-
-	// Find implementor structs referenced by impl edges.
-	for _, e := range implEdges {
-		if _, isIface := interfaces[e.To]; !isIface {
-			continue
-		}
-		if c, ok := classByName[e.From]; ok {
-			implementors[c.Name] = c
-		}
-	}
+	interfaces, classByName := collectInterfaces(classes)
+	implementors := collectImplementors(implEdges, interfaces, classByName)
 
 	// Nothing to render if no interfaces found.
 	if len(interfaces) == 0 {
-		return "", fmt.Errorf("no interfaces found for interfaces diagram")
+		return "", ErrNoInterfacesFound
 	}
 
 	var b strings.Builder
@@ -68,24 +41,69 @@ func renderInterfaces(in Input, opts Options) (string, error) {
 	}
 	b.WriteString("classDiagram\n")
 
-	// Render interfaces.
+	renderInterfaceClasses(&b, classes, interfaces)
+	renderImplementorClasses(&b, classes, implementors)
+	renderImplEdges(&b, implEdges, interfaces, implementors, opts.Scope)
+
+	return b.String(), nil
+}
+
+func filterImplEdges(impls []analysis.ImplEdge) []analysis.ImplEdge {
+	var implEdges []analysis.ImplEdge
+	for _, e := range impls {
+		if e.Kind == "implements" {
+			implEdges = append(implEdges, e)
+		}
+	}
+	return implEdges
+}
+
+func collectInterfaces(classes []analysis.ClassInfo) (interfaces, classByName map[string]analysis.ClassInfo) {
+	interfaces = make(map[string]analysis.ClassInfo)
+	classByName = make(map[string]analysis.ClassInfo)
+
+	for _, c := range classes {
+		classByName[c.Name] = c
+		if c.Kind == kindInterface {
+			interfaces[c.Name] = c
+		}
+	}
+	return interfaces, classByName
+}
+
+func collectImplementors(implEdges []analysis.ImplEdge, interfaces, classByName map[string]analysis.ClassInfo) map[string]analysis.ClassInfo {
+	implementors := make(map[string]analysis.ClassInfo)
+	for _, e := range implEdges {
+		if _, isIface := interfaces[e.To]; !isIface {
+			continue
+		}
+		if c, ok := classByName[e.From]; ok {
+			implementors[c.Name] = c
+		}
+	}
+	return implementors
+}
+
+func renderInterfaceClasses(b *strings.Builder, classes []analysis.ClassInfo, interfaces map[string]analysis.ClassInfo) {
 	for _, c := range classes {
 		if _, ok := interfaces[c.Name]; !ok {
 			continue
 		}
-		renderClassBlock(&b, c)
+		renderClassBlock(b, c)
 	}
+}
 
-	// Render implementor structs.
+func renderImplementorClasses(b *strings.Builder, classes []analysis.ClassInfo, implementors map[string]analysis.ClassInfo) {
 	for _, c := range classes {
 		if _, ok := implementors[c.Name]; !ok {
 			continue
 		}
-		renderClassBlock(&b, c)
+		renderClassBlock(b, c)
 	}
+}
 
-	// Render implements edges.
-	declared := make(map[string]bool)
+func renderImplEdges(b *strings.Builder, implEdges []analysis.ImplEdge, interfaces, implementors map[string]analysis.ClassInfo, scope string) {
+	declared := make(map[string]bool, len(interfaces)+len(implementors))
 	for name := range interfaces {
 		declared[name] = true
 	}
@@ -94,25 +112,21 @@ func renderInterfaces(in Input, opts Options) (string, error) {
 	}
 
 	for _, e := range implEdges {
-		if opts.Scope != "" {
-			if !declared[e.From] && !declared[e.To] {
-				continue
-			}
+		if scope != "" && !declared[e.From] && !declared[e.To] {
+			continue
 		}
 		if !declared[e.From] || !declared[e.To] {
 			continue
 		}
-		b.WriteString(fmt.Sprintf("    %s ..|> %s\n", mermaidID(e.From), mermaidID(e.To)))
+		fmt.Fprintf(b, "    %s ..|> %s\n", mermaidID(e.From), mermaidID(e.To))
 	}
-
-	return b.String(), nil
 }
 
 // renderClassBlock writes a single class/interface block to the builder.
 func renderClassBlock(b *strings.Builder, c analysis.ClassInfo) {
 	id := mermaidID(c.Name)
-	b.WriteString(fmt.Sprintf("    class %s {\n", id))
-	if c.Kind == "interface" {
+	fmt.Fprintf(b, "    class %s {\n", id)
+	if c.Kind == kindInterface {
 		b.WriteString("        <<interface>>\n")
 	}
 	for _, f := range c.Fields {
@@ -120,14 +134,14 @@ func renderClassBlock(b *strings.Builder, c analysis.ClassInfo) {
 		if f.Exported {
 			vis = "+"
 		}
-		b.WriteString(fmt.Sprintf("        %s%s %s\n", vis, f.Type, f.Name))
+		fmt.Fprintf(b, "        %s%s %s\n", vis, f.Type, f.Name)
 	}
 	for _, m := range c.Methods {
 		vis := "-"
 		if m.Exported {
 			vis = "+"
 		}
-		b.WriteString(fmt.Sprintf("        %s%s\n", vis, m.Signature))
+		fmt.Fprintf(b, "        %s%s\n", vis, m.Signature)
 	}
 	b.WriteString("    }\n")
 }

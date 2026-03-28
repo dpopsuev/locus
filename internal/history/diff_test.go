@@ -14,8 +14,8 @@ func TestDiffReportsNoChanges(t *testing.T) {
 		},
 	}
 	d := DiffReports(r, r)
-	if d.Summary != "no changes" {
-		t.Errorf("expected 'no changes', got %q", d.Summary)
+	if d.Summary != summaryNoChanges {
+		t.Errorf("expected %q, got %q", summaryNoChanges, d.Summary)
 	}
 }
 
@@ -25,12 +25,12 @@ func TestDiffReportsComponentChanges(t *testing.T) {
 			Services: []arch.ArchService{{Name: "a"}, {Name: "b"}, {Name: "c"}},
 		},
 	}
-	new := &arch.ContextReport{
+	updated := &arch.ContextReport{
 		Architecture: arch.ArchModel{
 			Services: []arch.ArchService{{Name: "a"}, {Name: "d"}},
 		},
 	}
-	d := DiffReports(old, new)
+	d := DiffReports(old, updated)
 	if len(d.AddedComponents) != 1 || d.AddedComponents[0] != "d" {
 		t.Errorf("expected added=[d], got %v", d.AddedComponents)
 	}
@@ -45,12 +45,12 @@ func TestDiffReportsEdgeChanges(t *testing.T) {
 			Edges: []arch.ArchEdge{{From: "a", To: "b"}, {From: "b", To: "c"}},
 		},
 	}
-	new := &arch.ContextReport{
+	updated := &arch.ContextReport{
 		Architecture: arch.ArchModel{
 			Edges: []arch.ArchEdge{{From: "a", To: "b"}, {From: "a", To: "c"}},
 		},
 	}
-	d := DiffReports(old, new)
+	d := DiffReports(old, updated)
 	if len(d.AddedEdges) != 1 || d.AddedEdges[0] != "a->c" {
 		t.Errorf("expected added=[a->c], got %v", d.AddedEdges)
 	}
@@ -63,10 +63,10 @@ func TestDiffReportsChurnDeltas(t *testing.T) {
 	old := &arch.ContextReport{
 		HotSpots: []arch.HotSpot{{Component: "x", Churn: 10}, {Component: "y", Churn: 5}},
 	}
-	new := &arch.ContextReport{
+	updated := &arch.ContextReport{
 		HotSpots: []arch.HotSpot{{Component: "x", Churn: 15}, {Component: "z", Churn: 3}},
 	}
-	d := DiffReports(old, new)
+	d := DiffReports(old, updated)
 	if len(d.ChurnDeltas) != 3 {
 		t.Fatalf("expected 3 churn deltas, got %d", len(d.ChurnDeltas))
 	}
@@ -92,14 +92,14 @@ func TestDiffReportsSummary(t *testing.T) {
 			Edges:    []arch.ArchEdge{{From: "a", To: "b"}},
 		},
 	}
-	new := &arch.ContextReport{
+	updated := &arch.ContextReport{
 		Architecture: arch.ArchModel{
 			Services: []arch.ArchService{{Name: "a"}, {Name: "b"}},
 			Edges:    []arch.ArchEdge{{From: "a", To: "b"}, {From: "b", To: "c"}},
 		},
 	}
-	d := DiffReports(old, new)
-	if d.Summary == "no changes" {
+	d := DiffReports(old, updated)
+	if d.Summary == summaryNoChanges {
 		t.Error("expected changes in summary")
 	}
 }

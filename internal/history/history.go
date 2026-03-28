@@ -4,15 +4,24 @@ import (
 	"bufio"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"time"
 
-	"github.com/dpopsuev/locus/internal/cache"
 	"github.com/dpopsuev/locus/internal/arch"
+	"github.com/dpopsuev/locus/internal/cache"
 )
 
+// Sentinel errors for history operations.
+var (
+	ErrNoHistory       = errors.New("no history")
+	ErrIndexOutOfRange = errors.New("index out of range")
+	ErrReportNotFound  = errors.New("cached report not found (cache may have been pruned)")
+)
+
+// Source identifies how a scan was triggered.
 type Source string
 
 const (
@@ -22,21 +31,22 @@ const (
 
 // Entry is the full record written per scan (includes the report for GetReport).
 type Entry struct {
-	Timestamp  time.Time           `json:"timestamp"`
-	HeadSHA    string              `json:"head_sha"`
-	Source     Source               `json:"source"`
-	RepoPath   string              `json:"repo_path"`
-	Components int                 `json:"components"`
-	Edges      int                 `json:"edges"`
+	Timestamp  time.Time `json:"timestamp"`
+	HeadSHA    string    `json:"head_sha"`
+	Source     Source    `json:"source"`
+	RepoPath   string    `json:"repo_path"`
+	Components int       `json:"components"`
+	Edges      int       `json:"edges"`
 }
 
+// EntrySummary is a lightweight view of an Entry for listing.
 type EntrySummary struct {
 	Timestamp  time.Time `json:"timestamp"`
 	HeadSHA    string    `json:"head_sha"`
 	Source     Source    `json:"source"`
-	RepoPath   string   `json:"repo_path"`
-	Components int      `json:"components"`
-	Edges      int      `json:"edges"`
+	RepoPath   string    `json:"repo_path"`
+	Components int       `json:"components"`
+	Edges      int       `json:"edges"`
 }
 
 // DefaultHistoryDir returns ~/.locus/history.
@@ -87,16 +97,9 @@ func List(historyDir, repoPath string, limit int) ([]EntrySummary, error) {
 		return nil, err
 	}
 
-	var summaries []EntrySummary
+	summaries := make([]EntrySummary, 0, len(entries))
 	for _, e := range entries {
-		summaries = append(summaries, EntrySummary{
-			Timestamp:  e.Timestamp,
-			HeadSHA:    e.HeadSHA,
-			Source:     e.Source,
-			RepoPath:   e.RepoPath,
-			Components: e.Components,
-			Edges:      e.Edges,
-		})
+		summaries = append(summaries, EntrySummary(e))
 	}
 
 	if limit > 0 && len(summaries) > limit {
@@ -113,14 +116,14 @@ func GetReport(sc *cache.ScanCache, historyDir, repoPath string, index int) (*ar
 		return nil, err
 	}
 	if len(entries) == 0 {
-		return nil, fmt.Errorf("no history for %s", repoPath)
+		return nil, fmt.Errorf("%w for %s", ErrNoHistory, repoPath)
 	}
 
 	if index < 0 {
 		index = len(entries) + index
 	}
 	if index < 0 || index >= len(entries) {
-		return nil, fmt.Errorf("index %d out of range (have %d entries)", index, len(entries))
+		return nil, fmt.Errorf("%w: %d (have %d entries)", ErrIndexOutOfRange, index, len(entries))
 	}
 
 	sha := entries[index].HeadSHA
@@ -129,7 +132,7 @@ func GetReport(sc *cache.ScanCache, historyDir, repoPath string, index int) (*ar
 		return nil, fmt.Errorf("read cached report for %s: %w", sha, err)
 	}
 	if !hit {
-		return nil, fmt.Errorf("cached report for %s at %s not found (cache may have been pruned)", repoPath, sha)
+		return nil, fmt.Errorf("%w: %s at %s", ErrReportNotFound, repoPath, sha)
 	}
 	return report, nil
 }

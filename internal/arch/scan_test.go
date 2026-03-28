@@ -17,10 +17,10 @@ func TestScanAndBuild_IntentLevels(t *testing.T) {
 	}
 
 	tests := []struct {
-		intent        ScanIntent
-		wantCycles    bool
-		wantHotSpots  bool
-		wantNesting   bool
+		intent         ScanIntent
+		wantCycles     bool
+		wantHotSpots   bool
+		wantNesting    bool
 		wantGitHistory bool
 	}{
 		{IntentArchitecture, false, false, false, false},
@@ -70,8 +70,8 @@ func TestScanAndBuild_IntentLevels(t *testing.T) {
 }
 
 func hasAnyNesting(r *ContextReport) bool {
-	for _, s := range r.Architecture.Services {
-		if s.MaxNesting > 0 {
+	for i := range r.Architecture.Services {
+		if r.Architecture.Services[i].MaxNesting > 0 {
 			return true
 		}
 	}
@@ -87,8 +87,8 @@ func TestScanIntentLevel(t *testing.T) {
 		{IntentCoupling, 1},
 		{IntentHealth, 2},
 		{IntentFull, 3},
-		{"", 2},          // default
-		{"unknown", 2},   // unknown defaults to health
+		{"", 2},        // default
+		{"unknown", 2}, // unknown defaults to health
 	}
 	for _, tt := range tests {
 		got := tt.intent.ScanLevel()

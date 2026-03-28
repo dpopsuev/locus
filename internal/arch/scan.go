@@ -93,22 +93,22 @@ type HotSpot struct {
 
 // ContextReport is the full output of a ScanAndBuild invocation.
 type ContextReport struct {
-	Project        *model.Project        `json:"project"`
-	Architecture   ArchModel             `json:"architecture"`
-	ModulePath     string                `json:"module_path"`
-	Scanner        string                `json:"scanner"`
-	SuggestedDepth int                   `json:"suggested_depth,omitempty"`
-	HotSpots          []HotSpot             `json:"hot_spots,omitempty"`
-	Cycles            []Cycle               `json:"cycles,omitempty"`
-	ImportDepth       DepthMap              `json:"import_depth,omitempty"`
-	LayerViolations   []LayerViolation      `json:"layer_violations,omitempty"`
-	Coverage          []CoverageResult      `json:"coverage,omitempty"`
-	APISurfaces       []APISurface          `json:"api_surfaces,omitempty"`
-	BoundaryCrossings []BoundaryCrossing    `json:"boundary_crossings,omitempty"`
-	RecentCommits     []PackageCommit       `json:"recent_commits,omitempty"`
-	Authors           map[string][]Author   `json:"authors,omitempty"`
-	FileHotSpots      []HotFile             `json:"file_hot_spots,omitempty"`
-	Anchors           []SemanticAnchor      `json:"anchors,omitempty"`
+	Project           *model.Project      `json:"project"`
+	Architecture      ArchModel           `json:"architecture"`
+	ModulePath        string              `json:"module_path"`
+	Scanner           string              `json:"scanner"`
+	SuggestedDepth    int                 `json:"suggested_depth,omitempty"`
+	HotSpots          []HotSpot           `json:"hot_spots,omitempty"`
+	Cycles            []Cycle             `json:"cycles,omitempty"`
+	ImportDepth       DepthMap            `json:"import_depth,omitempty"`
+	LayerViolations   []LayerViolation    `json:"layer_violations,omitempty"`
+	Coverage          []CoverageResult    `json:"coverage,omitempty"`
+	APISurfaces       []APISurface        `json:"api_surfaces,omitempty"`
+	BoundaryCrossings []BoundaryCrossing  `json:"boundary_crossings,omitempty"`
+	RecentCommits     []PackageCommit     `json:"recent_commits,omitempty"`
+	Authors           map[string][]Author `json:"authors,omitempty"`
+	FileHotSpots      []HotFile           `json:"file_hot_spots,omitempty"`
+	Anchors           []SemanticAnchor    `json:"anchors,omitempty"`
 }
 
 // ScanAndBuild scans any repository and produces a ContextReport.
@@ -265,7 +265,7 @@ func incrementalScan(root string, opts ScanOpts, _ *survey.AutoScanner) (*Contex
 
 // changedPackages returns package directories with changes since the given git ref.
 func changedPackages(root, since string) []string {
-	cmd := exec.Command("git", "diff", "--name-only", since+"..HEAD")
+	cmd := exec.Command("git", "diff", "--name-only", since+"..HEAD") //nolint:gosec // since is a git ref from CLI input
 	cmd.Dir = root
 	out, err := cmd.Output()
 	if err != nil {
@@ -332,7 +332,8 @@ func computeHotSpots(m ArchModel) []HotSpot {
 		fanIn[e.To]++
 	}
 	var spots []HotSpot
-	for _, s := range m.Services {
+	for i := range m.Services {
+		s := &m.Services[i]
 		fi := fanIn[s.Name]
 		if fi >= MinFanInHotSpot && (s.Churn >= MinChurnHotSpot || s.MaxNesting >= MinNestingHotSpot) {
 			spots = append(spots, HotSpot{
@@ -497,7 +498,7 @@ func applyLOC(root string, proj *model.Project, modPath string, m *ArchModel) {
 
 // applyNestingDepth runs tree-sitter nesting analysis and populates
 // MaxNesting and AvgNesting on each ArchService.
-func applyNestingDepth(root, modPath string, m *ArchModel) {
+func applyNestingDepth(root, _ string, m *ArchModel) {
 	ts := &analysis.TreeSitterAnalyzer{}
 	results, err := ts.NestingDepth(root)
 	if err != nil || len(results) == 0 {

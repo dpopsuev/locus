@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"runtime/debug"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -22,6 +24,22 @@ import (
 	locusmcp "github.com/dpopsuev/locus/internal/mcp"
 	"github.com/dpopsuev/locus/internal/protocol"
 	"github.com/dpopsuev/locus/internal/triage"
+)
+
+// Sentinel errors for CLI validation.
+var (
+	errComponentRequired = errors.New("--component is required")
+	errNoIntent          = errors.New("provide an intent string, --list, or --category")
+	errUnknownFormat     = errors.New("unknown format")
+)
+
+const (
+	formatMermaid = "mermaid"
+
+	// Slog attribute keys.
+	logKeyVersion   = "version"
+	logKeyTransport = "transport"
+	logKeyAddr      = "addr"
 )
 
 var Version = "dev"
@@ -141,16 +159,16 @@ Tools: scan_project, get_dependencies, get_impact, get_coupling_table,
 				func(r *http.Request) *sdkmcp.Server { return srv },
 				nil,
 			)
-			slog.Info("locus server starting", "version", Version, "transport", "http", "addr", serveFlags.addr)
-			server := &http.Server{Addr: serveFlags.addr, Handler: handler}
+			slog.LogAttrs(ctx, slog.LevelInfo, "locus server starting", slog.String(logKeyVersion, Version), slog.String(logKeyTransport, "http"), slog.String(logKeyAddr, serveFlags.addr))
+			server := &http.Server{Addr: serveFlags.addr, Handler: handler, ReadHeaderTimeout: 10 * time.Second}
 			go func() {
 				<-ctx.Done()
-				slog.Info("shutting down")
+				slog.LogAttrs(ctx, slog.LevelInfo, "shutting down")
 				server.Close()
 			}()
 			return server.ListenAndServe()
 		}
-		slog.Info("locus server starting", "version", Version, "transport", "stdio")
+		slog.LogAttrs(ctx, slog.LevelInfo, "locus server starting", slog.String(logKeyVersion, Version), slog.String(logKeyTransport, "stdio"))
 		return srv.Run(ctx, &sdkmcp.StdioTransport{})
 	},
 }
@@ -276,7 +294,7 @@ scan the repository, and report drift (missing/extra components and edges).
 		}
 		format := validateFlags.format
 		if format == "" {
-			if ext := validateFlags.desired; len(ext) > 0 {
+			if ext := validateFlags.desired; ext != "" {
 				if idx := len(ext) - 1; idx > 0 {
 					for i := len(ext) - 1; i >= 0; i-- {
 						if ext[i] == '.' {
@@ -286,10 +304,8 @@ scan the repository, and report drift (missing/extra components and edges).
 					}
 				}
 			}
-			if format == "json" || format == "mermaid" || format == "md" {
-				// keep as-is
-			} else {
-				format = "mermaid"
+			if format != "json" && format != formatMermaid && format != "md" {
+				format = formatMermaid
 			}
 		}
 
@@ -415,7 +431,7 @@ direct dependents, transitive dependents, blast radius %, and risk level.
 			path = args[0]
 		}
 		if impactFlags.component == "" {
-			return fmt.Errorf("--component is required")
+			return errComponentRequired
 		}
 		proto := newProto()
 		r, err := proto.GetImpact(cmd.Context(), path, impactFlags.component)
@@ -545,7 +561,7 @@ Examples:
 		}
 
 		if len(args) == 0 {
-			return fmt.Errorf("provide an intent string, --list, or --category")
+			return errNoIntent
 		}
 
 		intent := args[0]
@@ -617,10 +633,10 @@ func renderReport(report *arch.ContextReport, format string) error {
 		fmt.Println(string(data))
 	case "md":
 		fmt.Print(arch.RenderArchMarkdown(report.Architecture))
-	case "mermaid":
+	case formatMermaid:
 		fmt.Print(arch.RenderMermaid(report.Architecture))
 	default:
-		return fmt.Errorf("unknown format %q (use json, md, or mermaid)", format)
+		return fmt.Errorf("%w %q (use json, md, or mermaid)", errUnknownFormat, format)
 	}
 	return nil
 }

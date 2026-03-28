@@ -1,6 +1,7 @@
 package survey
 
 import (
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/token"
@@ -12,6 +13,11 @@ import (
 	"golang.org/x/tools/go/packages"
 
 	"github.com/dpopsuev/locus/internal/model"
+)
+
+var (
+	errNoPackages = errors.New("go/packages returned no packages")
+	errGoPackages = errors.New("go/packages error")
 )
 
 // PackagesScanner extracts structural metadata from Go source using
@@ -45,7 +51,7 @@ func (s *PackagesScanner) Scan(root string) (*model.Project, error) {
 	}
 
 	if len(pkgs) == 0 {
-		return s.fallback(root, fmt.Errorf("go/packages returned no packages"))
+		return s.fallback(root, errNoPackages)
 	}
 
 	// Check for load errors that indicate a broken environment.
@@ -53,7 +59,7 @@ func (s *PackagesScanner) Scan(root string) (*model.Project, error) {
 		for _, e := range pkg.Errors {
 			if strings.Contains(e.Msg, "cannot find module") ||
 				strings.Contains(e.Msg, "not a module") {
-				return s.fallback(root, fmt.Errorf("go/packages: %s", e.Msg))
+				return s.fallback(root, fmt.Errorf("%w: %s", errGoPackages, e.Msg))
 			}
 		}
 	}
@@ -127,22 +133,7 @@ func extractTypedSymbols(pkg *packages.Package, ns *model.Namespace) {
 	seen := make(map[string]bool)
 
 	// Collect symbol-level dependencies from type info.
-	symbolDeps := make(map[string]map[string]bool)
-	if pkg.TypesInfo != nil {
-		for ident, obj := range pkg.TypesInfo.Uses {
-			if obj.Pkg() == nil || obj.Pkg() == pkg.Types {
-				continue
-			}
-			enclosing := enclosingFuncName(pkg, ident.Pos())
-			if enclosing == "" {
-				continue
-			}
-			if symbolDeps[enclosing] == nil {
-				symbolDeps[enclosing] = make(map[string]bool)
-			}
-			symbolDeps[enclosing][obj.Pkg().Path()] = true
-		}
-	}
+	symbolDeps := collectSymbolDeps(pkg)
 
 	for _, f := range pkg.Syntax {
 		for _, decl := range f.Decls {
@@ -169,46 +160,32 @@ func extractTypedSymbols(pkg *packages.Package, ns *model.Namespace) {
 				ns.AddSymbol(sym)
 
 			case *ast.GenDecl:
-				for _, spec := range d.Specs {
-					switch s := spec.(type) {
-					case *ast.TypeSpec:
-						name := s.Name.Name
-						if seen[name] {
-							continue
-						}
-						seen[name] = true
-						kind := model.SymbolStruct
-						if _, ok := s.Type.(*ast.InterfaceType); ok {
-							kind = model.SymbolInterface
-						}
-						ns.AddSymbol(&model.Symbol{
-							Name:     name,
-							Kind:     kind,
-							Exported: ast.IsExported(name),
-						})
-
-					case *ast.ValueSpec:
-						for _, ident := range s.Names {
-							name := ident.Name
-							if seen[name] {
-								continue
-							}
-							seen[name] = true
-							kind := model.SymbolVariable
-							if d.Tok == token.CONST {
-								kind = model.SymbolConstant
-							}
-							ns.AddSymbol(&model.Symbol{
-								Name:     name,
-								Kind:     kind,
-								Exported: ast.IsExported(name),
-							})
-						}
-					}
-				}
+				extractGenDeclSymbols(d, ns, seen)
 			}
 		}
 	}
+}
+
+// collectSymbolDeps returns per-function external package dependencies.
+func collectSymbolDeps(pkg *packages.Package) map[string]map[string]bool {
+	symbolDeps := make(map[string]map[string]bool)
+	if pkg.TypesInfo == nil {
+		return symbolDeps
+	}
+	for ident, obj := range pkg.TypesInfo.Uses {
+		if obj.Pkg() == nil || obj.Pkg() == pkg.Types {
+			continue
+		}
+		enclosing := enclosingFuncName(pkg, ident.Pos())
+		if enclosing == "" {
+			continue
+		}
+		if symbolDeps[enclosing] == nil {
+			symbolDeps[enclosing] = make(map[string]bool)
+		}
+		symbolDeps[enclosing][obj.Pkg().Path()] = true
+	}
+	return symbolDeps
 }
 
 type couplingInfo struct {

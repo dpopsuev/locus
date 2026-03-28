@@ -7,6 +7,11 @@ import (
 	"github.com/dpopsuev/locus/internal/arch"
 )
 
+const (
+	labelSick  = "sick"
+	labelFatal = "fatal"
+)
+
 // RenderFacts returns plain-text machine-readable assertions from the same
 // data used by Mermaid renderers. Agents reason about these without parsing
 // diagram syntax.
@@ -25,12 +30,13 @@ func RenderFacts(report *arch.ContextReport) string {
 	for _, e := range report.Architecture.Edges {
 		fanIn[e.To]++
 	}
-	for _, s := range report.Architecture.Services {
+	for i := range report.Architecture.Services {
+		s := &report.Architecture.Services[i]
 		h := ClassifyHealth(fanIn[s.Name], s.Churn)
 		if h != Healthy {
-			label := "sick"
+			label := labelSick
 			if h == Fatal {
-				label = "fatal"
+				label = labelFatal
 			}
 			fmt.Fprintf(&b, "%s is %s (fan-in: %d, churn: %d)\n", s.Name, label, fanIn[s.Name], s.Churn)
 		}

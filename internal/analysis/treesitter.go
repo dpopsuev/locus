@@ -2,6 +2,7 @@ package analysis
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -14,6 +15,9 @@ import (
 	"github.com/dpopsuev/locus/internal/survey"
 )
 
+// ErrUnsupportedLanguage is returned when tree-sitter does not support the detected language.
+var ErrUnsupportedLanguage = errors.New("tree-sitter: unsupported language")
+
 // TreeSitterAnalyzer extracts type-level metadata by parsing source files
 // with tree-sitter grammars. Accuracy is ~70% (syntactic, not semantic).
 type TreeSitterAnalyzer struct{}
@@ -24,7 +28,7 @@ func (a *TreeSitterAnalyzer) Classes(root string) ([]ClassInfo, error) {
 	case model.LangGo:
 		return a.goClasses(root)
 	default:
-		return nil, fmt.Errorf("tree-sitter classes: unsupported language %v", lang)
+		return nil, fmt.Errorf("%w: %v (classes)", ErrUnsupportedLanguage, lang)
 	}
 }
 
@@ -34,7 +38,7 @@ func (a *TreeSitterAnalyzer) Implements(root string) ([]ImplEdge, error) {
 	case model.LangGo:
 		return a.goImplements(root)
 	default:
-		return nil, fmt.Errorf("tree-sitter implements: unsupported language %v", lang)
+		return nil, fmt.Errorf("%w: %v (implements)", ErrUnsupportedLanguage, lang)
 	}
 }
 
@@ -44,7 +48,7 @@ func (a *TreeSitterAnalyzer) FieldRefs(root string) ([]FieldRef, error) {
 	case model.LangGo:
 		return a.goFieldRefs(root)
 	default:
-		return nil, fmt.Errorf("tree-sitter field refs: unsupported language %v", lang)
+		return nil, fmt.Errorf("%w: %v (field refs)", ErrUnsupportedLanguage, lang)
 	}
 }
 
@@ -54,7 +58,7 @@ func (a *TreeSitterAnalyzer) CallChain(root, entry string, depth int) ([]Call, e
 	case model.LangGo:
 		return a.goCallChain(root, entry, depth)
 	default:
-		return nil, fmt.Errorf("tree-sitter call chain: unsupported language %v", lang)
+		return nil, fmt.Errorf("%w: %v (call chain)", ErrUnsupportedLanguage, lang)
 	}
 }
 
@@ -64,7 +68,7 @@ func (a *TreeSitterAnalyzer) EntryPoints(root string) ([]EntryPoint, error) {
 	case model.LangGo:
 		return a.goEntryPoints(root)
 	default:
-		return nil, fmt.Errorf("tree-sitter entry points: unsupported language %v", lang)
+		return nil, fmt.Errorf("%w: %v (entry points)", ErrUnsupportedLanguage, lang)
 	}
 }
 
@@ -74,7 +78,7 @@ func (a *TreeSitterAnalyzer) NestingDepth(root string) ([]NestingResult, error) 
 	case model.LangGo:
 		return a.goNestingDepth(root)
 	default:
-		return nil, fmt.Errorf("tree-sitter nesting: unsupported language %v", lang)
+		return nil, fmt.Errorf("%w: %v (nesting)", ErrUnsupportedLanguage, lang)
 	}
 }
 
@@ -106,11 +110,11 @@ func (a *TreeSitterAnalyzer) goClasses(root string) ([]ClassInfo, error) {
 					Exported: isExported(name),
 				}
 				switch typeNode.Type() {
-				case "struct_type":
-					ci.Kind = "struct"
+				case nodeStructType:
+					ci.Kind = kindStruct
 					ci.Fields = extractGoStructFields(typeNode, src)
-				case "interface_type":
-					ci.Kind = "interface"
+				case nodeInterfaceType:
+					ci.Kind = kindInterface
 					ci.Methods = extractGoInterfaceMethods(typeNode, src)
 				default:
 					continue
@@ -122,7 +126,7 @@ func (a *TreeSitterAnalyzer) goClasses(root string) ([]ClassInfo, error) {
 		// Collect methods declared in this file
 		for i := 0; i < int(root.ChildCount()); i++ {
 			child := root.Child(i)
-			if child.Type() != "method_declaration" {
+			if child.Type() != nodeMethodDecl {
 				continue
 			}
 			nameNode := child.ChildByFieldName("name")
@@ -154,6 +158,7 @@ func (a *TreeSitterAnalyzer) goClasses(root string) ([]ClassInfo, error) {
 	return classes, err
 }
 
+//nolint:gocyclo // struct embedding detection requires iterating nested AST nodes
 func (a *TreeSitterAnalyzer) goImplements(root string) ([]ImplEdge, error) {
 	var edges []ImplEdge
 	err := a.walkGoFiles(root, func(tree *sitter.Tree, src []byte, pkg, file string) {
@@ -173,7 +178,7 @@ func (a *TreeSitterAnalyzer) goImplements(root string) ([]ImplEdge, error) {
 				if nameNode == nil || typeNode == nil {
 					continue
 				}
-				if typeNode.Type() != "struct_type" {
+				if typeNode.Type() != nodeStructType {
 					continue
 				}
 				name := nameNode.Content(src)
@@ -204,7 +209,7 @@ func (a *TreeSitterAnalyzer) goImplements(root string) ([]ImplEdge, error) {
 						if fc.Type() == "field_identifier" {
 							nameCount++
 						}
-						if fc.Type() == "type_identifier" || fc.Type() == "qualified_type" || fc.Type() == "pointer_type" {
+						if fc.Type() == nodeTypeID || fc.Type() == nodeQualifiedType || fc.Type() == nodePointerType {
 							typeContent = fc.Content(src)
 						}
 					}
@@ -234,7 +239,7 @@ func (a *TreeSitterAnalyzer) goFieldRefs(root string) ([]FieldRef, error) {
 	}
 	var refs []FieldRef
 	for _, c := range classes {
-		if c.Kind != "struct" {
+		if c.Kind != kindStruct {
 			continue
 		}
 		for _, f := range c.Fields {
@@ -274,9 +279,9 @@ func (a *TreeSitterAnalyzer) goCallChain(root, entry string, maxDepth int) ([]Ca
 			child := rootNode.Child(i)
 			var nameNode *sitter.Node
 			switch child.Type() {
-			case "function_declaration":
+			case nodeFuncDecl:
 				nameNode = child.ChildByFieldName("name")
-			case "method_declaration":
+			case nodeMethodDecl:
 				nameNode = child.ChildByFieldName("name")
 			default:
 				continue
@@ -328,7 +333,7 @@ func (a *TreeSitterAnalyzer) goEntryPoints(root string) ([]EntryPoint, error) {
 		rootNode := tree.RootNode()
 		for i := 0; i < int(rootNode.ChildCount()); i++ {
 			child := rootNode.Child(i)
-			if child.Type() != "function_declaration" {
+			if child.Type() != nodeFuncDecl {
 				continue
 			}
 			nameNode := child.ChildByFieldName("name")
@@ -373,9 +378,9 @@ func (a *TreeSitterAnalyzer) goNestingDepth(root string) ([]NestingResult, error
 			child := rootNode.Child(i)
 			var nameNode *sitter.Node
 			switch child.Type() {
-			case "function_declaration":
+			case nodeFuncDecl:
 				nameNode = child.ChildByFieldName("name")
-			case "method_declaration":
+			case nodeMethodDecl:
 				nameNode = child.ChildByFieldName("name")
 			default:
 				continue
@@ -414,12 +419,12 @@ func (a *TreeSitterAnalyzer) walkGoFiles(root string, fn func(*sitter.Tree, []by
 		}
 		if d.IsDir() {
 			base := d.Name()
-			if base == "vendor" || base == "testdata" || strings.HasPrefix(base, ".") {
+			if base == dirVendor || base == dirTestdata || strings.HasPrefix(base, ".") {
 				return filepath.SkipDir
 			}
 			return nil
 		}
-		if filepath.Ext(path) != ".go" {
+		if filepath.Ext(path) != extGo {
 			return nil
 		}
 		if strings.HasSuffix(path, "_test.go") {
@@ -436,7 +441,7 @@ func (a *TreeSitterAnalyzer) walkGoFiles(root string, fn func(*sitter.Tree, []by
 		rel, _ := filepath.Rel(absRoot, path)
 		pkg := filepath.Dir(rel)
 		if pkg == "." {
-			pkg = "(root)"
+			pkg = pkgRoot
 		}
 		pkg = filepath.ToSlash(pkg)
 		fn(tree, src, pkg, rel)
@@ -470,10 +475,10 @@ func extractGoStructFields(structNode *sitter.Node, src []byte) []FieldInfo {
 			switch fc.Type() {
 			case "field_identifier":
 				names = append(names, fc.Content(src))
-			case "type_identifier", "qualified_type", "pointer_type",
+			case nodeTypeID, nodeQualifiedType, nodePointerType,
 				"slice_type", "array_type", "map_type",
 				"channel_type", "function_type", "interface_type",
-				"struct_type":
+				nodeStructType:
 				typStr = fc.Content(src)
 			case "raw_string_literal", "interpreted_string_literal":
 				tag = fc.Content(src)
@@ -538,9 +543,9 @@ func extractGoReceiverType(recvNode *sitter.Node, src []byte) string {
 			for j := 0; j < int(child.ChildCount()); j++ {
 				fc := child.Child(j)
 				switch fc.Type() {
-				case "type_identifier":
+				case nodeTypeID:
 					return fc.Content(src)
-				case "pointer_type":
+				case nodePointerType:
 					inner := fc.Content(src)
 					return strings.TrimPrefix(inner, "*")
 				}
@@ -570,10 +575,10 @@ func extractCalls(node *sitter.Node, src []byte, emit func(callee string, line i
 }
 
 var nestingTypes = map[string]bool{
-	"if_statement":       true,
-	"for_statement":      true,
-	"switch_statement":   true,
-	"select_statement":   true,
+	"if_statement":          true,
+	"for_statement":         true,
+	"switch_statement":      true,
+	"select_statement":      true,
 	"type_switch_statement": true,
 }
 
@@ -607,7 +612,7 @@ func isHTTPHandlerSignature(params *sitter.Node, src []byte) bool {
 }
 
 func isExported(name string) bool {
-	if len(name) == 0 {
+	if name == "" {
 		return false
 	}
 	return name[0] >= 'A' && name[0] <= 'Z'

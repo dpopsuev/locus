@@ -50,6 +50,8 @@ func (tc ThemeColor) Resolve(mode string) string {
 		return tc.Dark
 	case "light":
 		return tc.Light
+	case themeNatural:
+		return tc.Natural
 	default:
 		return tc.Natural
 	}
@@ -65,8 +67,8 @@ type Shape struct {
 
 // Theme is the three-layer design token registry.
 type Theme struct {
-	Colors   map[string]ThemeColor       `yaml:"colors"`
-	Shapes   map[string]Shape            `yaml:"shapes"`
+	Colors   map[string]ThemeColor        `yaml:"colors"`
+	Shapes   map[string]Shape             `yaml:"shapes"`
 	Diagrams map[string]map[string]string `yaml:"diagrams"`
 }
 
@@ -118,10 +120,10 @@ func DefaultTheme() *Theme {
 				"edge":         "edge",
 			},
 			"c4": {
-				"component":         "component",
-				"healthy_component": "healthy",
-				"sick_component":    "sick",
-				"fatal_component":   "fatal",
+				"component":          "component",
+				"healthy_component":  "healthy",
+				"sick_component":     "sick",
+				"fatal_component":    "fatal",
 				"container_boundary": "boundary",
 			},
 			"layers": {
@@ -159,7 +161,7 @@ func DefaultTheme() *Theme {
 // Resolve compiles the theme for a specific mode, producing hex-ready values.
 func (t *Theme) Resolve(mode string) *ResolvedTheme {
 	if mode == "" {
-		mode = "natural"
+		mode = themeNatural
 	}
 
 	resolved := make(map[string]string, len(t.Colors))
@@ -193,7 +195,7 @@ func (t *Theme) Resolve(mode string) *ResolvedTheme {
 
 // ClassDefs emits Mermaid classDef lines for all shapes that have fill/stroke.
 func (rt *ResolvedTheme) ClassDefs() string {
-	var lines []string
+	lines := make([]string, 0, len(rt.ShapeHex))
 	names := make([]string, 0, len(rt.ShapeHex))
 	for n := range rt.ShapeHex {
 		names = append(names, n)

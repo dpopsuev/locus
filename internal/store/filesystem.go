@@ -139,7 +139,7 @@ func (f *FilesystemStore) saveProjects(projects []ProjectInfo) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(p, data, 0o644)
+	return os.WriteFile(p, data, 0o600)
 }
 
 func (f *FilesystemStore) PutComponentMeta(_ context.Context, project, sha string, meta []ComponentMeta) error {
@@ -151,7 +151,7 @@ func (f *FilesystemStore) PutComponentMeta(_ context.Context, project, sha strin
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(p, data, 0o644)
+	return os.WriteFile(p, data, 0o600)
 }
 
 func (f *FilesystemStore) ListComponentMeta(_ context.Context, project, sha string) ([]ComponentMeta, error) {
@@ -232,7 +232,7 @@ func (f *FilesystemStore) PutDesiredState(_ context.Context, project string, sta
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(p, data, 0o644)
+	return os.WriteFile(p, data, 0o600)
 }
 
 func (f *FilesystemStore) desiredStatePath(project string) string {

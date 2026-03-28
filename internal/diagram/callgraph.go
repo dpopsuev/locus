@@ -11,7 +11,7 @@ import (
 // clustered in package subgraphs. Cross-package calls use dotted edges.
 func renderCallGraph(in Input, opts Options) (string, error) {
 	if in.DeepAnalyzer == nil {
-		return "", fmt.Errorf("callgraph diagram requires a DeepAnalyzer")
+		return "", ErrDeepAnalyzerRequired
 	}
 
 	cgOpts := analysis.CallGraphOpts{
@@ -59,10 +59,10 @@ func renderCallGraph(in Input, opts Options) (string, error) {
 		safePkg := strings.ReplaceAll(pkg, "/", "_")
 		safePkg = strings.ReplaceAll(safePkg, "(", "")
 		safePkg = strings.ReplaceAll(safePkg, ")", "")
-		b.WriteString(fmt.Sprintf("    subgraph %s [\"%s\"]\n", safePkg, sanitizeMermaid(pkg)))
+		fmt.Fprintf(&b, "    subgraph %s [%q]\n", safePkg, sanitizeMermaid(pkg))
 		for _, n := range nodes {
 			id := getID(n.Package, n.Name)
-			b.WriteString(fmt.Sprintf("        %s[\"%s\"]\n", id, sanitizeMermaid(n.Name)))
+			fmt.Fprintf(&b, "        %s[%q]\n", id, sanitizeMermaid(n.Name))
 		}
 		b.WriteString("    end\n")
 	}
@@ -75,14 +75,14 @@ func renderCallGraph(in Input, opts Options) (string, error) {
 			continue
 		}
 		if e.CrossPkg {
-			b.WriteString(fmt.Sprintf("    %s -.-> %s\n", fromID, toID))
+			fmt.Fprintf(&b, "    %s -.-> %s\n", fromID, toID)
 		} else {
-			b.WriteString(fmt.Sprintf("    %s --> %s\n", fromID, toID))
+			fmt.Fprintf(&b, "    %s --> %s\n", fromID, toID)
 		}
 	}
 
 	if cg.Layer != "" {
-		b.WriteString(fmt.Sprintf("    %%%% layer: %s\n", cg.Layer))
+		fmt.Fprintf(&b, "    %%%% layer: %s\n", cg.Layer)
 	}
 
 	return b.String(), nil

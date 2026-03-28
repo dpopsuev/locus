@@ -68,7 +68,7 @@ func ComputeDiffIntelligence(changedFiles []string, modulePath string, graph *an
 	}
 
 	// For each symbol whose package matches a changed package, emit a SemanticChange.
-	var changes []SemanticChange
+	changes := make([]SemanticChange, 0, len(graph.Nodes))
 	for _, node := range graph.Nodes {
 		if !pkgSet[node.Package] {
 			continue
@@ -103,12 +103,12 @@ func ComputeDiffIntelligence(changedFiles []string, modulePath string, graph *an
 func callerSeverity(count int) string {
 	switch {
 	case count > 10:
-		return "critical"
+		return RiskCritical
 	case count > 3:
-		return "high"
+		return RiskHigh
 	case count > 0:
-		return "medium"
+		return RiskMedium
 	default:
-		return "low"
+		return RiskLow
 	}
 }

@@ -31,7 +31,7 @@ func RunGoCoverage(root, modPath string) ([]CoverageResult, error) {
 	tmp.Close()
 	defer os.Remove(coverFile)
 
-	cmd := exec.Command("go", "test", "-coverprofile="+coverFile, "-count=1", "./...")
+	cmd := exec.Command("go", "test", "-coverprofile="+coverFile, "-count=1", "./...") //nolint:gosec // coverFile is a controlled temp path
 	cmd.Dir = root
 	cmd.Stdout = nil
 	cmd.Stderr = nil
@@ -92,7 +92,7 @@ func parseCoverProfile(path, modPath string) ([]CoverageResult, error) {
 		}
 	}
 
-	var results []CoverageResult
+	results := make([]CoverageResult, 0, len(pkgs))
 	for pkg, a := range pkgs {
 		component := pkg
 		if modPath != "" && strings.HasPrefix(pkg, modPath+"/") {

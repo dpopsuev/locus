@@ -62,11 +62,11 @@ func ReadSkills(root string) ([]Skill, error) {
 		return nil, nil
 	}
 
-	var skills []Skill
 	entries, err := os.ReadDir(skillsDir)
 	if err != nil {
 		return nil, err
 	}
+	skills := make([]Skill, 0, len(entries))
 	for _, e := range entries {
 		if !e.IsDir() {
 			continue
@@ -87,8 +87,8 @@ func ReadSkills(root string) ([]Skill, error) {
 	return skills, nil
 }
 
-func parseFrontmatter(content string) (map[string]string, string) {
-	fm := map[string]string{}
+func parseFrontmatter(content string) (fm map[string]string, body string) {
+	fm = map[string]string{}
 	if !strings.HasPrefix(content, "---") {
 		return fm, content
 	}
@@ -99,7 +99,7 @@ func parseFrontmatter(content string) (map[string]string, string) {
 		return fm, content
 	}
 	fmBlock := rest[:idx]
-	body := rest[idx+4:]
+	body = rest[idx+4:]
 
 	var currentKey string
 	var listBuf []string

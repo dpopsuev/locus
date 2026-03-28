@@ -3,6 +3,7 @@ package survey
 import (
 	"bufio"
 	"cmp"
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -15,6 +16,8 @@ import (
 
 	"github.com/dpopsuev/locus/internal/model"
 )
+
+var errNoModuleDirective = errors.New("no module directive found")
 
 // GoScanner extracts structural metadata from Go source trees.
 type GoScanner struct{}
@@ -125,42 +128,48 @@ func extractSymbols(f *ast.File, pkg *model.Namespace) {
 			})
 
 		case *ast.GenDecl:
-			for _, spec := range d.Specs {
-				switch s := spec.(type) {
-				case *ast.TypeSpec:
-					name := s.Name.Name
-					if seen[name] {
-						continue
-					}
-					seen[name] = true
-					kind := model.SymbolStruct
-					if _, ok := s.Type.(*ast.InterfaceType); ok {
-						kind = model.SymbolInterface
-					}
-					pkg.AddSymbol(&model.Symbol{
-						Name:     name,
-						Kind:     kind,
-						Exported: ast.IsExported(name),
-					})
+			extractGenDeclSymbols(d, pkg, seen)
+		}
+	}
+}
 
-				case *ast.ValueSpec:
-					for _, ident := range s.Names {
-						name := ident.Name
-						if seen[name] {
-							continue
-						}
-						seen[name] = true
-						kind := model.SymbolVariable
-						if d.Tok == token.CONST {
-							kind = model.SymbolConstant
-						}
-						pkg.AddSymbol(&model.Symbol{
-							Name:     name,
-							Kind:     kind,
-							Exported: ast.IsExported(name),
-						})
-					}
+// extractGenDeclSymbols extracts type and value symbols from a GenDecl and
+// adds them to the namespace. Shared between GoScanner and PackagesScanner.
+func extractGenDeclSymbols(d *ast.GenDecl, ns *model.Namespace, seen map[string]bool) {
+	for _, spec := range d.Specs {
+		switch s := spec.(type) {
+		case *ast.TypeSpec:
+			name := s.Name.Name
+			if seen[name] {
+				continue
+			}
+			seen[name] = true
+			kind := model.SymbolStruct
+			if _, ok := s.Type.(*ast.InterfaceType); ok {
+				kind = model.SymbolInterface
+			}
+			ns.AddSymbol(&model.Symbol{
+				Name:     name,
+				Kind:     kind,
+				Exported: ast.IsExported(name),
+			})
+
+		case *ast.ValueSpec:
+			for _, ident := range s.Names {
+				name := ident.Name
+				if seen[name] {
+					continue
 				}
+				seen[name] = true
+				kind := model.SymbolVariable
+				if d.Tok == token.CONST {
+					kind = model.SymbolConstant
+				}
+				ns.AddSymbol(&model.Symbol{
+					Name:     name,
+					Kind:     kind,
+					Exported: ast.IsExported(name),
+				})
 			}
 		}
 	}
@@ -191,5 +200,5 @@ func readModulePath(goModPath string) (string, error) {
 	if err := scanner.Err(); err != nil {
 		return "", err
 	}
-	return "", fmt.Errorf("%s: no module directive found", goModPath)
+	return "", fmt.Errorf("%s: %w", goModPath, errNoModuleDirective)
 }

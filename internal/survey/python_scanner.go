@@ -65,7 +65,7 @@ type pyprojectTOML struct {
 	} `toml:"project"`
 	Tool struct {
 		Poetry struct {
-			Name         string            `toml:"name"`
+			Name         string                 `toml:"name"`
 			Dependencies map[string]interface{} `toml:"dependencies"`
 		} `toml:"poetry"`
 	} `toml:"tool"`
@@ -191,7 +191,6 @@ func discoverPythonPackages(root string) []string {
 	return packages
 }
 
-
 func hasPythonFiles(dir string) bool {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -267,7 +266,7 @@ var (
 	rePyFromImport = regexp.MustCompile(`^from\s+(\S+)\s+import\s+`)
 )
 
-func (s *PythonScanner) extractPythonImports(dir string, ns *model.Namespace, importPath string, internalPkgs map[string]bool, externalDeps map[string]bool, proj *model.Project) {
+func (s *PythonScanner) extractPythonImports(dir string, _ *model.Namespace, importPath string, internalPkgs, _ map[string]bool, proj *model.Project) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return

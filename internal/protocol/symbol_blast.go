@@ -86,16 +86,7 @@ func ComputeSymbolBlastRadius(edges []analysis.CallEdge, symbol string, totalPkg
 	}
 
 	// Risk level thresholds match ComputeImpact.
-	switch {
-	case report.BlastRadius >= 50:
-		report.RiskLevel = "critical"
-	case report.BlastRadius >= 25:
-		report.RiskLevel = "high"
-	case report.BlastRadius >= 10:
-		report.RiskLevel = "medium"
-	default:
-		report.RiskLevel = "low"
-	}
+	report.RiskLevel = classifyRisk(report.BlastRadius)
 
 	report.Summary = fmt.Sprintf("%d direct, %d transitive caller(s) of %s across %d package(s) — %s risk",
 		len(report.DirectCallers), len(report.TransCallers), symbol, len(report.AffectedPkgs), report.RiskLevel)

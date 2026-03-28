@@ -25,7 +25,7 @@ type InterfaceMetricsReport struct {
 	Summary      string            `json:"summary"`
 }
 
-// ComputeInterfaceMetrics analyses interfaces and their implementors.
+// ComputeInterfaceMetrics analyzes interfaces and their implementors.
 func ComputeInterfaceMetrics(classes []analysis.ClassInfo, impls []analysis.ImplEdge) *InterfaceMetricsReport {
 	// Step 1: Filter interfaces from ClassInfo.
 	ifaceMap := make(map[string]*InterfaceMetric)

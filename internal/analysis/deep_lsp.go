@@ -40,27 +40,7 @@ func (a *LSPDeepAnalyzer) CallGraph(_ string, opts CallGraphOpts) (*CallGraph, e
 		depth = DefaultCallGraphDepth
 	}
 
-	var roots []string
-	if opts.Entry != "" {
-		roots = []string{opts.Entry}
-	} else {
-		files := findSrcFiles(a.root)
-		seen := make(map[string]bool)
-		for _, f := range files {
-			syms, err := conn.documentSymbols(f, a.root)
-			if err != nil {
-				continue
-			}
-			for _, sym := range syms {
-				if (sym.Kind == int(model.SymbolFunction) || sym.Kind == int(model.SymbolMethod)) && isExported(sym.Name) {
-					if !seen[sym.Name] {
-						seen[sym.Name] = true
-						roots = append(roots, sym.Name)
-					}
-				}
-			}
-		}
-	}
+	roots := lspCallGraphRoots(opts, conn, a.root)
 
 	nodeSet := make(map[string]FuncNode)
 	var edges []CallEdge
@@ -123,7 +103,7 @@ func (a *LSPDeepAnalyzer) CallGraph(_ string, opts CallGraphOpts) (*CallGraph, e
 
 // DataFlowTrace uses callHierarchy to trace data flow from an entry,
 // detecting data stores via workspace/symbol heuristics.
-func (a *LSPDeepAnalyzer) DataFlowTrace(_ string, entry string, maxDepth int) (*DataFlow, error) {
+func (a *LSPDeepAnalyzer) DataFlowTrace(_, entry string, maxDepth int) (*DataFlow, error) {
 	conn, cleanup, err := a.startConn()
 	if err != nil {
 		return nil, fmt.Errorf("lsp deep dataflow: %w", err)
@@ -260,4 +240,33 @@ func (a *LSPDeepAnalyzer) DetectStateMachines(_ string) ([]StateMachine, error) 
 	}
 
 	return machines, nil
+}
+
+// lspCallGraphRoots determines the root functions for call graph analysis.
+func lspCallGraphRoots(opts CallGraphOpts, conn *lspConn, root string) []string {
+	if opts.Entry != "" {
+		return []string{opts.Entry}
+	}
+	files := findSrcFiles(root)
+	seen := make(map[string]bool)
+	var roots []string
+	for _, f := range files {
+		syms, err := conn.documentSymbols(f, root)
+		if err != nil {
+			continue
+		}
+		for _, sym := range syms {
+			if !isExported(sym.Name) {
+				continue
+			}
+			if sym.Kind != int(model.SymbolFunction) && sym.Kind != int(model.SymbolMethod) {
+				continue
+			}
+			if !seen[sym.Name] {
+				seen[sym.Name] = true
+				roots = append(roots, sym.Name)
+			}
+		}
+	}
+	return roots
 }

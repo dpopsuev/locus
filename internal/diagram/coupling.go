@@ -18,7 +18,7 @@ func renderCoupling(in Input, opts Options) string {
 		value int
 	}
 
-	var flows []flow
+	flows := make([]flow, 0, len(report.Architecture.Edges))
 	for _, e := range report.Architecture.Edges {
 		if opts.Scope != "" && e.From != opts.Scope && e.To != opts.Scope {
 			continue
@@ -70,14 +70,6 @@ func fanIn(edges []arch.ArchEdge) map[string]int {
 	m := make(map[string]int)
 	for _, e := range edges {
 		m[e.To]++
-	}
-	return m
-}
-
-func fanOut(edges []arch.ArchEdge) map[string]int {
-	m := make(map[string]int)
-	for _, e := range edges {
-		m[e.From]++
 	}
 	return m
 }

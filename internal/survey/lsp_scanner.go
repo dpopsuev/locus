@@ -2,6 +2,7 @@ package survey
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -10,6 +11,8 @@ import (
 
 	"github.com/dpopsuev/locus/internal/model"
 )
+
+var errEmptyServerCmd = errors.New("lsp scanner: empty ServerCmd")
 
 // LSPScanner extracts structural metadata by communicating with an
 // external LSP server. It is language-agnostic: the same code works
@@ -26,7 +29,7 @@ func (s *LSPScanner) Scan(root string) (*model.Project, error) {
 
 	parts := strings.Fields(s.ServerCmd)
 	if len(parts) == 0 {
-		return nil, fmt.Errorf("lsp scanner: empty ServerCmd")
+		return nil, errEmptyServerCmd
 	}
 
 	bin, err := exec.LookPath(parts[0])
@@ -144,7 +147,7 @@ func (s *LSPScanner) runProtocol(client *lspClient, root string) (*model.Project
 		dir := filepath.Dir(rel)
 		nsKey := filepath.ToSlash(dir)
 		if nsKey == "." {
-			nsKey = "(root)"
+			nsKey = nsRoot
 		}
 
 		for _, sym := range symbols {
@@ -161,7 +164,7 @@ func (s *LSPScanner) runProtocol(client *lspClient, root string) (*model.Project
 
 func addSymbolToNS(nsMap map[string]*model.Namespace, nsKey, name string, kind int) {
 	if nsKey == "" {
-		nsKey = "(root)"
+		nsKey = nsRoot
 	}
 	ns := nsMap[nsKey]
 	if ns == nil {
@@ -219,7 +222,7 @@ func pathToURI(path string) string {
 }
 
 func isExportedSymbol(name string) bool {
-	if len(name) == 0 {
+	if name == "" {
 		return false
 	}
 	c := name[0]

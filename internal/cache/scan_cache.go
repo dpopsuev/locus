@@ -4,6 +4,7 @@ import (
 	"compress/gzip"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -12,6 +13,9 @@ import (
 
 	"github.com/dpopsuev/locus/internal/arch"
 )
+
+// ErrEmptySHA is returned when Put is called with an empty SHA.
+var ErrEmptySHA = errors.New("empty SHA")
 
 // ScanCache stores and retrieves architecture scan results on the filesystem,
 // keyed by (repo path, git SHA). Multiple SHAs can coexist per repo,
@@ -62,19 +66,19 @@ func (c *ScanCache) Get(repoPath, sha string) (*arch.ContextReport, bool, error)
 
 // GetCurrent resolves HEAD for the repo and returns the cached report if present.
 // Returns the resolved SHA alongside the report.
-func (c *ScanCache) GetCurrent(repoPath string) (*arch.ContextReport, string, bool, error) {
-	sha := ResolveHEAD(repoPath)
+func (c *ScanCache) GetCurrent(repoPath string) (report *arch.ContextReport, sha string, hit bool, err error) {
+	sha = ResolveHEAD(repoPath)
 	if sha == "" {
 		return nil, "", false, nil
 	}
-	report, hit, err := c.Get(repoPath, sha)
+	report, hit, err = c.Get(repoPath, sha)
 	return report, sha, hit, err
 }
 
 // Put stores a report keyed by (repo, sha). Writes are atomic (temp + rename).
 func (c *ScanCache) Put(repoPath, sha string, report *arch.ContextReport) error {
 	if sha == "" {
-		return fmt.Errorf("empty SHA")
+		return ErrEmptySHA
 	}
 	p := c.entryPath(repoPath, sha)
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
@@ -144,4 +148,3 @@ func ResolveBranch(repoPath, ref string) (string, error) {
 	}
 	return strings.TrimSpace(string(out)), nil
 }
-

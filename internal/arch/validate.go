@@ -2,10 +2,16 @@ package arch
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
 	"sort"
 	"strings"
+)
+
+var (
+	errUnsupportedFormat = errors.New("unsupported format")
+	errNoMermaidContent  = errors.New("no components or edges found in mermaid input")
 )
 
 // ArchDrift reports the delta between a desired and actual architecture.
@@ -20,12 +26,12 @@ type ArchDrift struct {
 // ValidateArchitecture computes the drift between a desired and actual ArchModel.
 func ValidateArchitecture(desired, actual ArchModel) *ArchDrift {
 	desiredComps := make(map[string]bool, len(desired.Services))
-	for _, s := range desired.Services {
-		desiredComps[s.Name] = true
+	for i := range desired.Services {
+		desiredComps[desired.Services[i].Name] = true
 	}
 	actualComps := make(map[string]bool, len(actual.Services))
-	for _, s := range actual.Services {
-		actualComps[s.Name] = true
+	for i := range actual.Services {
+		actualComps[actual.Services[i].Name] = true
 	}
 
 	var missing, extra []string
@@ -79,14 +85,14 @@ func ValidateArchitecture(desired, actual ArchModel) *ArchDrift {
 }
 
 // ParseDesiredState parses a desired architecture from mermaid or JSON input.
-func ParseDesiredState(input string, format string) (*ArchModel, error) {
+func ParseDesiredState(input, format string) (*ArchModel, error) {
 	switch strings.ToLower(format) {
 	case "json":
 		return parseDesiredJSON(input)
 	case "mermaid", "":
 		return parseDesiredMermaid(input)
 	default:
-		return nil, fmt.Errorf("unsupported format: %s (use json or mermaid)", format)
+		return nil, fmt.Errorf("%w: %s (use json or mermaid)", errUnsupportedFormat, format)
 	}
 }
 
@@ -144,14 +150,14 @@ func parseDesiredMermaid(input string) (*ArchModel, error) {
 	}
 
 	if len(m.Services) == 0 && len(m.Edges) == 0 {
-		return nil, fmt.Errorf("no components or edges found in mermaid input")
+		return nil, errNoMermaidContent
 	}
 	return m, nil
 }
 
 func hasService(services []ArchService, name string) bool {
-	for _, s := range services {
-		if s.Name == name {
+	for i := range services {
+		if services[i].Name == name {
 			return true
 		}
 	}

@@ -51,9 +51,9 @@ func ComputeImportDirection(edges []arch.ArchEdge, depths arch.DepthMap) *Import
 		// meaning higher-level imports lower-level.
 		if fromDepth < toDepth {
 			diff := toDepth - fromDepth
-			severity := "warning"
+			severity := SeverityWarning
 			if diff >= 2 {
-				severity = "error"
+				severity = SeverityError
 			}
 			violations = append(violations, ImportDirectionViolation{
 				From:      e.From,
@@ -67,7 +67,7 @@ func ComputeImportDirection(edges []arch.ArchEdge, depths arch.DepthMap) *Import
 
 	sort.Slice(violations, func(i, j int) bool {
 		if violations[i].Severity != violations[j].Severity {
-			return violations[i].Severity == "error"
+			return violations[i].Severity == SeverityError
 		}
 		return violations[i].From < violations[j].From
 	})
@@ -75,7 +75,7 @@ func ComputeImportDirection(edges []arch.ArchEdge, depths arch.DepthMap) *Import
 	errors := 0
 	warnings := 0
 	for _, v := range violations {
-		if v.Severity == "error" {
+		if v.Severity == SeverityError {
 			errors++
 		} else {
 			warnings++

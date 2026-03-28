@@ -8,7 +8,7 @@ import (
 	"github.com/dpopsuev/locus/internal/arch"
 )
 
-func renderLayers(in Input, opts Options) string {
+func renderLayers(in Input, _ Options) string {
 	report := in.Report
 	rt := in.ResolvedTheme
 
@@ -23,12 +23,13 @@ func renderLayers(in Input, opts Options) string {
 	}
 
 	layerMap := make(map[int][]string)
-	for _, svc := range report.Architecture.Services {
+	for i := range report.Architecture.Services {
+		svc := &report.Architecture.Services[i]
 		d := depths[svc.Name]
 		layerMap[d] = append(layerMap[d], svc.Name)
 	}
 
-	var layers []layer
+	layers := make([]layer, 0, len(layerMap))
 	for d, comps := range layerMap {
 		sort.Strings(comps)
 		layers = append(layers, layer{depth: d, components: comps})

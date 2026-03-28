@@ -13,8 +13,8 @@ func renderDependency(in Input, opts Options) string {
 
 	fi := fanIn(m.Edges)
 	churnMap := make(map[string]int)
-	for _, s := range m.Services {
-		churnMap[s.Name] = s.Churn
+	for i := range m.Services {
+		churnMap[m.Services[i].Name] = m.Services[i].Churn
 	}
 
 	var b strings.Builder
@@ -24,14 +24,15 @@ func renderDependency(in Input, opts Options) string {
 
 	enrichSet := parseEnrich(opts.Enrich)
 
-	for _, s := range m.Services {
+	for i := range m.Services {
+		s := &m.Services[i]
 		if opts.Scope != "" && s.Name != opts.Scope && !isEdgeNeighbor(m.Edges, opts.Scope, s.Name) {
 			continue
 		}
 		id := mermaidID(s.Name)
 		label := s.Name
 		if len(enrichSet) > 0 {
-			label += enrichLabel(s, fi[s.Name], enrichSet)
+			label += enrichLabel(*s, fi[s.Name], enrichSet)
 		} else if s.Churn > 0 {
 			label += fmt.Sprintf(" [churn:%d]", s.Churn)
 		}

@@ -16,12 +16,16 @@ type mockAnalyzer struct {
 	nesting []analysis.NestingResult
 }
 
-func (m *mockAnalyzer) Classes(root string) ([]analysis.ClassInfo, error)             { return m.classes, nil }
-func (m *mockAnalyzer) Implements(root string) ([]analysis.ImplEdge, error)            { return m.impls, nil }
-func (m *mockAnalyzer) FieldRefs(root string) ([]analysis.FieldRef, error)             { return m.refs, nil }
-func (m *mockAnalyzer) CallChain(root, entry string, depth int) ([]analysis.Call, error) { return m.calls, nil }
-func (m *mockAnalyzer) EntryPoints(root string) ([]analysis.EntryPoint, error)         { return m.entries, nil }
-func (m *mockAnalyzer) NestingDepth(root string) ([]analysis.NestingResult, error)     { return m.nesting, nil }
+func (m *mockAnalyzer) Classes(root string) ([]analysis.ClassInfo, error)   { return m.classes, nil }
+func (m *mockAnalyzer) Implements(root string) ([]analysis.ImplEdge, error) { return m.impls, nil }
+func (m *mockAnalyzer) FieldRefs(root string) ([]analysis.FieldRef, error)  { return m.refs, nil }
+func (m *mockAnalyzer) CallChain(root, entry string, depth int) ([]analysis.Call, error) {
+	return m.calls, nil
+}
+func (m *mockAnalyzer) EntryPoints(root string) ([]analysis.EntryPoint, error) { return m.entries, nil }
+func (m *mockAnalyzer) NestingDepth(root string) ([]analysis.NestingResult, error) {
+	return m.nesting, nil
+}
 
 func TestRenderClasses(t *testing.T) {
 	mock := &mockAnalyzer{

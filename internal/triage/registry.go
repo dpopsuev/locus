@@ -152,11 +152,10 @@ func (r *Registry) List() []ToolMeta {
 
 // ByCategory returns tools that belong to the given category.
 func (r *Registry) ByCategory(cat string) []ToolMeta {
-	cat = strings.ToLower(cat)
 	var out []ToolMeta
 	for _, t := range r.tools {
 		for _, c := range t.Categories {
-			if strings.ToLower(c) == cat {
+			if strings.EqualFold(c, cat) {
 				out = append(out, t)
 				break
 			}

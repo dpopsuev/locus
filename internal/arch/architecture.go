@@ -25,13 +25,13 @@ type ArchService struct {
 
 // ArchEdge represents a dependency edge in an architecture artifact.
 type ArchEdge struct {
-	Name     string
-	From     string
-	To       string
-	Protocol string
-	Trigger  string
-	Weight   int
-	CallSites int
+	Name       string
+	From       string
+	To         string
+	Protocol   string
+	Trigger    string
+	Weight     int
+	CallSites  int
 	LOCSurface int
 }
 
@@ -54,6 +54,11 @@ type ArchModel struct {
 	Edges      []ArchEdge
 	Forbidden  []ArchForbidden
 }
+
+const (
+	protoImport   = "import"
+	protoExternal = "external"
+)
 
 // ComponentGroup maps a logical component name to a set of package import paths.
 // When groups are provided, packages within the same group are collapsed into
@@ -113,34 +118,7 @@ func projectToArchPackageLevel(proj *model.Project, modPath string, m ArchModel,
 		m.Services = append(m.Services, svc)
 	}
 
-	if proj.DependencyGraph != nil {
-		for _, e := range proj.DependencyGraph.Edges {
-			if e.External && !opts.IncludeExternal {
-				continue
-			}
-			if !e.External && (!nsSet[e.From] || !nsSet[e.To]) {
-				continue
-			}
-			fromRel := shortImportPath(modPath, e.From)
-			toRel := shortImportPath(modPath, e.To)
-			if e.External {
-				toRel = e.To
-			}
-			if opts.ExcludeTests && (strings.HasPrefix(fromRel, "testkit/") || strings.HasPrefix(toRel, "testkit/")) {
-				continue
-			}
-			proto := "import"
-			if e.External {
-				proto = "external"
-			}
-			m.Edges = append(m.Edges, ArchEdge{
-				From:     fromRel,
-				To:       toRel,
-				Protocol: proto,
-				Weight:   e.Weight,
-			})
-		}
-	}
+	m = buildPackageEdges(proj, modPath, m, opts, nsSet)
 
 	sort.Slice(m.Services, func(i, j int) bool { return m.Services[i].Name < m.Services[j].Name })
 	sort.Slice(m.Edges, func(i, j int) bool {
@@ -149,6 +127,39 @@ func projectToArchPackageLevel(proj *model.Project, modPath string, m ArchModel,
 		}
 		return m.Edges[i].To < m.Edges[j].To
 	})
+	return m
+}
+
+func buildPackageEdges(proj *model.Project, modPath string, m ArchModel, opts SyncOptions, nsSet map[string]bool) ArchModel {
+	if proj.DependencyGraph == nil {
+		return m
+	}
+	for _, e := range proj.DependencyGraph.Edges {
+		if e.External && !opts.IncludeExternal {
+			continue
+		}
+		if !e.External && (!nsSet[e.From] || !nsSet[e.To]) {
+			continue
+		}
+		fromRel := shortImportPath(modPath, e.From)
+		toRel := shortImportPath(modPath, e.To)
+		if e.External {
+			toRel = e.To
+		}
+		if opts.ExcludeTests && (strings.HasPrefix(fromRel, "testkit/") || strings.HasPrefix(toRel, "testkit/")) {
+			continue
+		}
+		proto := protoImport
+		if e.External {
+			proto = protoExternal
+		}
+		m.Edges = append(m.Edges, ArchEdge{
+			From:     fromRel,
+			To:       toRel,
+			Protocol: proto,
+			Weight:   e.Weight,
+		})
+	}
 	return m
 }
 
@@ -182,58 +193,7 @@ func projectToArchGroupLevel(proj *model.Project, modPath string, m ArchModel, o
 		m.Services[i].Churn = groupChurn[m.Services[i].Name]
 	}
 
-	edgeWeights := make(map[[2]string]int)
-	edgeProto := make(map[[2]string]string)
-	if proj.DependencyGraph != nil {
-		for _, e := range proj.DependencyGraph.Edges {
-			if e.External && !opts.IncludeExternal {
-				continue
-			}
-			fromRel := shortImportPath(modPath, e.From)
-			toRel := shortImportPath(modPath, e.To)
-			if e.External {
-				toRel = e.To
-			}
-			if opts.ExcludeTests && (strings.HasPrefix(fromRel, "testkit/") || strings.HasPrefix(toRel, "testkit/")) {
-				continue
-			}
-			fromGroup := pkgToGroup[fromRel]
-			if fromGroup == "" {
-				fromGroup = fromRel
-			}
-			var toGroup string
-			if e.External {
-				toGroup = toRel
-				if !groupSet[toGroup] {
-					groupSet[toGroup] = true
-					m.Services = append(m.Services, ArchService{Name: toGroup})
-				}
-			} else {
-				toGroup = pkgToGroup[toRel]
-				if toGroup == "" {
-					toGroup = toRel
-				}
-			}
-			if fromGroup == toGroup {
-				continue
-			}
-			key := [2]string{fromGroup, toGroup}
-			edgeWeights[key] += e.Weight
-			if e.External {
-				edgeProto[key] = "external"
-			} else if edgeProto[key] == "" {
-				edgeProto[key] = "import"
-			}
-		}
-	}
-
-	for key, w := range edgeWeights {
-		proto := edgeProto[key]
-		if proto == "" {
-			proto = "import"
-		}
-		m.Edges = append(m.Edges, ArchEdge{From: key[0], To: key[1], Protocol: proto, Weight: w})
-	}
+	m = buildGroupEdges(proj, modPath, m, opts, pkgToGroup, groupSet)
 
 	sort.Slice(m.Services, func(i, j int) bool { return m.Services[i].Name < m.Services[j].Name })
 	sort.Slice(m.Edges, func(i, j int) bool {
@@ -242,6 +202,64 @@ func projectToArchGroupLevel(proj *model.Project, modPath string, m ArchModel, o
 		}
 		return m.Edges[i].To < m.Edges[j].To
 	})
+	return m
+}
+
+func buildGroupEdges(proj *model.Project, modPath string, m ArchModel, opts SyncOptions, pkgToGroup map[string]string, groupSet map[string]bool) ArchModel {
+	if proj.DependencyGraph == nil {
+		return m
+	}
+
+	edgeWeights := make(map[[2]string]int)
+	edgeProto := make(map[[2]string]string)
+	for _, e := range proj.DependencyGraph.Edges {
+		if e.External && !opts.IncludeExternal {
+			continue
+		}
+		fromRel := shortImportPath(modPath, e.From)
+		toRel := shortImportPath(modPath, e.To)
+		if e.External {
+			toRel = e.To
+		}
+		if opts.ExcludeTests && (strings.HasPrefix(fromRel, "testkit/") || strings.HasPrefix(toRel, "testkit/")) {
+			continue
+		}
+		fromGroup := pkgToGroup[fromRel]
+		if fromGroup == "" {
+			fromGroup = fromRel
+		}
+		var toGroup string
+		if e.External {
+			toGroup = toRel
+			if !groupSet[toGroup] {
+				groupSet[toGroup] = true
+				m.Services = append(m.Services, ArchService{Name: toGroup})
+			}
+		} else {
+			toGroup = pkgToGroup[toRel]
+			if toGroup == "" {
+				toGroup = toRel
+			}
+		}
+		if fromGroup == toGroup {
+			continue
+		}
+		key := [2]string{fromGroup, toGroup}
+		edgeWeights[key] += e.Weight
+		if e.External {
+			edgeProto[key] = protoExternal
+		} else if edgeProto[key] == "" {
+			edgeProto[key] = protoImport
+		}
+	}
+
+	for key, w := range edgeWeights {
+		proto := edgeProto[key]
+		if proto == "" {
+			proto = protoImport
+		}
+		m.Edges = append(m.Edges, ArchEdge{From: key[0], To: key[1], Protocol: proto, Weight: w})
+	}
 	return m
 }
 
@@ -274,7 +292,8 @@ func RenderArchMos(m ArchModel) string {
 	fmt.Fprintf(&b, "  status = %q\n", "active")
 	b.WriteString("\n")
 
-	for _, s := range m.Services {
+	for i := range m.Services {
+		s := &m.Services[i]
 		fmt.Fprintf(&b, "  component %q {\n", s.Name)
 		if s.Package != "" {
 			fmt.Fprintf(&b, "    package = %q\n", s.Package)
@@ -322,8 +341,8 @@ func RenderArchMarkdown(m ArchModel) string {
 	b.WriteString("> Auto-generated by `mos architecture sync`. Do not edit manually.\n\n")
 
 	hasChurn := false
-	for _, s := range m.Services {
-		if s.Churn > 0 {
+	for i := range m.Services {
+		if m.Services[i].Churn > 0 {
 			hasChurn = true
 			break
 		}
@@ -337,7 +356,8 @@ func RenderArchMarkdown(m ArchModel) string {
 		b.WriteString("| Component | Package |\n")
 		b.WriteString("|-----------|----------|\n")
 	}
-	for _, s := range m.Services {
+	for i := range m.Services {
+		s := &m.Services[i]
 		pkg := s.Package
 		if pkg == "" {
 			pkg = "-"
@@ -366,7 +386,8 @@ func RenderArchMarkdown(m ArchModel) string {
 			Churn int
 		}
 		var spots []hotSpot
-		for _, s := range m.Services {
+		for i := range m.Services {
+			s := &m.Services[i]
 			fi := fanIn[s.Name]
 			if fi >= 3 && s.Churn >= 5 {
 				spots = append(spots, hotSpot{s.Name, fi, s.Churn})
@@ -406,7 +427,8 @@ func RenderMermaid(m ArchModel) string {
 	var b strings.Builder
 	b.WriteString("graph TD\n")
 
-	for _, s := range m.Services {
+	for i := range m.Services {
+		s := &m.Services[i]
 		id := mermaidID(s.Name)
 		label := s.Name
 		if s.Package != "" {
@@ -428,35 +450,36 @@ func RenderMermaid(m ArchModel) string {
 		if e.Weight > 0 {
 			edgeLabel = fmt.Sprintf("%s(%d)", edgeLabel, e.Weight)
 		}
-		isExternal := e.Protocol == "external"
-		if edgeLabel != "" {
-			if isExternal {
-				fmt.Fprintf(&b, "    %s -.->|\"%s\"| %s\n", fromID, edgeLabel, toID)
-			} else {
-				fmt.Fprintf(&b, "    %s -->|\"%s\"| %s\n", fromID, edgeLabel, toID)
-			}
-		} else {
-			if isExternal {
-				fmt.Fprintf(&b, "    %s -.-> %s\n", fromID, toID)
-			} else {
-				fmt.Fprintf(&b, "    %s --> %s\n", fromID, toID)
-			}
-		}
+		renderMermaidEdge(&b, fromID, toID, edgeLabel, e.Protocol == protoExternal)
 	}
 
 	for _, f := range m.Forbidden {
-		if f.From != "" && f.To != "" {
-			fromID := mermaidID(f.From)
-			toID := mermaidID(f.To)
-			label := "FORBIDDEN"
-			if f.Reason != "" {
-				label = f.Reason
-			}
-			fmt.Fprintf(&b, "    %s -.-x|\"%s\"| %s\n", fromID, label, toID)
+		if f.From == "" || f.To == "" {
+			continue
 		}
+		fromID := mermaidID(f.From)
+		toID := mermaidID(f.To)
+		label := "FORBIDDEN"
+		if f.Reason != "" {
+			label = f.Reason
+		}
+		fmt.Fprintf(&b, "    %s -.-x|\"%s\"| %s\n", fromID, label, toID)
 	}
 
 	return b.String()
+}
+
+func renderMermaidEdge(b *strings.Builder, fromID, toID, label string, external bool) {
+	switch {
+	case label != "" && external:
+		fmt.Fprintf(b, "    %s -.->|\"%s\"| %s\n", fromID, label, toID)
+	case label != "":
+		fmt.Fprintf(b, "    %s -->|\"%s\"| %s\n", fromID, label, toID)
+	case external:
+		fmt.Fprintf(b, "    %s -.-> %s\n", fromID, toID)
+	default:
+		fmt.Fprintf(b, "    %s --> %s\n", fromID, toID)
+	}
 }
 
 func mermaidID(name string) string {

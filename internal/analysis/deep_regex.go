@@ -19,7 +19,6 @@ var (
 	reGoIota     = regexp.MustCompile(`\biota\b`)
 	reGoConstVal = regexp.MustCompile(`(?m)^\s+(\w+)`)
 	reGoType     = regexp.MustCompile(`(?m)^type\s+(\w+)\s+`)
-	reGoSwitch   = regexp.MustCompile(`(?m)switch\s+\w+`)
 	reGoImport   = regexp.MustCompile(`"([^"]+)"`)
 )
 
@@ -29,14 +28,7 @@ func (a *RegexDeepAnalyzer) CallGraph(root string, opts CallGraphOpts) (*CallGra
 		depth = DefaultCallGraphDepth
 	}
 
-	type funcDef struct {
-		name string
-		pkg  string
-		body string
-		line int
-	}
-
-	funcIndex := make(map[string]funcDef)
+	funcIndex := make(map[string]regexFuncDef)
 	nodeSet := make(map[string]FuncNode)
 
 	walkSourceFiles(root, func(content, pkg, relPath string) {
@@ -57,7 +49,7 @@ func (a *RegexDeepAnalyzer) CallGraph(root string, opts CallGraphOpts) (*CallGra
 			}
 			line := strings.Count(content[:start], "\n") + 1
 			key := pkg + "." + name
-			funcIndex[key] = funcDef{name: name, pkg: pkg, body: content[start:endIdx], line: line}
+			funcIndex[key] = regexFuncDef{name: name, pkg: pkg, body: content[start:endIdx], line: line}
 			nodeSet[key] = FuncNode{Name: name, Package: pkg, Line: line}
 		}
 	})
@@ -77,24 +69,16 @@ func (a *RegexDeepAnalyzer) CallGraph(root string, opts CallGraphOpts) (*CallGra
 		}
 		for _, m := range reGoCall.FindAllStringSubmatch(fd.body, -1) {
 			callee := m[1]
-			if callee == fd.name || callee == "func" || callee == "if" || callee == "for" || callee == "switch" || callee == "return" {
+			if isRegexKeyword(callee, fd.name) {
 				continue
 			}
-			calleeKey := fd.pkg + "." + callee
-			calleePkg := fd.pkg
-			if _, found := funcIndex[calleeKey]; !found {
-				for k, f := range funcIndex {
-					if f.name == callee {
-						calleeKey = k
-						calleePkg = f.pkg
-						break
-					}
-				}
-			}
+			calleeKey, calleePkg := resolveRegexCallee(callee, fd.pkg, funcIndex)
 			edges = append(edges, CallEdge{
-				Caller: fd.name, Callee: callee,
-				CallerPkg: fd.pkg, CalleePkg: calleePkg,
-				CrossPkg: fd.pkg != calleePkg,
+				Caller:    fd.name,
+				Callee:    callee,
+				CallerPkg: fd.pkg,
+				CalleePkg: calleePkg,
+				CrossPkg:  fd.pkg != calleePkg,
 			})
 			if _, exists := funcIndex[calleeKey]; exists {
 				walk(calleeKey, d+1)
@@ -124,6 +108,7 @@ func (a *RegexDeepAnalyzer) CallGraph(root string, opts CallGraphOpts) (*CallGra
 	return &CallGraph{Nodes: nodes, Edges: edges, Layer: LayerRegex}, nil
 }
 
+//nolint:gocyclo // data flow tracing with import heuristics requires multiple branches
 func (a *RegexDeepAnalyzer) DataFlowTrace(root, entry string, maxDepth int) (*DataFlow, error) {
 	if maxDepth <= 0 {
 		maxDepth = DefaultDataFlowDepth
@@ -230,29 +215,7 @@ func (a *RegexDeepAnalyzer) DetectStateMachines(root string) ([]StateMachine, er
 			}
 
 			// Extract type name and values
-			var typeName string
-			var values []string
-			for _, line := range strings.Split(constBlock, "\n") {
-				trimmed := strings.TrimSpace(line)
-				if strings.Contains(trimmed, "iota") {
-					parts := strings.Fields(trimmed)
-					if len(parts) >= 2 {
-						values = append(values, parts[0])
-						// Look for type before = or iota
-						for _, p := range parts {
-							if reGoType.MatchString("type "+p+" ") || (p != parts[0] && p != "=" && p != "iota") {
-								typeName = p
-								break
-							}
-						}
-					}
-				} else if matches := reGoConstVal.FindStringSubmatch(trimmed); len(matches) > 1 {
-					name := matches[1]
-					if name != "" && name != ")" && name != "//" && !strings.HasPrefix(name, "//") {
-						values = append(values, name)
-					}
-				}
-			}
+			typeName, values := parseConstBlock(constBlock)
 
 			if typeName == "" && len(values) > 0 {
 				typeName = values[0] + "Type"
@@ -282,18 +245,18 @@ func (a *RegexDeepAnalyzer) DetectStateMachines(root string) ([]StateMachine, er
 
 func walkSourceFiles(root string, fn func(content, pkg, relPath string)) {
 	absRoot, _ := filepath.Abs(root)
-	filepath.WalkDir(absRoot, func(path string, d os.DirEntry, err error) error {
+	_ = filepath.WalkDir(absRoot, func(path string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			if d != nil && d.IsDir() {
 				base := d.Name()
-				if base == "vendor" || base == "testdata" || strings.HasPrefix(base, ".") {
+				if base == dirVendor || base == dirTestdata || strings.HasPrefix(base, ".") {
 					return filepath.SkipDir
 				}
 			}
 			return nil
 		}
 		ext := filepath.Ext(path)
-		if ext != ".go" && ext != ".rs" && ext != ".py" && ext != ".ts" && ext != ".js" && ext != ".java" {
+		if ext != extGo && ext != extRust && ext != extPy && ext != extTS && ext != extJS && ext != extJava {
 			return nil
 		}
 		if strings.HasSuffix(path, "_test.go") {
@@ -306,10 +269,77 @@ func walkSourceFiles(root string, fn func(content, pkg, relPath string)) {
 		rel, _ := filepath.Rel(absRoot, path)
 		pkg := filepath.Dir(rel)
 		if pkg == "." {
-			pkg = "(root)"
+			pkg = pkgRoot
 		}
 		pkg = filepath.ToSlash(pkg)
 		fn(string(data), pkg, rel)
 		return nil
 	})
+}
+
+// parseConstBlock extracts a type name and const values from a Go const block.
+func parseConstBlock(constBlock string) (typeName string, values []string) {
+	for _, line := range strings.Split(constBlock, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.Contains(trimmed, "iota") {
+			typeName, values = parseIotaLine(trimmed, typeName, values)
+		} else if matches := reGoConstVal.FindStringSubmatch(trimmed); len(matches) > 1 {
+			name := matches[1]
+			if name != "" && name != ")" && name != "//" && !strings.HasPrefix(name, "//") {
+				values = append(values, name)
+			}
+		}
+	}
+	return typeName, values
+}
+
+// parseIotaLine parses a single line containing iota and returns the updated type name and values.
+func parseIotaLine(trimmed, typeName string, values []string) (resultType string, resultValues []string) {
+	parts := strings.Fields(trimmed)
+	if len(parts) < 2 {
+		return typeName, values
+	}
+	values = append(values, parts[0])
+	if typeName != "" {
+		return typeName, values
+	}
+	// Look for type before = or iota
+	for _, p := range parts {
+		if reGoType.MatchString("type "+p+" ") || (p != parts[0] && p != "=" && p != "iota") {
+			return p, values
+		}
+	}
+	return typeName, values
+}
+
+// regexKeywords are Go keywords that look like function calls in regex matching.
+var regexKeywords = map[string]bool{
+	"func": true, "if": true, "for": true,
+	"switch": true, "return": true,
+}
+
+// isRegexKeyword checks if a callee name is a Go keyword or the caller itself.
+func isRegexKeyword(callee, callerName string) bool {
+	return callee == callerName || regexKeywords[callee]
+}
+
+type regexFuncDef struct {
+	name string
+	pkg  string
+	body string
+	line int
+}
+
+// resolveRegexCallee finds the package-qualified key for a callee in the regex index.
+func resolveRegexCallee(callee, callerPkg string, funcIndex map[string]regexFuncDef) (key, pkg string) {
+	calleeKey := callerPkg + "." + callee
+	calleePkg := callerPkg
+	if _, found := funcIndex[calleeKey]; !found {
+		for k, f := range funcIndex {
+			if f.name == callee {
+				return k, f.pkg
+			}
+		}
+	}
+	return calleeKey, calleePkg
 }

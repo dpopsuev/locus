@@ -12,7 +12,7 @@ import (
 //   - Subgraph trust boundaries
 func renderDataflow(in Input, opts Options) (string, error) {
 	if in.DeepAnalyzer == nil {
-		return "", fmt.Errorf("dataflow diagram requires a DeepAnalyzer")
+		return "", ErrDeepAnalyzerRequired
 	}
 
 	entry := opts.Entry
@@ -53,13 +53,13 @@ func renderDataflow(in Input, opts Options) (string, error) {
 		safe := sanitizeMermaid(n.Name)
 		switch n.Kind {
 		case "external":
-			b.WriteString(fmt.Sprintf("    %s([%s])\n", id, safe))
+			fmt.Fprintf(&b, "    %s([%s])\n", id, safe)
 		case "data_store":
-			b.WriteString(fmt.Sprintf("    %s[(%s)]\n", id, safe))
+			fmt.Fprintf(&b, "    %s[(%s)]\n", id, safe)
 		case "entry":
-			b.WriteString(fmt.Sprintf("    %s[[\"%s\"]]\n", id, safe))
+			fmt.Fprintf(&b, "    %s[[%q]]\n", id, safe)
 		default:
-			b.WriteString(fmt.Sprintf("    %s[\"%s\"]\n", id, safe))
+			fmt.Fprintf(&b, "    %s[%q]\n", id, safe)
 		}
 	}
 
@@ -67,10 +67,10 @@ func renderDataflow(in Input, opts Options) (string, error) {
 	for _, boundary := range flow.Boundaries {
 		safeName := sanitizeMermaid(boundary.Name)
 		subID := strings.ReplaceAll(strings.ToLower(safeName), " ", "_")
-		b.WriteString(fmt.Sprintf("    subgraph %s [\"%s\"]\n", subID, safeName))
+		fmt.Fprintf(&b, "    subgraph %s [%q]\n", subID, safeName)
 		for _, nodeName := range boundary.Nodes {
 			if id, ok := nodeIDs[nodeName]; ok {
-				b.WriteString(fmt.Sprintf("        %s\n", id))
+				fmt.Fprintf(&b, "        %s\n", id)
 			}
 		}
 		b.WriteString("    end\n")
@@ -81,14 +81,14 @@ func renderDataflow(in Input, opts Options) (string, error) {
 		fromID := getID(e.From)
 		toID := getID(e.To)
 		if e.Label != "" {
-			b.WriteString(fmt.Sprintf("    %s -->|\"%s\"| %s\n", fromID, sanitizeMermaid(e.Label), toID))
+			fmt.Fprintf(&b, "    %s -->|%q| %s\n", fromID, sanitizeMermaid(e.Label), toID)
 		} else {
-			b.WriteString(fmt.Sprintf("    %s --> %s\n", fromID, toID))
+			fmt.Fprintf(&b, "    %s --> %s\n", fromID, toID)
 		}
 	}
 
 	if flow.Layer != "" {
-		b.WriteString(fmt.Sprintf("    %%%% layer: %s\n", flow.Layer))
+		fmt.Fprintf(&b, "    %%%% layer: %s\n", flow.Layer)
 	}
 
 	return b.String(), nil

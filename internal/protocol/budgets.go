@@ -7,6 +7,14 @@ import (
 	"github.com/dpopsuev/locus/internal/store"
 )
 
+// Severity level constants used across protocol analysis.
+const (
+	SeverityInfo     = "info"
+	SeverityWarning  = "warning"
+	SeverityError    = "error"
+	SeverityCritical = "critical"
+)
+
 // BudgetViolation records a single metric exceeding its budget.
 type BudgetViolation struct {
 	Component string  `json:"component"`
@@ -16,7 +24,7 @@ type BudgetViolation struct {
 	Severity  string  `json:"severity"`
 }
 
-// BudgetReport summarises budget compliance across all constrained components.
+// BudgetReport summarizes budget compliance across all constrained components.
 type BudgetReport struct {
 	Violations []BudgetViolation `json:"violations"`
 	Passing    int               `json:"passing"`
@@ -83,9 +91,9 @@ func ComputeBudgetViolations(
 
 		for _, ch := range checks {
 			if ch.actual > ch.budget {
-				severity := "warning"
+				severity := SeverityWarning
 				if ch.actual > ch.budget*2 {
-					severity = "error"
+					severity = SeverityError
 				}
 				violations = append(violations, BudgetViolation{
 					Component: c.Component,

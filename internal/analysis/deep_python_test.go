@@ -12,7 +12,7 @@ func TestPythonDeepCallGraph(t *testing.T) {
 	dir := t.TempDir()
 
 	files := map[string]string{
-		"pyproject.toml": "[project]\nname = \"testapp\"\n",
+		"pyproject.toml":  "[project]\nname = \"testapp\"\n",
 		"app/__init__.py": "",
 		"app/main.py": `
 def main():

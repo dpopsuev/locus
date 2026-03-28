@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -17,11 +18,25 @@ import (
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+// Log key constants for structured logging.
+const (
+	logKeyTool    = "tool"
+	logKeyElapsed = "elapsed"
+	logKeyError   = "error"
+)
+
+// Sentinel errors for input validation.
+var (
+	ErrUnknownCodographAction = errors.New("unknown codograph action")
+	ErrUnknownAnalysisAction  = errors.New("unknown analysis action")
+	ErrIntentRequired         = errors.New("intent is required")
+)
+
 // Codograph action names.
 const (
-	ActionScanLocal  = "scan_local"
-	ActionScanRemote = "scan_remote"
-	ActionHistory    = "history"
+	ActionScanLocal       = "scan_local"
+	ActionScanRemote      = "scan_remote"
+	ActionHistory         = "history"
 	ActionDiff            = "diff"
 	ActionSetDesiredState = "set_desired_state"
 	ActionGetDesiredState = "get_desired_state"
@@ -30,22 +45,22 @@ const (
 
 // Analysis action names.
 const (
-	ActionDeps        = "deps"
-	ActionImpact      = "impact"
-	ActionCoupling    = "coupling"
-	ActionCycles      = "cycles"
-	ActionViolations  = "violations"
-	ActionCoverage    = "coverage"
-	ActionAPISurface  = "api_surface"
-	ActionConventions = "conventions"
-	ActionGaps        = "gaps"
-	ActionScanDiff    = "scan_diff"
-	ActionCallers     = "callers"
-	ActionCrossRepo   = "cross_repo"
-	ActionPreset      = "preset"
-	ActionComponent   = "component"
-	ActionQuery       = "query"
-	ActionSearch      = "search"
+	ActionDeps             = "deps"
+	ActionImpact           = "impact"
+	ActionCoupling         = "coupling"
+	ActionCycles           = "cycles"
+	ActionViolations       = "violations"
+	ActionCoverage         = "coverage"
+	ActionAPISurface       = "api_surface"
+	ActionConventions      = "conventions"
+	ActionGaps             = "gaps"
+	ActionScanDiff         = "scan_diff"
+	ActionCallers          = "callers"
+	ActionCrossRepo        = "cross_repo"
+	ActionPreset           = "preset"
+	ActionComponent        = "component"
+	ActionQuery            = "query"
+	ActionSearch           = "search"
 	ActionDrift            = "drift"
 	ActionSuggestArch      = "suggest_architecture"
 	ActionBlastRadius      = "blast_radius"
@@ -224,7 +239,7 @@ type codographActionInput struct {
 
 	Layers  []string `json:"layers,omitempty" jsonschema:"ordered layer names for desired state"`
 	BranchA string   `json:"branch_a,omitempty" jsonschema:"first branch to compare (diff)"`
-	BranchB string `json:"branch_b,omitempty" jsonschema:"second branch to compare (diff)"`
+	BranchB string   `json:"branch_b,omitempty" jsonschema:"second branch to compare (diff)"`
 }
 
 type analysisActionInput struct {
@@ -299,12 +314,12 @@ func (h *handler) handleCodograph(ctx context.Context, req *sdkmcp.CallToolReque
 		}
 		return jsonResult(r)
 	default:
-		return nil, nil, fmt.Errorf("unknown codograph action %q (valid: %s, %s, %s, %s)",
-			in.Action, ActionScanLocal, ActionScanRemote, ActionHistory, ActionDiff)
+		return nil, nil, fmt.Errorf("%w %q (valid: %s, %s, %s, %s)",
+			ErrUnknownCodographAction, in.Action, ActionScanLocal, ActionScanRemote, ActionHistory, ActionDiff)
 	}
 }
 
-func (h *handler) handleAnalysis(ctx context.Context, req *sdkmcp.CallToolRequest, in analysisActionInput) (*sdkmcp.CallToolResult, any, error) {
+func (h *handler) handleAnalysis(ctx context.Context, req *sdkmcp.CallToolRequest, in analysisActionInput) (*sdkmcp.CallToolResult, any, error) { //nolint:gocritic // signature constrained by MCP SDK ToolHandlerFor generic type
 	switch in.Action {
 	case ActionDeps:
 		return h.handleGetDependencies(ctx, req, depsInput{
@@ -324,26 +339,36 @@ func (h *handler) handleAnalysis(ctx context.Context, req *sdkmcp.CallToolReques
 			View: in.View, ChurnDays: in.ChurnDays, Component: in.Component,
 			CacheKey: in.CacheKey,
 		})
-	case ActionCycles:
-		return h.handleGetCycles(ctx, req, cyclesInput{
-			Path: in.Path, Layers: in.Layers, CacheKey: in.CacheKey,
-			Format: in.Format,
-		})
+	case ActionCycles, ActionCoverage, ActionAPISurface, ActionConventions, ActionGaps:
+		return h.dispatchCyclesVariant(ctx, req, &in)
 	case ActionViolations:
 		return h.handleGetViolations(ctx, req, violationsInput{
 			Path: in.Path, Layers: in.Layers, CacheKey: in.CacheKey,
 			Format: in.Format,
 		})
 	case ActionCallers:
-		r, err := h.proto.GetCallers(ctx, in.Path, in.Symbol, in.CacheKey)
-		if err != nil {
-			return nil, nil, err
-		}
-		return jsonResult(r)
+		return h.dispatchCallers(ctx, &in)
 	case ActionScanDiff:
 		return h.handleScanDiff(ctx, req, scanDiffInput{
 			Path: in.Path, BeforeSHA: in.BeforeSHA, AfterSHA: in.AfterSHA,
 		})
+	case ActionCrossRepo, ActionPreset, ActionComponent, ActionDrift,
+		ActionSuggestArch, ActionSearch, ActionQuery:
+		return h.dispatchAnalysisLookup(ctx, &in)
+	case ActionBlastRadius, ActionImportDirection, ActionTrustBoundaries,
+		ActionModDependencies, ActionBudgets, ActionSymbolBlast, ActionDiffIntelligence:
+		return h.dispatchAnalysisAdvanced(ctx, &in)
+	default:
+		return nil, nil, fmt.Errorf("%w %q (valid: %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+			ErrUnknownAnalysisAction, in.Action, ActionDeps, ActionImpact, ActionCoupling, ActionCycles,
+			ActionViolations, ActionScanDiff, ActionCoverage, ActionAPISurface, ActionConventions, ActionGaps,
+			ActionBlastRadius, ActionImportDirection, ActionTrustBoundaries, ActionBudgets, ActionModDependencies,
+			ActionSymbolBlast, ActionDiffIntelligence)
+	}
+}
+
+func (h *handler) dispatchCyclesVariant(ctx context.Context, req *sdkmcp.CallToolRequest, in *analysisActionInput) (*sdkmcp.CallToolResult, any, error) {
+	switch in.Action {
 	case ActionCoverage:
 		return h.handleGetCycles(ctx, req, cyclesInput{
 			Path: in.Path, Analysis: ActionCoverage, Threshold: in.Threshold,
@@ -362,6 +387,24 @@ func (h *handler) handleAnalysis(ctx context.Context, req *sdkmcp.CallToolReques
 		return h.handleGetCycles(ctx, req, cyclesInput{
 			Path: in.Path, Analysis: ActionGaps, CacheKey: in.CacheKey,
 		})
+	default: // ActionCycles
+		return h.handleGetCycles(ctx, req, cyclesInput{
+			Path: in.Path, Layers: in.Layers, CacheKey: in.CacheKey,
+			Format: in.Format,
+		})
+	}
+}
+
+func (h *handler) dispatchCallers(ctx context.Context, in *analysisActionInput) (*sdkmcp.CallToolResult, any, error) {
+	r, err := h.proto.GetCallers(ctx, in.Path, in.Symbol, in.CacheKey)
+	if err != nil {
+		return nil, nil, err
+	}
+	return jsonResult(r)
+}
+
+func (h *handler) dispatchAnalysisLookup(ctx context.Context, in *analysisActionInput) (*sdkmcp.CallToolResult, any, error) {
+	switch in.Action {
 	case ActionCrossRepo:
 		r, err := h.proto.GetCrossRepo(ctx, in.Path, in.PathB, in.CacheKey, in.CacheKeyB)
 		if err != nil {
@@ -398,12 +441,17 @@ func (h *handler) handleAnalysis(ctx context.Context, req *sdkmcp.CallToolReques
 			return nil, nil, err
 		}
 		return jsonResult(r)
-	case ActionQuery:
+	default: // ActionQuery
 		r, err := h.proto.AnswerQuery(ctx, in.Path, in.Query, in.CacheKey)
 		if err != nil {
 			return nil, nil, err
 		}
 		return jsonResult(r)
+	}
+}
+
+func (h *handler) dispatchAnalysisAdvanced(ctx context.Context, in *analysisActionInput) (*sdkmcp.CallToolResult, any, error) {
+	switch in.Action {
 	case ActionBlastRadius:
 		r, err := h.proto.GetBlastRadius(ctx, in.Path, in.Files, in.Since, in.CacheKey)
 		if err != nil {
@@ -440,18 +488,12 @@ func (h *handler) handleAnalysis(ctx context.Context, req *sdkmcp.CallToolReques
 			return nil, nil, err
 		}
 		return jsonResult(r)
-	case ActionDiffIntelligence:
+	default: // ActionDiffIntelligence
 		r, err := h.proto.GetDiffIntelligence(ctx, in.Path, in.Since, in.CacheKey)
 		if err != nil {
 			return nil, nil, err
 		}
 		return jsonResult(r)
-	default:
-		return nil, nil, fmt.Errorf("unknown analysis action %q (valid: %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
-			in.Action, ActionDeps, ActionImpact, ActionCoupling, ActionCycles,
-			ActionViolations, ActionScanDiff, ActionCoverage, ActionAPISurface, ActionConventions, ActionGaps,
-			ActionBlastRadius, ActionImportDirection, ActionTrustBoundaries, ActionBudgets, ActionModDependencies,
-			ActionSymbolBlast, ActionDiffIntelligence)
 	}
 }
 
@@ -495,7 +537,6 @@ func (h *handler) handleScanProject(ctx context.Context, _ *sdkmcp.CallToolReque
 	}
 }
 
-
 type depsInput struct {
 	Path      string `json:"path"`
 	Component string `json:"component"`
@@ -510,7 +551,6 @@ func (h *handler) handleGetDependencies(ctx context.Context, _ *sdkmcp.CallToolR
 	return jsonResult(r)
 }
 
-
 type impactInput struct {
 	Path      string `json:"path"`
 	Component string `json:"component"`
@@ -524,7 +564,6 @@ func (h *handler) handleGetImpact(ctx context.Context, _ *sdkmcp.CallToolRequest
 	}
 	return jsonResult(r)
 }
-
 
 type couplingInput struct {
 	Path      string `json:"path"`
@@ -560,7 +599,6 @@ func (h *handler) handleGetCouplingTable(ctx context.Context, _ *sdkmcp.CallTool
 		return text(result), nil, nil
 	}
 }
-
 
 type remoteInput struct {
 	URL       string `json:"url"`
@@ -612,7 +650,6 @@ func (h *handler) handleGetCodographHistory(ctx context.Context, _ *sdkmcp.CallT
 	data, _ := json.MarshalIndent(entries, "", "  ")
 	return text(string(data)), nil, nil
 }
-
 
 type diffBranchesInput struct {
 	Path    string `json:"path"`
@@ -844,7 +881,7 @@ type triageInput struct {
 
 func (h *handler) handleTriage(_ context.Context, _ *sdkmcp.CallToolRequest, in triageInput) (*sdkmcp.CallToolResult, any, error) {
 	if in.Intent == "" {
-		return nil, nil, fmt.Errorf("intent is required")
+		return nil, nil, ErrIntentRequired
 	}
 	result := h.reg.Triage(in.Intent, in.Path)
 	return jsonResult(result)
@@ -873,9 +910,9 @@ func noOut[In any](h func(context.Context, *sdkmcp.CallToolRequest, In) (*sdkmcp
 		result, out, err := h(ctx, req, in)
 		elapsed := time.Since(start)
 		if err != nil {
-			slog.Error("tool call failed", "tool", tool, "elapsed", elapsed, "error", err)
+			slog.LogAttrs(ctx, slog.LevelError, "tool call failed", slog.String(logKeyTool, tool), slog.Duration(logKeyElapsed, elapsed), slog.Any(logKeyError, err))
 		} else {
-			slog.Debug("tool call", "tool", tool, "elapsed", elapsed)
+			slog.LogAttrs(ctx, slog.LevelDebug, "tool call", slog.String(logKeyTool, tool), slog.Duration(logKeyElapsed, elapsed))
 		}
 		return result, out, err
 	}

@@ -70,7 +70,8 @@ func RenderCouplingTable(report *ContextReport, sortBy string, topN int) string 
 	}
 
 	rows := make([]row, 0, len(report.Architecture.Services))
-	for _, svc := range report.Architecture.Services {
+	for i := range report.Architecture.Services {
+		svc := &report.Architecture.Services[i]
 		fi := fanIn[svc.Name]
 		fo := fanOut[svc.Name]
 		if fi > 0 || fo > 0 {

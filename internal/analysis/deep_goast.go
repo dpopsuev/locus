@@ -15,8 +15,7 @@ import (
 // GoASTDeepAnalyzer uses go/ast for call graph, data flow, and state machine
 // analysis. More accurate than regex, no external tools required.
 type GoASTDeepAnalyzer struct {
-	root    string
-	modPath string
+	root string
 }
 
 // NewGoASTDeep creates a GoASTDeepAnalyzer for the given root directory.
@@ -33,7 +32,7 @@ type goFunc struct {
 	pkg          string
 	file         string
 	line         int
-	receiverType string // non-empty for methods (e.g., "*APIDriver")
+	receiverType string   // non-empty for methods (e.g., "*APIDriver")
 	callees      []string // function names called in the body
 	body         *ast.BlockStmt
 }
@@ -124,7 +123,7 @@ func (a *GoASTDeepAnalyzer) CallGraph(_ string, opts CallGraphOpts) (*CallGraph,
 	return &CallGraph{Nodes: nodes, Edges: edges, Layer: LayerGoAST}, nil
 }
 
-func (a *GoASTDeepAnalyzer) DataFlowTrace(_ string, entry string, maxDepth int) (*DataFlow, error) {
+func (a *GoASTDeepAnalyzer) DataFlowTrace(_, entry string, maxDepth int) (*DataFlow, error) {
 	if maxDepth <= 0 {
 		maxDepth = DefaultDataFlowDepth
 	}
@@ -134,45 +133,11 @@ func (a *GoASTDeepAnalyzer) DataFlowTrace(_ string, entry string, maxDepth int) 
 		return nil, err
 	}
 
-	funcIndex := make(map[string]*goFunc)
-	for i := range funcs {
-		funcIndex[funcs[i].name] = &funcs[i]
+	nf := make([]namedFunc, len(funcs))
+	for i, f := range funcs {
+		nf[i] = namedFunc{name: f.name, pkg: f.pkg, line: f.line, callees: f.callees}
 	}
-
-	nodeMap := make(map[string]DataFlowNode)
-	var edges []DataFlowEdge
-	visited := make(map[string]bool)
-
-	nodeMap[entry] = DataFlowNode{Name: entry, Kind: "entry"}
-
-	var trace func(name string, d int)
-	trace = func(name string, d int) {
-		if d > maxDepth || visited[name] {
-			return
-		}
-		visited[name] = true
-		fn, ok := funcIndex[name]
-		if !ok {
-			return
-		}
-		for _, callee := range fn.callees {
-			if _, ok := funcIndex[callee]; !ok {
-				continue
-			}
-			if _, exists := nodeMap[callee]; !exists {
-				nodeMap[callee] = DataFlowNode{Name: callee, Kind: "process", Pkg: funcIndex[callee].pkg}
-			}
-			edges = append(edges, DataFlowEdge{From: name, To: callee})
-			trace(callee, d+1)
-		}
-	}
-	trace(entry, 0)
-
-	nodes := make([]DataFlowNode, 0, len(nodeMap))
-	for _, n := range nodeMap {
-		nodes = append(nodes, n)
-	}
-	return &DataFlow{Nodes: nodes, Edges: edges, Layer: LayerGoAST}, nil
+	return dataFlowTrace(nf, entry, maxDepth, LayerGoAST), nil
 }
 
 func (a *GoASTDeepAnalyzer) DetectStateMachines(_ string) ([]StateMachine, error) {
@@ -191,7 +156,7 @@ func (a *GoASTDeepAnalyzer) DetectStateMachines(_ string) ([]StateMachine, error
 			}
 			return nil
 		}
-		if filepath.Ext(path) != ".go" || strings.HasSuffix(d.Name(), "_test.go") {
+		if filepath.Ext(path) != extGo || strings.HasSuffix(d.Name(), "_test.go") {
 			return nil
 		}
 
@@ -203,62 +168,67 @@ func (a *GoASTDeepAnalyzer) DetectStateMachines(_ string) ([]StateMachine, error
 		rel, _ := filepath.Rel(absRoot, path)
 		pkg := filepath.ToSlash(filepath.Dir(rel))
 		if pkg == "." {
-			pkg = "(root)"
+			pkg = pkgRoot
 		}
 
 		for _, decl := range f.Decls {
-			gd, ok := decl.(*ast.GenDecl)
-			if !ok || gd.Tok != token.CONST || len(gd.Specs) < 3 {
-				continue
+			if sm := parseIotaConstGroup(decl, f, pkg); sm != nil {
+				machines = append(machines, *sm)
 			}
-
-			// Check if it's an iota-based const group.
-			var typeName string
-			var values []string
-			hasIota := false
-
-			for _, spec := range gd.Specs {
-				vs, ok := spec.(*ast.ValueSpec)
-				if !ok {
-					continue
-				}
-				for _, name := range vs.Names {
-					values = append(values, name.Name)
-				}
-				if vs.Type != nil {
-					if ident, ok := vs.Type.(*ast.Ident); ok {
-						typeName = ident.Name
-					}
-				}
-				for _, v := range vs.Values {
-					if ident, ok := v.(*ast.Ident); ok && ident.Name == "iota" {
-						hasIota = true
-					}
-				}
-			}
-
-			if !hasIota || len(values) < 3 {
-				continue
-			}
-			if typeName == "" {
-				typeName = values[0] + "Type"
-			}
-
-			// Look for switch statements on this type in the same file.
-			transitions := findASTSwitchTransitions(f, values)
-
-			machines = append(machines, StateMachine{
-				Name:        typeName,
-				Package:     pkg,
-				States:      values,
-				Transitions: transitions,
-				Initial:     values[0],
-			})
 		}
 		return nil
 	})
 
 	return machines, nil
+}
+
+// parseIotaConstGroup checks if a declaration is an iota-based const group
+// and returns a StateMachine if so.
+func parseIotaConstGroup(decl ast.Decl, f *ast.File, pkg string) *StateMachine {
+	gd, ok := decl.(*ast.GenDecl)
+	if !ok || gd.Tok != token.CONST || len(gd.Specs) < 3 {
+		return nil
+	}
+
+	var typeName string
+	var values []string
+	hasIota := false
+
+	for _, spec := range gd.Specs {
+		vs, ok := spec.(*ast.ValueSpec)
+		if !ok {
+			continue
+		}
+		for _, name := range vs.Names {
+			values = append(values, name.Name)
+		}
+		if vs.Type != nil {
+			if ident, ok := vs.Type.(*ast.Ident); ok {
+				typeName = ident.Name
+			}
+		}
+		for _, v := range vs.Values {
+			if ident, ok := v.(*ast.Ident); ok && ident.Name == "iota" {
+				hasIota = true
+			}
+		}
+	}
+
+	if !hasIota || len(values) < 3 {
+		return nil
+	}
+	if typeName == "" {
+		typeName = values[0] + "Type"
+	}
+
+	transitions := findASTSwitchTransitions(f, values)
+	return &StateMachine{
+		Name:        typeName,
+		Package:     pkg,
+		States:      values,
+		Transitions: transitions,
+		Initial:     values[0],
+	}
 }
 
 func findASTSwitchTransitions(f *ast.File, states []string) []StateTransition {
@@ -325,7 +295,7 @@ func (a *GoASTDeepAnalyzer) parseFunctions() ([]goFunc, error) {
 			}
 			return nil
 		}
-		if filepath.Ext(path) != ".go" || strings.HasSuffix(d.Name(), "_test.go") {
+		if filepath.Ext(path) != extGo || strings.HasSuffix(d.Name(), "_test.go") {
 			return nil
 		}
 
@@ -337,7 +307,7 @@ func (a *GoASTDeepAnalyzer) parseFunctions() ([]goFunc, error) {
 		rel, _ := filepath.Rel(absRoot, path)
 		pkg := filepath.ToSlash(filepath.Dir(rel))
 		if pkg == "." {
-			pkg = "(root)"
+			pkg = pkgRoot
 		}
 
 		relFile := filepath.ToSlash(rel)

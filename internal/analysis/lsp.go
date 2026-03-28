@@ -3,6 +3,7 @@ package analysis
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -16,18 +17,32 @@ import (
 	"github.com/dpopsuev/locus/internal/survey"
 )
 
+var (
+	// ErrLSPFieldRefs is returned when LSP field refs analysis is attempted.
+	ErrLSPFieldRefs = errors.New("LSP field refs: not implemented (use tree-sitter)")
+	// ErrLSPEntryPoints is returned when LSP entry points analysis is attempted.
+	ErrLSPEntryPoints = errors.New("LSP entry points: not implemented (use tree-sitter)")
+	// ErrLSPNestingDepth is returned when LSP nesting depth analysis is attempted.
+	ErrLSPNestingDepth = errors.New("LSP nesting depth: not applicable (use tree-sitter)")
+	// ErrLSPNoServer is returned when no LSP server is found for the language.
+	ErrLSPNoServer = errors.New("no LSP server for language")
+	// ErrSymbolNotFound is returned when a workspace symbol is not found.
+	ErrSymbolNotFound = errors.New("symbol not found")
+	// ErrCallHierarchyNotFound is returned when no call hierarchy item is found.
+	ErrCallHierarchyNotFound = errors.New("no call hierarchy item found")
+	// ErrContentLengthMissing is returned when Content-Length header is missing from LSP response.
+	ErrContentLengthMissing = errors.New("missing Content-Length header")
+	// ErrCallChainEntryNotFound is returned when the entry function is not found for call chain analysis.
+	ErrCallChainEntryNotFound = errors.New("call hierarchy: entry not found")
+	// ErrLSPRequest is returned when an LSP request returns an error response.
+	ErrLSPRequest = errors.New("lsp request error")
+)
+
 // LSPAnalyzer extracts type-level metadata via an LSP server. It uses
 // typeHierarchy, callHierarchy, and implementation requests for ~99%
 // semantic accuracy. Falls through to tree-sitter on timeout or error.
 type LSPAnalyzer struct {
 	Timeout time.Duration // per-request timeout; default 30s
-}
-
-func (a *LSPAnalyzer) timeout() time.Duration {
-	if a.Timeout > 0 {
-		return a.Timeout
-	}
-	return time.Duration(DefaultLSPTimeout) * time.Second
 }
 
 func (a *LSPAnalyzer) Classes(root string) ([]ClassInfo, error) {
@@ -49,7 +64,7 @@ func (a *LSPAnalyzer) Implements(root string) ([]ImplEdge, error) {
 }
 
 func (a *LSPAnalyzer) FieldRefs(root string) ([]FieldRef, error) {
-	return nil, fmt.Errorf("LSP field refs: not implemented (use tree-sitter)")
+	return nil, ErrLSPFieldRefs
 }
 
 func (a *LSPAnalyzer) CallChain(root, entry string, depth int) ([]Call, error) {
@@ -62,11 +77,11 @@ func (a *LSPAnalyzer) CallChain(root, entry string, depth int) ([]Call, error) {
 }
 
 func (a *LSPAnalyzer) EntryPoints(root string) ([]EntryPoint, error) {
-	return nil, fmt.Errorf("LSP entry points: not implemented (use tree-sitter)")
+	return nil, ErrLSPEntryPoints
 }
 
 func (a *LSPAnalyzer) NestingDepth(root string) ([]NestingResult, error) {
-	return nil, fmt.Errorf("LSP nesting depth: not applicable (use tree-sitter)")
+	return nil, ErrLSPNestingDepth
 }
 
 // --- LSP connection ---
@@ -118,7 +133,7 @@ func (c *lspConn) request(method string, params any) (json.RawMessage, error) {
 		}
 		if *resp.ID == id {
 			if resp.Error != nil {
-				return nil, fmt.Errorf("lsp %s: code %d: %s", method, resp.Error.Code, resp.Error.Message)
+				return nil, fmt.Errorf("%w: %s (code %d: %s)", ErrLSPRequest, method, resp.Error.Code, resp.Error.Message)
 			}
 			return resp.Result, nil
 		}
@@ -163,7 +178,7 @@ func (c *lspConn) readMsg() (*lspResponse, error) {
 		}
 	}
 	if contentLen < 0 {
-		return nil, fmt.Errorf("missing Content-Length header")
+		return nil, ErrContentLengthMissing
 	}
 	body := make([]byte, contentLen)
 	if _, err := io.ReadFull(c.r, body); err != nil {
@@ -183,10 +198,10 @@ func (c *lspConn) initialize(root string) error {
 		"rootUri":   rootURI,
 		"capabilities": map[string]any{
 			"textDocument": map[string]any{
-				"documentSymbol":  map[string]any{"hierarchicalDocumentSymbolSupport": true},
-				"typeHierarchy":   map[string]any{},
-				"callHierarchy":   map[string]any{},
-				"implementation":  map[string]any{},
+				"documentSymbol": map[string]any{"hierarchicalDocumentSymbolSupport": true},
+				"typeHierarchy":  map[string]any{},
+				"callHierarchy":  map[string]any{},
+				"implementation": map[string]any{},
 			},
 		},
 	}
@@ -197,11 +212,13 @@ func (c *lspConn) initialize(root string) error {
 }
 
 func (c *lspConn) shutdown() {
-	c.request("shutdown", nil)
-	c.notify("exit", nil)
+	_, _ = c.request("shutdown", nil)
+	_ = c.notify("exit", nil)
 }
 
 // documentClasses uses textDocument/documentSymbol on all source files.
+//
+//nolint:unparam // error return kept for API consistency with TypeAnalyzer interface
 func (c *lspConn) documentClasses(root string) ([]ClassInfo, error) {
 	files := findSrcFiles(root)
 	var classes []ClassInfo
@@ -213,15 +230,15 @@ func (c *lspConn) documentClasses(root string) ([]ClassInfo, error) {
 		rel, _ := filepath.Rel(root, f)
 		pkg := filepath.ToSlash(filepath.Dir(rel))
 		if pkg == "." {
-			pkg = "(root)"
+			pkg = pkgRoot
 		}
 		for _, sym := range syms {
 			var kind string
 			switch sym.Kind {
 			case 23: // struct
-				kind = "struct"
+				kind = kindStruct
 			case 11: // interface
-				kind = "interface"
+				kind = kindInterface
 			case 5: // class
 				kind = "class"
 			default:
@@ -255,6 +272,8 @@ func (c *lspConn) documentClasses(root string) ([]ClassInfo, error) {
 }
 
 // implementations uses textDocument/implementation to find interface edges.
+//
+//nolint:unparam // error return kept for API consistency with TypeAnalyzer interface
 func (c *lspConn) implementations(root string) ([]ImplEdge, error) {
 	// LSP textDocument/implementation requires a specific position.
 	// We first get all interface symbols via documentSymbol, then query
@@ -270,17 +289,20 @@ func (c *lspConn) implementations(root string) ([]ImplEdge, error) {
 			if sym.Kind != 11 { // interface
 				continue
 			}
-			impls, err := c.request("textDocument/implementation", map[string]any{
+			implParams := map[string]any{
 				"textDocument": map[string]string{"uri": pathToURI(f)},
 				"position":     map[string]int{"line": sym.Line, "character": sym.Col},
-			})
+			}
+			impls, err := c.request("textDocument/implementation", implParams)
 			if err != nil {
 				continue
 			}
 			var locations []struct {
 				URI   string `json:"uri"`
 				Range struct {
-					Start struct{ Line int `json:"line"` } `json:"start"`
+					Start struct {
+						Line int `json:"line"`
+					} `json:"start"`
 				} `json:"range"`
 			}
 			if json.Unmarshal(impls, &locations) != nil {
@@ -309,7 +331,7 @@ func (c *lspConn) callChain(root, entry string, maxDepth int) ([]Call, error) {
 	// Find the entry function via workspace/symbol
 	item, err := c.findCallHierarchyItem(root, entry)
 	if err != nil || item == nil {
-		return nil, fmt.Errorf("call hierarchy: entry %q not found", entry)
+		return nil, fmt.Errorf("%w: %q", ErrCallChainEntryNotFound, entry)
 	}
 
 	var calls []Call
@@ -356,7 +378,7 @@ type callHierarchyItem struct {
 	} `json:"range"`
 }
 
-func (c *lspConn) findCallHierarchyItem(root, name string) (*callHierarchyItem, error) {
+func (c *lspConn) findCallHierarchyItem(_, name string) (*callHierarchyItem, error) {
 	// Use workspace/symbol to find the function, then prepare callHierarchy
 	wsResult, err := c.request("workspace/symbol", map[string]any{"query": name})
 	if err != nil {
@@ -376,29 +398,30 @@ func (c *lspConn) findCallHierarchyItem(root, name string) (*callHierarchyItem, 
 		} `json:"location"`
 	}
 	if json.Unmarshal(wsResult, &symbols) != nil || len(symbols) == 0 {
-		return nil, fmt.Errorf("symbol %q not found", name)
+		return nil, fmt.Errorf("%w: %q", ErrSymbolNotFound, name)
 	}
 	// Find exact match
 	for _, s := range symbols {
-		if s.Name == name && (s.Kind == int(model.SymbolFunction) || s.Kind == int(model.SymbolMethod)) {
-			prepResult, err := c.request("textDocument/prepareCallHierarchy", map[string]any{
-				"textDocument": map[string]string{"uri": s.Location.URI},
-				"position": map[string]int{
-					"line":      s.Location.Range.Start.Line,
-					"character": s.Location.Range.Start.Character,
-				},
-			})
-			if err != nil {
-				return nil, err
-			}
-			var items []callHierarchyItem
-			if json.Unmarshal(prepResult, &items) != nil || len(items) == 0 {
-				return nil, fmt.Errorf("no call hierarchy item for %q", name)
-			}
-			return &items[0], nil
+		if s.Name != name || (s.Kind != int(model.SymbolFunction) && s.Kind != int(model.SymbolMethod)) {
+			continue
 		}
+		prepResult, err := c.request("textDocument/prepareCallHierarchy", map[string]any{
+			"textDocument": map[string]string{"uri": s.Location.URI},
+			"position": map[string]int{
+				"line":      s.Location.Range.Start.Line,
+				"character": s.Location.Range.Start.Character,
+			},
+		})
+		if err != nil {
+			return nil, err
+		}
+		var items []callHierarchyItem
+		if json.Unmarshal(prepResult, &items) != nil || len(items) == 0 {
+			return nil, fmt.Errorf("%w: %q", ErrCallHierarchyNotFound, name)
+		}
+		return &items[0], nil
 	}
-	return nil, fmt.Errorf("symbol %q not found", name)
+	return nil, fmt.Errorf("%w: %q", ErrSymbolNotFound, name)
 }
 
 type docSymbol struct {
@@ -409,7 +432,7 @@ type docSymbol struct {
 	Children []docSymbol `json:"children,omitempty"`
 }
 
-func (c *lspConn) documentSymbols(file, root string) ([]docSymbol, error) {
+func (c *lspConn) documentSymbols(file, _ string) ([]docSymbol, error) {
 	uri := pathToURI(file)
 	content, err := os.ReadFile(file)
 	if err != nil {
@@ -417,13 +440,13 @@ func (c *lspConn) documentSymbols(file, root string) ([]docSymbol, error) {
 	}
 	lang := "go"
 	switch filepath.Ext(file) {
-	case ".rs":
+	case extRust:
 		lang = "rust"
-	case ".py":
+	case extPy:
 		lang = "python"
-	case ".ts", ".js":
+	case extTS, extJS:
 		lang = "typescript"
-	case ".java":
+	case extJava:
 		lang = "java"
 	}
 	_ = c.notify("textDocument/didOpen", map[string]any{
@@ -437,22 +460,28 @@ func (c *lspConn) documentSymbols(file, root string) ([]docSymbol, error) {
 	if err != nil {
 		return nil, err
 	}
-	var symbols []struct {
-		Name           string `json:"name"`
-		Kind           int    `json:"kind"`
-		Range          struct{ Start struct{ Line, Character int } } `json:"range"`
-		SelectionRange struct{ Start struct{ Line, Character int } } `json:"selectionRange"`
+	type posRange struct {
+		Start struct {
+			Line, Character int
+		}
+	}
+	type symEntry struct {
+		Name           string   `json:"name"`
+		Kind           int      `json:"kind"`
+		Range          posRange `json:"range"`
+		SelectionRange posRange `json:"selectionRange"`
 		Children       []struct {
-			Name           string `json:"name"`
-			Kind           int    `json:"kind"`
-			Range          struct{ Start struct{ Line, Character int } } `json:"range"`
-			SelectionRange struct{ Start struct{ Line, Character int } } `json:"selectionRange"`
+			Name           string   `json:"name"`
+			Kind           int      `json:"kind"`
+			Range          posRange `json:"range"`
+			SelectionRange posRange `json:"selectionRange"`
 		} `json:"children,omitempty"`
 	}
+	var symbols []symEntry
 	if json.Unmarshal(result, &symbols) != nil {
 		return nil, nil
 	}
-	var out []docSymbol
+	out := make([]docSymbol, 0, len(symbols))
 	for _, s := range symbols {
 		ds := docSymbol{
 			Name: s.Name, Kind: s.Kind,
@@ -477,7 +506,7 @@ func (a *LSPAnalyzer) startServer(root string) (*lspConn, func(), error) {
 	lang := survey.DetectLanguage(root)
 	cmdStr := survey.DefaultLSPServer(lang)
 	if cmdStr == "" {
-		return nil, nil, fmt.Errorf("no LSP server for language %v", lang)
+		return nil, nil, fmt.Errorf("%w: %v", ErrLSPNoServer, lang)
 	}
 	parts := strings.Fields(cmdStr)
 	bin, err := exec.LookPath(parts[0])
@@ -502,13 +531,13 @@ func (a *LSPAnalyzer) startServer(root string) (*lspConn, func(), error) {
 	conn := newLSPConn(stdout, stdin)
 	if err := conn.initialize(absRoot); err != nil {
 		stdin.Close()
-		cmd.Wait()
+		_ = cmd.Wait() // best-effort cleanup after init failure
 		return nil, nil, err
 	}
 	cleanup := func() {
 		conn.shutdown()
 		stdin.Close()
-		cmd.Wait()
+		_ = cmd.Wait() // best-effort cleanup
 	}
 	return conn, cleanup, nil
 }
@@ -564,20 +593,20 @@ func resolveNameAtURI(uri string, line int) string {
 func findSrcFiles(root string) []string {
 	absRoot, _ := filepath.Abs(root)
 	var files []string
-	filepath.WalkDir(absRoot, func(path string, d os.DirEntry, err error) error {
+	_ = filepath.WalkDir(absRoot, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 		if d.IsDir() {
 			base := d.Name()
-			if base == "vendor" || base == "testdata" || strings.HasPrefix(base, ".") {
+			if base == dirVendor || base == dirTestdata || strings.HasPrefix(base, ".") {
 				return filepath.SkipDir
 			}
 			return nil
 		}
 		ext := filepath.Ext(d.Name())
 		switch ext {
-		case ".go", ".rs", ".py", ".ts", ".js", ".java":
+		case extGo, extRust, extPy, extTS, extJS, extJava:
 			if !strings.HasSuffix(d.Name(), "_test.go") {
 				files = append(files, path)
 			}

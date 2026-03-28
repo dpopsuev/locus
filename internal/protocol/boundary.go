@@ -39,7 +39,7 @@ func CheckBoundaryRules(edges []arch.ArchEdge, rules []store.BoundaryRule) []Bou
 					From:     e.From,
 					To:       e.To,
 					Rule:     r.FromPattern + " -> " + r.ToPattern,
-					Severity: "error",
+					Severity: SeverityError,
 				})
 			}
 		}

@@ -201,10 +201,10 @@ export class GlobeRenderer {}
 
 func TestTSScanSkipsNodeModules(t *testing.T) {
 	dir := setupTSProject(t, map[string]string{
-		"package.json":                 `{"name": "skip-test"}`,
-		"src/main.ts":                  `export function main() {}`,
-		"node_modules/foo/index.js":    `export function foo() {}`,
-		"dist/bundle.js":               `export function bundled() {}`,
+		"package.json":              `{"name": "skip-test"}`,
+		"src/main.ts":               `export function main() {}`,
+		"node_modules/foo/index.js": `export function foo() {}`,
+		"dist/bundle.js":            `export function bundled() {}`,
 	})
 
 	sc := &survey.TypeScriptScanner{}

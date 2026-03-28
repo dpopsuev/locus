@@ -30,25 +30,25 @@ func setupGitRepo(t *testing.T) string {
 	run("init")
 	run("checkout", "-b", "main")
 
-	if err := os.MkdirAll(filepath.Join(dir, "pkg/alpha"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(dir, "pkg", "alpha"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "pkg/alpha/a.go"), []byte("package alpha\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "pkg", "alpha", "a.go"), []byte("package alpha\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	run("add", ".")
 	run("commit", "-m", "add alpha")
 
-	if err := os.MkdirAll(filepath.Join(dir, "pkg/beta"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(dir, "pkg", "beta"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "pkg/beta/b.go"), []byte("package beta\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "pkg", "beta", "b.go"), []byte("package beta\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	run("add", ".")
 	run("commit", "-m", "add beta")
 
-	if err := os.WriteFile(filepath.Join(dir, "pkg/alpha/a.go"), []byte("package alpha\n// updated\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "pkg", "alpha", "a.go"), []byte("package alpha\n// updated\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	run("add", ".")

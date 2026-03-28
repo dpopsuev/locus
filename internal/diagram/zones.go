@@ -6,21 +6,22 @@ import (
 	"strings"
 )
 
-func renderZones(in Input, opts Options) string {
+func renderZones(in Input, _ Options) string {
 	m := in.Report.Architecture
 	rt := in.ResolvedTheme
 
 	fi := fanIn(m.Edges)
 	churnMap := make(map[string]int)
 	symbolCount := make(map[string]int)
-	for _, s := range m.Services {
-		churnMap[s.Name] = s.Churn
-		symbolCount[s.Name] = len(s.Symbols)
+	for i := range m.Services {
+		churnMap[m.Services[i].Name] = m.Services[i].Churn
+		symbolCount[m.Services[i].Name] = len(m.Services[i].Symbols)
 	}
 
 	// Group components by top-level directory (zone).
 	zones := make(map[string][]string)
-	for _, s := range m.Services {
+	for i := range m.Services {
+		s := &m.Services[i]
 		zone := topLevelDir(s.Name)
 		zones[zone] = append(zones[zone], s.Name)
 	}

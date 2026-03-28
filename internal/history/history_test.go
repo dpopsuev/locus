@@ -6,24 +6,24 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dpopsuev/locus/internal/cache"
 	"github.com/dpopsuev/locus/internal/arch"
+	"github.com/dpopsuev/locus/internal/cache"
 )
 
-func testSetup(t *testing.T) (*cache.ScanCache, string) {
+func testSetup(t *testing.T) (sc *cache.ScanCache, histDir string) {
 	t.Helper()
 	dir := t.TempDir()
-	sc := cache.New(filepath.Join(dir, "cache"))
-	histDir := filepath.Join(dir, "history")
+	sc = cache.New(filepath.Join(dir, "cache"))
+	histDir = filepath.Join(dir, "history")
 	return sc, histDir
 }
 
-func testReport(components int, edges int) *arch.ContextReport {
-	var svcs []arch.ArchService
+func testReport(components, edges int) *arch.ContextReport {
+	svcs := make([]arch.ArchService, 0, components)
 	for i := range components {
 		svcs = append(svcs, arch.ArchService{Name: "svc" + string(rune('A'+i))})
 	}
-	var edgeList []arch.ArchEdge
+	edgeList := make([]arch.ArchEdge, 0, edges)
 	for i := range edges {
 		edgeList = append(edgeList, arch.ArchEdge{From: "a", To: "b" + string(rune('0'+i))})
 	}

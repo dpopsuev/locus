@@ -75,7 +75,7 @@ func (s *TypeScriptScanner) Scan(root string) (*model.Project, error) {
 
 		dir := filepath.ToSlash(filepath.Dir(rel))
 		if dir == "." {
-			dir = "(root)"
+			dir = nsRoot
 		}
 
 		ns := nsMap[dir]
@@ -116,14 +116,16 @@ func (s *TypeScriptScanner) Scan(root string) (*model.Project, error) {
 	return proj, nil
 }
 
-var (
-	reExportFunc      = regexp.MustCompile(`^\s*export\s+(?:async\s+)?function\s+(\w+)`)
-	reExportClass     = regexp.MustCompile(`^\s*export\s+(?:abstract\s+)?class\s+(\w+)`)
-	reExportInterface = regexp.MustCompile(`^\s*export\s+(?:type\s+)?interface\s+(\w+)`)
-	reExportConst     = regexp.MustCompile(`^\s*export\s+(?:const|let|var)\s+(\w+)`)
-	reExportType      = regexp.MustCompile(`^\s*export\s+type\s+(\w+)\s*=`)
-	reExportEnum      = regexp.MustCompile(`^\s*export\s+(?:const\s+)?enum\s+(\w+)`)
+var tsExportPatterns = []symbolPattern{
+	{regexp.MustCompile(`^\s*export\s+(?:async\s+)?function\s+(\w+)`), model.SymbolFunction},
+	{regexp.MustCompile(`^\s*export\s+(?:abstract\s+)?class\s+(\w+)`), model.SymbolClass},
+	{regexp.MustCompile(`^\s*export\s+(?:const\s+)?enum\s+(\w+)`), model.SymbolEnum},
+	{regexp.MustCompile(`^\s*export\s+(?:type\s+)?interface\s+(\w+)`), model.SymbolInterface},
+	{regexp.MustCompile(`^\s*export\s+type\s+(\w+)\s*=`), model.SymbolTypeParameter},
+	{regexp.MustCompile(`^\s*export\s+(?:const|let|var)\s+(\w+)`), model.SymbolVariable},
+}
 
+var (
 	// Match value imports but NOT type-only imports.
 	// `import type { X } from '...'` and `export type { X } from '...'` are
 	// compile-time only (erased by TypeScript) and should not create dependency edges.
@@ -133,22 +135,10 @@ var (
 )
 
 func (s *TypeScriptScanner) extractExports(line string, ns *model.Namespace, seen map[string]bool) {
-	if m := reExportFunc.FindStringSubmatch(line); m != nil {
-		addTSSymbol(ns, seen, m[1], model.SymbolFunction)
-	} else if m := reExportClass.FindStringSubmatch(line); m != nil {
-		addTSSymbol(ns, seen, m[1], model.SymbolClass)
-	} else if m := reExportEnum.FindStringSubmatch(line); m != nil {
-		addTSSymbol(ns, seen, m[1], model.SymbolEnum)
-	} else if m := reExportInterface.FindStringSubmatch(line); m != nil {
-		addTSSymbol(ns, seen, m[1], model.SymbolInterface)
-	} else if m := reExportType.FindStringSubmatch(line); m != nil {
-		addTSSymbol(ns, seen, m[1], model.SymbolTypeParameter)
-	} else if m := reExportConst.FindStringSubmatch(line); m != nil {
-		addTSSymbol(ns, seen, m[1], model.SymbolVariable)
-	}
+	matchSymbolPatterns(line, tsExportPatterns, ns, seen, true)
 }
 
-func (s *TypeScriptScanner) extractImportEdge(line, fromDir, root string, externalPkgs map[string]bool, graph *model.DependencyGraph) {
+func (s *TypeScriptScanner) extractImportEdge(line, fromDir, _ string, _ map[string]bool, graph *model.DependencyGraph) {
 	// Skip type-only imports — they are erased at compile time and
 	// don't create runtime dependencies. Prevents false-positive cycles.
 	if reImportTypeOnly.MatchString(line) {
@@ -178,13 +168,13 @@ func (s *TypeScriptScanner) extractImportEdge(line, fromDir, root string, extern
 
 func resolveRelativeImport(fromDir, spec string) string {
 	base := fromDir
-	if base == "(root)" {
+	if base == nsRoot {
 		base = "."
 	}
 	resolved := filepath.ToSlash(filepath.Clean(filepath.Join(base, spec)))
 	dir := filepath.ToSlash(filepath.Dir(resolved))
 	if dir == "." {
-		return "(root)"
+		return nsRoot
 	}
 	return dir
 }
@@ -199,18 +189,6 @@ func barePackageName(spec string) string {
 	}
 	parts := strings.SplitN(spec, "/", 2)
 	return parts[0]
-}
-
-func addTSSymbol(ns *model.Namespace, seen map[string]bool, name string, kind model.SymbolKind) {
-	if seen[name] {
-		return
-	}
-	seen[name] = true
-	ns.AddSymbol(&model.Symbol{
-		Name:     name,
-		Kind:     kind,
-		Exported: true,
-	})
 }
 
 func isTSFile(name string) bool {

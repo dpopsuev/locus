@@ -1,12 +1,15 @@
 package analysis
 
 import (
-	"fmt"
+	"errors"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 )
+
+// ErrRegexCallChainNotSupported is returned when regex call chain analysis is attempted.
+var ErrRegexCallChainNotSupported = errors.New("regex call chain: not supported")
 
 // RegexAnalyzer is the last-resort analyzer. It uses simple regex patterns
 // to extract type declarations from source files. Accuracy is ~40% but it
@@ -35,20 +38,20 @@ func (a *RegexAnalyzer) Classes(root string) ([]ClassInfo, error) {
 		text := string(content)
 		ext := filepath.Ext(path)
 		switch ext {
-		case ".go":
+		case extGo:
 			for _, m := range reGoStruct.FindAllStringSubmatch(text, -1) {
 				classes = append(classes, ClassInfo{
-					Name: m[1], Package: pkg, Kind: "struct",
+					Name: m[1], Package: pkg, Kind: kindStruct,
 					Exported: isExported(m[1]),
 				})
 			}
 			for _, m := range reGoIface.FindAllStringSubmatch(text, -1) {
 				classes = append(classes, ClassInfo{
-					Name: m[1], Package: pkg, Kind: "interface",
+					Name: m[1], Package: pkg, Kind: kindInterface,
 					Exported: isExported(m[1]),
 				})
 			}
-		case ".java":
+		case extJava:
 			for _, m := range reClass.FindAllStringSubmatch(text, -1) {
 				classes = append(classes, ClassInfo{
 					Name: m[1], Package: pkg, Kind: "class",
@@ -57,21 +60,21 @@ func (a *RegexAnalyzer) Classes(root string) ([]ClassInfo, error) {
 			}
 			for _, m := range reInterface.FindAllStringSubmatch(text, -1) {
 				classes = append(classes, ClassInfo{
-					Name: m[1], Package: pkg, Kind: "interface",
+					Name: m[1], Package: pkg, Kind: kindInterface,
 					Exported: true,
 				})
 			}
-		case ".py":
+		case extPy:
 			for _, m := range rePyClass.FindAllStringSubmatch(text, -1) {
 				classes = append(classes, ClassInfo{
 					Name: m[1], Package: pkg, Kind: "class",
 					Exported: !strings.HasPrefix(m[1], "_"),
 				})
 			}
-		case ".rs":
+		case extRust:
 			for _, m := range reRustStruct.FindAllStringSubmatch(text, -1) {
 				classes = append(classes, ClassInfo{
-					Name: m[1], Package: pkg, Kind: "struct",
+					Name: m[1], Package: pkg, Kind: kindStruct,
 					Exported: true,
 				})
 			}
@@ -81,7 +84,7 @@ func (a *RegexAnalyzer) Classes(root string) ([]ClassInfo, error) {
 					Exported: true,
 				})
 			}
-		case ".ts", ".js":
+		case extTS, extJS:
 			for _, m := range reTSClass.FindAllStringSubmatch(text, -1) {
 				classes = append(classes, ClassInfo{
 					Name: m[1], Package: pkg, Kind: "class",
@@ -90,7 +93,7 @@ func (a *RegexAnalyzer) Classes(root string) ([]ClassInfo, error) {
 			}
 			for _, m := range reTSInterface.FindAllStringSubmatch(text, -1) {
 				classes = append(classes, ClassInfo{
-					Name: m[1], Package: pkg, Kind: "interface",
+					Name: m[1], Package: pkg, Kind: kindInterface,
 					Exported: true,
 				})
 			}
@@ -99,17 +102,18 @@ func (a *RegexAnalyzer) Classes(root string) ([]ClassInfo, error) {
 	return classes, nil
 }
 
+//nolint:gocyclo // multi-language regex matching requires branching per language
 func (a *RegexAnalyzer) Implements(root string) ([]ImplEdge, error) {
 	var edges []ImplEdge
 	walkSrcFiles(root, func(path, pkg string, content []byte) {
 		text := string(content)
 		ext := filepath.Ext(path)
 		switch ext {
-		case ".rs":
+		case extRust:
 			for _, m := range reRustImpl.FindAllStringSubmatch(text, -1) {
 				edges = append(edges, ImplEdge{From: m[2], To: m[1], Kind: "implements"})
 			}
-		case ".java":
+		case extJava:
 			for _, m := range reClass.FindAllStringSubmatch(text, -1) {
 				if m[2] != "" {
 					edges = append(edges, ImplEdge{From: m[1], To: m[2], Kind: "extends"})
@@ -123,7 +127,7 @@ func (a *RegexAnalyzer) Implements(root string) ([]ImplEdge, error) {
 					}
 				}
 			}
-		case ".py":
+		case extPy:
 			for _, m := range rePyClass.FindAllStringSubmatch(text, -1) {
 				if m[2] != "" {
 					for _, parent := range strings.Split(m[2], ",") {
@@ -134,7 +138,7 @@ func (a *RegexAnalyzer) Implements(root string) ([]ImplEdge, error) {
 					}
 				}
 			}
-		case ".ts", ".js":
+		case extTS, extJS:
 			for _, m := range reTSClass.FindAllStringSubmatch(text, -1) {
 				if m[2] != "" {
 					edges = append(edges, ImplEdge{From: m[1], To: m[2], Kind: "extends"})
@@ -158,7 +162,7 @@ func (a *RegexAnalyzer) FieldRefs(root string) ([]FieldRef, error) {
 }
 
 func (a *RegexAnalyzer) CallChain(root, entry string, depth int) ([]Call, error) {
-	return nil, fmt.Errorf("regex call chain: not supported")
+	return nil, ErrRegexCallChainNotSupported
 }
 
 func (a *RegexAnalyzer) EntryPoints(root string) ([]EntryPoint, error) {
@@ -166,7 +170,7 @@ func (a *RegexAnalyzer) EntryPoints(root string) ([]EntryPoint, error) {
 	walkSrcFiles(root, func(path, pkg string, content []byte) {
 		text := string(content)
 		ext := filepath.Ext(path)
-		if ext == ".go" {
+		if ext == extGo {
 			if reGoMain.MatchString(text) {
 				entries = append(entries, EntryPoint{
 					Name: "main", Kind: "main", Package: pkg, File: path,
@@ -187,7 +191,7 @@ func (a *RegexAnalyzer) EntryPoints(root string) ([]EntryPoint, error) {
 func (a *RegexAnalyzer) NestingDepth(root string) ([]NestingResult, error) {
 	var results []NestingResult
 	walkSrcFiles(root, func(path, pkg string, content []byte) {
-		if filepath.Ext(path) != ".go" {
+		if filepath.Ext(path) != extGo {
 			return
 		}
 		for _, m := range reFunc.FindAllStringSubmatchIndex(string(content), -1) {
@@ -226,20 +230,20 @@ func (a *RegexAnalyzer) NestingDepth(root string) ([]NestingResult, error) {
 
 func walkSrcFiles(root string, fn func(path, pkg string, content []byte)) {
 	absRoot, _ := filepath.Abs(root)
-	filepath.WalkDir(absRoot, func(path string, d os.DirEntry, err error) error {
+	_ = filepath.WalkDir(absRoot, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 		if d.IsDir() {
 			base := d.Name()
-			if base == "vendor" || base == "testdata" || strings.HasPrefix(base, ".") {
+			if base == dirVendor || base == dirTestdata || strings.HasPrefix(base, ".") {
 				return filepath.SkipDir
 			}
 			return nil
 		}
 		ext := filepath.Ext(d.Name())
 		switch ext {
-		case ".go", ".rs", ".py", ".ts", ".js", ".java":
+		case extGo, extRust, extPy, extTS, extJS, extJava:
 		default:
 			return nil
 		}
@@ -253,7 +257,7 @@ func walkSrcFiles(root string, fn func(path, pkg string, content []byte)) {
 		rel, _ := filepath.Rel(absRoot, path)
 		pkg := filepath.ToSlash(filepath.Dir(rel))
 		if pkg == "." {
-			pkg = "(root)"
+			pkg = pkgRoot
 		}
 		fn(path, pkg, content)
 		return nil

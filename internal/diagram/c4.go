@@ -19,8 +19,8 @@ func renderC4(in Input, opts Options) string {
 
 	fi := fanIn(report.Architecture.Edges)
 	churnMap := make(map[string]int)
-	for _, s := range report.Architecture.Services {
-		churnMap[s.Name] = s.Churn
+	for i := range report.Architecture.Services {
+		churnMap[report.Architecture.Services[i].Name] = report.Architecture.Services[i].Churn
 	}
 
 	type container struct {
@@ -36,7 +36,8 @@ func renderC4(in Input, opts Options) string {
 	groups := make(map[string]*container)
 	var order []string
 
-	for _, svc := range report.Architecture.Services {
+	for i := range report.Architecture.Services {
+		svc := &report.Architecture.Services[i]
 		g := groupName(svc.Name, depth)
 		if _, ok := groups[g]; !ok {
 			groups[g] = &container{name: g}

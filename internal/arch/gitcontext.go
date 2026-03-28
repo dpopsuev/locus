@@ -5,7 +5,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -47,11 +46,12 @@ func RecentCommits(root string, days int, modPath string) []PackageCommit {
 	}
 
 	absRoot, _ := filepath.Abs(root)
-	var commits []PackageCommit
+	lines := strings.Split(string(out), "\n")
+	commits := make([]PackageCommit, 0, len(lines))
 	var currentHash, currentAuthor, currentMsg string
 	var currentDate time.Time
 
-	for _, line := range strings.Split(string(out), "\n") {
+	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
@@ -90,7 +90,7 @@ func RecentCommits(root string, days int, modPath string) []PackageCommit {
 	}
 
 	seen := make(map[string]bool)
-	var deduped []PackageCommit
+	deduped := make([]PackageCommit, 0, len(commits))
 	for _, c := range commits {
 		key := c.Hash + "|" + c.Package
 		if seen[key] {
@@ -105,7 +105,7 @@ func RecentCommits(root string, days int, modPath string) []PackageCommit {
 }
 
 // AuthorOwnership returns per-package top contributors from git history.
-func AuthorOwnership(root string, modPath string) map[string][]Author {
+func AuthorOwnership(root, modPath string) map[string][]Author {
 	cmd := exec.Command("git", "log", "--format=%an", "--name-only")
 	cmd.Dir = root
 	out, err := cmd.Output()
@@ -188,7 +188,7 @@ func FileHotSpots(root string, days int) []HotFile {
 		fileCounts[line]++
 	}
 
-	var files []HotFile
+	files := make([]HotFile, 0, len(fileCounts))
 	for path, count := range fileCounts {
 		dir := filepath.Dir(path)
 		if dir == "." {
@@ -208,18 +208,4 @@ func FileHotSpots(root string, days int) []HotFile {
 		files = files[:MaxFileHotSpots]
 	}
 	return files
-}
-
-// parseShortlogLine parses a "  N\tAuthor Name" line from git shortlog.
-func parseShortlogLine(line string) (string, int) {
-	line = strings.TrimSpace(line)
-	parts := strings.SplitN(line, "\t", 2)
-	if len(parts) != 2 {
-		return "", 0
-	}
-	count, err := strconv.Atoi(strings.TrimSpace(parts[0]))
-	if err != nil {
-		return "", 0
-	}
-	return strings.TrimSpace(parts[1]), count
 }

@@ -23,20 +23,30 @@ type ConventionReport struct {
 	Total       int          `json:"total"`
 }
 
+// conventionData holds intermediate data collected during the filesystem walk.
+type conventionData struct {
+	structureDirs  map[string]int
+	testPatterns   map[string][]string
+	configPatterns map[string][]string
+	namingFiles    map[string]int
+	namingTypes    map[string]int
+}
+
+var (
+	structurePrefixes = []string{"cmd/", "internal/", "pkg/", "src/"}
+	testSuffixes      = []string{"_test.go", "test_", ".spec.ts", ".spec.js", "_test.py"}
+	configNames       = []string{".yaml", ".yml", ".toml", ".json", "config.", ".config"}
+)
+
 // DetectConventions scans the project and detects coding conventions.
 func DetectConventions(root string) (*ConventionReport, error) {
-	report := &ConventionReport{}
-
-	// Track what we find
-	structureDirs := make(map[string]int)
-	testPatterns := make(map[string][]string)
-	configPatterns := make(map[string][]string)
-	namingFiles := make(map[string]int)   // snake_case vs camelCase for files
-	namingTypes := make(map[string]int)  // PascalCase for types (from filenames)
-
-	structurePrefixes := []string{"cmd/", "internal/", "pkg/", "src/"}
-	testSuffixes := []string{"_test.go", "test_", ".spec.ts", ".spec.js", "_test.py"}
-	configNames := []string{".yaml", ".yml", ".toml", ".json", "config.", ".config"}
+	data := &conventionData{
+		structureDirs:  make(map[string]int),
+		testPatterns:   make(map[string][]string),
+		configPatterns: make(map[string][]string),
+		namingFiles:    make(map[string]int),
+		namingTypes:    make(map[string]int),
+	}
 
 	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
@@ -54,122 +64,122 @@ func DetectConventions(root string) (*ConventionReport, error) {
 
 		rel, _ := filepath.Rel(root, path)
 		base := filepath.Base(path)
-
-		// File structure patterns
-		for _, prefix := range structurePrefixes {
-			if strings.HasPrefix(rel, prefix) {
-				structureDirs[prefix]++
-				break
-			}
-		}
-
-		// Test file patterns
-		for _, suffix := range testSuffixes {
-			if strings.HasSuffix(base, suffix) || strings.HasPrefix(base, suffix) {
-				examples := testPatterns[suffix]
-				examples = append(examples, rel)
-				if len(examples) > 5 {
-					examples = examples[:5]
-				}
-				testPatterns[suffix] = examples
-				break
-			}
-		}
-
-		// Config patterns
-		for _, cfg := range configNames {
-			if strings.Contains(base, cfg) || strings.HasSuffix(base, cfg) {
-				examples := configPatterns[cfg]
-				examples = append(examples, rel)
-				if len(examples) > 5 {
-					examples = examples[:5]
-				}
-				configPatterns[cfg] = examples
-				break
-			}
-		}
-
-		// Naming: file conventions (exclude test and config)
-		ext := filepath.Ext(base)
-		if ext == ".go" && !strings.HasSuffix(base, "_test.go") {
-			name := strings.TrimSuffix(base, ext)
-			if snakeCaseRegex.MatchString(name) {
-				namingFiles["snake_case"]++
-			} else if camelCaseRegex.MatchString(name) {
-				namingFiles["camelCase"]++
-			}
-		}
-		if ext == ".go" && strings.HasSuffix(base, "_test.go") {
-			// Go: PascalCase for types often in exported files
-			namingTypes["PascalCase"]++
-		}
-
+		data.classifyFile(rel, base)
 		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	// Build conventions from collected data
+	return data.buildReport(), nil
+}
+
+// classifyFile categorizes a single file into convention patterns.
+func (d *conventionData) classifyFile(rel, base string) {
+	// File structure patterns
 	for _, prefix := range structurePrefixes {
-		if structureDirs[prefix] > 0 {
+		if strings.HasPrefix(rel, prefix) {
+			d.structureDirs[prefix]++
+			break
+		}
+	}
+
+	// Test file patterns
+	for _, suffix := range testSuffixes {
+		if !strings.HasSuffix(base, suffix) && !strings.HasPrefix(base, suffix) {
+			continue
+		}
+		examples := d.testPatterns[suffix]
+		examples = append(examples, rel)
+		if len(examples) > 5 {
+			examples = examples[:5]
+		}
+		d.testPatterns[suffix] = examples
+		break
+	}
+
+	// Config patterns
+	for _, cfg := range configNames {
+		if !strings.Contains(base, cfg) && !strings.HasSuffix(base, cfg) {
+			continue
+		}
+		examples := d.configPatterns[cfg]
+		examples = append(examples, rel)
+		if len(examples) > 5 {
+			examples = examples[:5]
+		}
+		d.configPatterns[cfg] = examples
+		break
+	}
+
+	// Naming: file conventions
+	ext := filepath.Ext(base)
+	if ext != extGo {
+		return
+	}
+	if strings.HasSuffix(base, "_test.go") {
+		d.namingTypes["PascalCase"]++
+		return
+	}
+	name := strings.TrimSuffix(base, ext)
+	if snakeCaseRegex.MatchString(name) {
+		d.namingFiles["snake_case"]++
+	} else if camelCaseRegex.MatchString(name) {
+		d.namingFiles["camelCase"]++
+	}
+}
+
+// buildReport converts collected data into a ConventionReport.
+func (d *conventionData) buildReport() *ConventionReport {
+	report := &ConventionReport{}
+
+	for _, prefix := range structurePrefixes {
+		if d.structureDirs[prefix] > 0 {
 			report.Conventions = append(report.Conventions, Convention{
 				Category: "structure",
 				Pattern:  prefix + " directory layout",
-				Count:    structureDirs[prefix],
-				Examples:  []string{prefix + "..."},
+				Count:    d.structureDirs[prefix],
+				Examples: []string{prefix + "..."},
 			})
-			report.Total += structureDirs[prefix]
+			report.Total += d.structureDirs[prefix]
 		}
 	}
 
-	for pattern, examples := range testPatterns {
+	addPatternConventions(report, "style", "test file: ", d.testPatterns)
+	addPatternConventions(report, "structure", "config: ", d.configPatterns)
+	addCountConventions(report, "naming", "file naming: ", d.namingFiles)
+	addCountConventions(report, "naming", "type naming: ", d.namingTypes)
+
+	return report
+}
+
+// addPatternConventions adds conventions from pattern-to-examples maps.
+func addPatternConventions(report *ConventionReport, category, prefix string, patterns map[string][]string) {
+	for pattern, examples := range patterns {
 		if len(examples) > 0 {
 			report.Conventions = append(report.Conventions, Convention{
-				Category: "style",
-				Pattern:  "test file: " + pattern,
+				Category: category,
+				Pattern:  prefix + pattern,
 				Count:    len(examples),
 				Examples: examples,
 			})
 			report.Total += len(examples)
 		}
 	}
+}
 
-	for pattern, examples := range configPatterns {
-		if len(examples) > 0 {
-			report.Conventions = append(report.Conventions, Convention{
-				Category: "structure",
-				Pattern:  "config: " + pattern,
-				Count:    len(examples),
-				Examples: examples,
-			})
-			report.Total += len(examples)
-		}
-	}
-
-	for naming, count := range namingFiles {
+// addCountConventions adds conventions from name-to-count maps.
+func addCountConventions(report *ConventionReport, category, prefix string, counts map[string]int) {
+	for name, count := range counts {
 		if count > 0 {
 			report.Conventions = append(report.Conventions, Convention{
-				Category: "naming",
-				Pattern:  "file naming: " + naming,
+				Category: category,
+				Pattern:  prefix + name,
 				Count:    count,
 			})
 			report.Total += count
 		}
 	}
-
-	for naming, count := range namingTypes {
-		if count > 0 {
-			report.Conventions = append(report.Conventions, Convention{
-				Category: "naming",
-				Pattern:  "type naming: " + naming,
-				Count:    count,
-			})
-			report.Total += count
-		}
-	}
-
-	return report, nil
 }
 
 var (

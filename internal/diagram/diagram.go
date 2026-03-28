@@ -9,6 +9,8 @@ import (
 	"github.com/dpopsuev/locus/internal/history"
 )
 
+const themeNatural = "natural"
+
 // Options controls which diagram is rendered and how it is scoped.
 type Options struct {
 	Type         string // dependency, c4, coupling, churn, layers, tree, classes, sequence, er, dataflow, callgraph, state
@@ -24,11 +26,11 @@ type Options struct {
 // Input bundles everything the renderers may need. Not every renderer
 // uses every field — e.g. churn needs History while dependency does not.
 type Input struct {
-	Report       *arch.ContextReport
-	History      []history.EntrySummary
-	Analyzer     analysis.TypeAnalyzer
-	DeepAnalyzer analysis.DeepAnalyzer
-	Root         string // repository root path (needed by Tier 2/3 renderers)
+	Report        *arch.ContextReport
+	History       []history.EntrySummary
+	Analyzer      analysis.TypeAnalyzer
+	DeepAnalyzer  analysis.DeepAnalyzer
+	Root          string // repository root path (needed by Tier 2/3 renderers)
 	ResolvedTheme *ResolvedTheme
 }
 
@@ -38,7 +40,7 @@ func Render(in Input, opts Options) (string, error) {
 		theme := DefaultTheme()
 		mode := opts.Theme
 		if mode == "" {
-			mode = "natural"
+			mode = themeNatural
 		}
 		in.ResolvedTheme = theme.Resolve(mode)
 	}
@@ -72,7 +74,7 @@ func Render(in Input, opts Options) (string, error) {
 	case "zones":
 		return renderZones(in, opts), nil
 	default:
-		return "", fmt.Errorf("unknown diagram type %q (use: %s)", opts.Type, strings.Join(Types(), ", "))
+		return "", fmt.Errorf("%w %q (use: %s)", ErrUnknownDiagramType, opts.Type, strings.Join(Types(), ", "))
 	}
 }
 

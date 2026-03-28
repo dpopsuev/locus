@@ -140,11 +140,11 @@ func TestComputeSymbolBlastRadius_Cycle(t *testing.T) {
 
 func TestComputeSymbolBlastRadius_RiskLevels(t *testing.T) {
 	tests := []struct {
-		name      string
-		affected  int
-		total     int
-		wantRisk  string
-		wantPct   int
+		name     string
+		affected int
+		total    int
+		wantRisk string
+		wantPct  int
 	}{
 		{"low", 1, 20, "low", 5},
 		{"medium", 3, 20, "medium", 15},

@@ -9,14 +9,14 @@ import (
 // from an entry point through function calls.
 func renderSequence(in Input, opts Options) (string, error) {
 	if in.Analyzer == nil {
-		return "", fmt.Errorf("sequence diagram requires a TypeAnalyzer")
+		return "", ErrTypeAnalyzerRequired
 	}
 
 	entry := opts.Entry
 	if entry == "" {
 		eps, _ := in.Analyzer.EntryPoints(in.Root)
 		if len(eps) == 0 {
-			return "", fmt.Errorf("sequence diagram: no --entry provided and no entry points detected")
+			return "", ErrNoEntryProvided
 		}
 		entry = eps[0].Name
 	}
@@ -31,7 +31,7 @@ func renderSequence(in Input, opts Options) (string, error) {
 		return "", fmt.Errorf("sequence: %w", err)
 	}
 	if len(calls) == 0 {
-		return "", fmt.Errorf("sequence diagram: no calls found from entry %q", entry)
+		return "", fmt.Errorf("%w %q", ErrNoCallsFound, entry)
 	}
 
 	var b strings.Builder

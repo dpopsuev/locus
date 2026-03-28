@@ -54,7 +54,9 @@ func TestCacheMissDifferentSHA(t *testing.T) {
 	c := tempCache(t)
 	report := &arch.ContextReport{Scanner: "test"}
 
-	c.Put("/repo/a", "sha-1", report)
+	if err := c.Put("/repo/a", "sha-1", report); err != nil {
+		t.Fatal(err)
+	}
 
 	_, hit, err := c.Get("/repo/a", "sha-2")
 	if err != nil {
@@ -71,8 +73,12 @@ func TestMultipleSHAsPerRepo(t *testing.T) {
 	r1 := &arch.ContextReport{Scanner: "branch-a"}
 	r2 := &arch.ContextReport{Scanner: "branch-b"}
 
-	c.Put("/repo", "sha-a", r1)
-	c.Put("/repo", "sha-b", r2)
+	if err := c.Put("/repo", "sha-a", r1); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Put("/repo", "sha-b", r2); err != nil {
+		t.Fatal(err)
+	}
 
 	got1, hit1, _ := c.Get("/repo", "sha-a")
 	got2, hit2, _ := c.Get("/repo", "sha-b")
@@ -92,7 +98,9 @@ func TestGetCurrent(t *testing.T) {
 	sha := initGitRepo(t, repoPath)
 
 	report := &arch.ContextReport{Scanner: "current"}
-	c.Put(repoPath, sha, report)
+	if err := c.Put(repoPath, sha, report); err != nil {
+		t.Fatal(err)
+	}
 
 	got, gotSHA, hit, err := c.GetCurrent(repoPath)
 	if err != nil {
@@ -115,7 +123,9 @@ func TestGetCurrentMissAfterNewCommit(t *testing.T) {
 	repoPath := t.TempDir()
 	sha1 := initGitRepo(t, repoPath)
 
-	c.Put(repoPath, sha1, &arch.ContextReport{Scanner: "old"})
+	if err := c.Put(repoPath, sha1, &arch.ContextReport{Scanner: "old"}); err != nil {
+		t.Fatal(err)
+	}
 
 	cmd := exec.Command("git", "commit", "--allow-empty", "-m", "second")
 	cmd.Dir = repoPath
@@ -141,10 +151,16 @@ func TestGetCurrentMissAfterNewCommit(t *testing.T) {
 func TestInvalidate(t *testing.T) {
 	c := tempCache(t)
 
-	c.Put("/repo", "sha1", &arch.ContextReport{Scanner: "test"})
-	c.Put("/repo", "sha2", &arch.ContextReport{Scanner: "test2"})
+	if err := c.Put("/repo", "sha1", &arch.ContextReport{Scanner: "test"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Put("/repo", "sha2", &arch.ContextReport{Scanner: "test2"}); err != nil {
+		t.Fatal(err)
+	}
 
-	c.Invalidate("/repo")
+	if err := c.Invalidate("/repo"); err != nil {
+		t.Fatal(err)
+	}
 
 	_, hit1, _ := c.Get("/repo", "sha1")
 	_, hit2, _ := c.Get("/repo", "sha2")
@@ -204,4 +220,3 @@ func TestResolveBranch(t *testing.T) {
 		t.Errorf("feature-x SHA %q != HEAD %q", sha, headSHA)
 	}
 }
-

@@ -26,9 +26,9 @@ func setupModule(t *testing.T, files map[string]string) string {
 
 func TestScanExtractsPackages(t *testing.T) {
 	dir := setupModule(t, map[string]string{
-		"go.mod":     "module example.com/test\n\ngo 1.21\n",
-		"main.go":    "package main\n\nfunc main() {}\n",
-		"lib/lib.go": "package lib\n\nfunc Hello() string { return \"hi\" }\n",
+		"go.mod":      "module example.com/test\n\ngo 1.21\n",
+		"main.go":     "package main\n\nfunc main() {}\n",
+		"lib/lib.go":  "package lib\n\nfunc Hello() string { return \"hi\" }\n",
 		"lib/util.go": "package lib\n\nvar Version = \"1.0\"\n",
 	})
 
@@ -179,11 +179,11 @@ func Hello() { fmt.Println("hi") }
 
 func TestScanSkipsVendorAndHiddenDirs(t *testing.T) {
 	dir := setupModule(t, map[string]string{
-		"go.mod":             "module example.com/skip\n\ngo 1.21\n",
-		"main.go":            "package main\n",
-		"vendor/v/v.go":      "package v\n",
-		".hidden/h.go":       "package h\n",
-		"testdata/td/td.go":  "package td\n",
+		"go.mod":            "module example.com/skip\n\ngo 1.21\n",
+		"main.go":           "package main\n",
+		"vendor/v/v.go":     "package v\n",
+		".hidden/h.go":      "package h\n",
+		"testdata/td/td.go": "package td\n",
 	})
 
 	sc := &survey.GoScanner{}

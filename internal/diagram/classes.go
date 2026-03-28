@@ -7,10 +7,12 @@ import (
 	"github.com/dpopsuev/locus/internal/analysis"
 )
 
+const kindInterface = "interface"
+
 // renderClasses produces a Mermaid classDiagram from TypeAnalyzer data.
 func renderClasses(in Input, opts Options) (string, error) {
 	if in.Analyzer == nil {
-		return "", fmt.Errorf("classes diagram requires a TypeAnalyzer")
+		return "", ErrTypeAnalyzerRequired
 	}
 	classes, err := in.Analyzer.Classes(in.Root)
 	if err != nil {
@@ -23,7 +25,7 @@ func renderClasses(in Input, opts Options) (string, error) {
 	}
 
 	if len(classes) == 0 {
-		return "", fmt.Errorf("no types found for classes diagram")
+		return "", ErrNoTypesFound
 	}
 
 	var b strings.Builder
@@ -38,7 +40,7 @@ func renderClasses(in Input, opts Options) (string, error) {
 		declared[c.Name] = true
 
 		b.WriteString(fmt.Sprintf("    class %s {\n", id))
-		if c.Kind == "interface" {
+		if c.Kind == kindInterface {
 			b.WriteString("        <<interface>>\n")
 		}
 		for _, f := range c.Fields {

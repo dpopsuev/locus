@@ -7,15 +7,19 @@ import (
 	"github.com/dpopsuev/locus/internal/arch"
 )
 
+const summaryNoChanges = "no changes"
+
+// CodographDiff holds the structural difference between two codographs.
 type CodographDiff struct {
-	AddedComponents   []string          `json:"added_components,omitempty"`
-	RemovedComponents []string          `json:"removed_components,omitempty"`
-	AddedEdges        []string          `json:"added_edges,omitempty"`
-	RemovedEdges      []string          `json:"removed_edges,omitempty"`
-	ChurnDeltas       []ChurnDelta      `json:"churn_deltas,omitempty"`
-	Summary           string            `json:"summary"`
+	AddedComponents   []string     `json:"added_components,omitempty"`
+	RemovedComponents []string     `json:"removed_components,omitempty"`
+	AddedEdges        []string     `json:"added_edges,omitempty"`
+	RemovedEdges      []string     `json:"removed_edges,omitempty"`
+	ChurnDeltas       []ChurnDelta `json:"churn_deltas,omitempty"`
+	Summary           string       `json:"summary"`
 }
 
+// ChurnDelta records a change in churn for a single component.
 type ChurnDelta struct {
 	Component string `json:"component"`
 	OldChurn  int    `json:"old_churn"`
@@ -23,11 +27,12 @@ type ChurnDelta struct {
 	Delta     int    `json:"delta"`
 }
 
-func DiffReports(old, new *arch.ContextReport) *CodographDiff {
+// DiffReports computes the structural difference between two codograph reports.
+func DiffReports(old, updated *arch.ContextReport) *CodographDiff {
 	d := &CodographDiff{}
 
 	oldComps := componentSet(old.Architecture.Services)
-	newComps := componentSet(new.Architecture.Services)
+	newComps := componentSet(updated.Architecture.Services)
 
 	for name := range newComps {
 		if !oldComps[name] {
@@ -41,7 +46,7 @@ func DiffReports(old, new *arch.ContextReport) *CodographDiff {
 	}
 
 	oldEdges := edgeSet(old.Architecture.Edges)
-	newEdges := edgeSet(new.Architecture.Edges)
+	newEdges := edgeSet(updated.Architecture.Edges)
 
 	for key := range newEdges {
 		if !oldEdges[key] {
@@ -55,7 +60,7 @@ func DiffReports(old, new *arch.ContextReport) *CodographDiff {
 	}
 
 	oldChurn := churnMap(old.HotSpots)
-	newChurn := churnMap(new.HotSpots)
+	newChurn := churnMap(updated.HotSpots)
 
 	allChurnKeys := map[string]bool{}
 	for k := range oldChurn {
@@ -83,8 +88,8 @@ func DiffReports(old, new *arch.ContextReport) *CodographDiff {
 
 func componentSet(svcs []arch.ArchService) map[string]bool {
 	m := make(map[string]bool, len(svcs))
-	for _, s := range svcs {
-		m[s.Name] = true
+	for i := range svcs {
+		m[svcs[i].Name] = true
 	}
 	return m
 }
@@ -127,7 +132,7 @@ func buildSummary(d *CodographDiff) string {
 		parts = append(parts, fmt.Sprintf("%d churn changes", n))
 	}
 	if len(parts) == 0 {
-		return "no changes"
+		return summaryNoChanges
 	}
 	return strings.Join(parts, ", ")
 }

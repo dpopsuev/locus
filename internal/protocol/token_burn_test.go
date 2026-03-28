@@ -16,7 +16,7 @@ func tokenCount(s string) int {
 	return len(s) / 4
 }
 
-func setupBurnTest(t *testing.T) (*Protocol, string) {
+func setupBurnTest(t *testing.T) (proto *Protocol, repoPath string) {
 	t.Helper()
 	repoPath, err := filepath.Abs("../..")
 	if err != nil {

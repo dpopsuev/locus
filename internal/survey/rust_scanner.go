@@ -66,7 +66,7 @@ func (s *RustScanner) scanWorkspace(root string, manifest cargoManifest, proj *m
 		name string
 		dir  string
 	}
-	var crates []crateInfo
+	crates := make([]crateInfo, 0, len(manifest.Workspace.Members))
 
 	for _, member := range manifest.Workspace.Members {
 		memberDir := filepath.Join(root, member)
@@ -123,14 +123,14 @@ func (s *RustScanner) scanSingleCrate(root string, manifest cargoManifest, proj 
 	return proj, nil
 }
 
-var (
-	rePubFn     = regexp.MustCompile(`^\s*pub(?:\(crate\))?\s+(?:async\s+)?fn\s+(\w+)`)
-	rePubStruct = regexp.MustCompile(`^\s*pub(?:\(crate\))?\s+struct\s+(\w+)`)
-	rePubEnum   = regexp.MustCompile(`^\s*pub(?:\(crate\))?\s+enum\s+(\w+)`)
-	rePubTrait  = regexp.MustCompile(`^\s*pub(?:\(crate\))?\s+trait\s+(\w+)`)
-	rePubConst  = regexp.MustCompile(`^\s*pub(?:\(crate\))?\s+const\s+(\w+)`)
-	rePubType   = regexp.MustCompile(`^\s*pub(?:\(crate\))?\s+type\s+(\w+)`)
-)
+var rustSymbolPatterns = []symbolPattern{
+	{regexp.MustCompile(`^\s*pub(?:\(crate\))?\s+(?:async\s+)?fn\s+(\w+)`), model.SymbolFunction},
+	{regexp.MustCompile(`^\s*pub(?:\(crate\))?\s+struct\s+(\w+)`), model.SymbolStruct},
+	{regexp.MustCompile(`^\s*pub(?:\(crate\))?\s+enum\s+(\w+)`), model.SymbolEnum},
+	{regexp.MustCompile(`^\s*pub(?:\(crate\))?\s+trait\s+(\w+)`), model.SymbolInterface},
+	{regexp.MustCompile(`^\s*pub(?:\(crate\))?\s+const\s+(\w+)`), model.SymbolConstant},
+	{regexp.MustCompile(`^\s*pub(?:\(crate\))?\s+type\s+(\w+)`), model.SymbolTypeParameter},
+}
 
 func (s *RustScanner) extractRustSymbols(crateDir string, ns *model.Namespace) {
 	seen := make(map[string]bool)
@@ -162,34 +162,9 @@ func (s *RustScanner) extractRustSymbols(crateDir string, ns *model.Namespace) {
 
 		scanner := bufio.NewScanner(f)
 		for scanner.Scan() {
-			line := scanner.Text()
-			if m := rePubFn.FindStringSubmatch(line); m != nil {
-				addRustSymbol(ns, seen, m[1], model.SymbolFunction)
-			} else if m := rePubStruct.FindStringSubmatch(line); m != nil {
-				addRustSymbol(ns, seen, m[1], model.SymbolStruct)
-			} else if m := rePubEnum.FindStringSubmatch(line); m != nil {
-				addRustSymbol(ns, seen, m[1], model.SymbolEnum)
-			} else if m := rePubTrait.FindStringSubmatch(line); m != nil {
-				addRustSymbol(ns, seen, m[1], model.SymbolInterface)
-			} else if m := rePubConst.FindStringSubmatch(line); m != nil {
-				addRustSymbol(ns, seen, m[1], model.SymbolConstant)
-			} else if m := rePubType.FindStringSubmatch(line); m != nil {
-				addRustSymbol(ns, seen, m[1], model.SymbolTypeParameter)
-			}
+			matchSymbolPatterns(scanner.Text(), rustSymbolPatterns, ns, seen, true)
 		}
 		return nil
-	})
-}
-
-func addRustSymbol(ns *model.Namespace, seen map[string]bool, name string, kind model.SymbolKind) {
-	if seen[name] {
-		return
-	}
-	seen[name] = true
-	ns.AddSymbol(&model.Symbol{
-		Name:     name,
-		Kind:     kind,
-		Exported: true,
 	})
 }
 

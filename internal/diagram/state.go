@@ -11,7 +11,7 @@ import (
 // machine patterns (const/iota groups + switch transitions).
 func renderState(in Input, opts Options) (string, error) {
 	if in.DeepAnalyzer == nil {
-		return "", fmt.Errorf("state diagram requires a DeepAnalyzer")
+		return "", ErrDeepAnalyzerRequired
 	}
 
 	machines, err := in.DeepAnalyzer.DetectStateMachines(in.Root)

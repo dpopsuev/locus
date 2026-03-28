@@ -19,7 +19,7 @@ type GapEntry struct {
 type GapReport struct {
 	Entries           []GapEntry `json:"entries"`
 	TotalGaps         int        `json:"total_gaps"`
-	ComponentsScanned int         `json:"components_scanned"`
+	ComponentsScanned int        `json:"components_scanned"`
 }
 
 // DetectGaps identifies undocumented or under-tested components.
@@ -32,8 +32,8 @@ func DetectGaps(report *arch.ContextReport, root string) (*GapReport, error) {
 		fanIn[e.To]++
 	}
 
-	for _, svc := range report.Architecture.Services {
-		comp := svc.Name
+	for i := range report.Architecture.Services {
+		comp := report.Architecture.Services[i].Name
 		dir := componentDir(root, report.ModulePath, comp)
 		// Skip components outside the project root (e.g. GOPATH module cache). BUG-9.
 		if !strings.HasPrefix(dir, root) {
@@ -58,14 +58,15 @@ func DetectGaps(report *arch.ContextReport, root string) (*GapReport, error) {
 			continue
 		}
 
-		// Severity: high fan-in without tests = critical
+		// Severity: high fan-in without tests = critical.
 		fi := fanIn[comp]
-		if !hasTests && fi >= 3 {
-			entry.Severity = "critical"
-		} else if !hasDocs {
-			entry.Severity = "warning"
-		} else {
-			entry.Severity = "info"
+		switch {
+		case !hasTests && fi >= 3:
+			entry.Severity = SeverityCritical
+		case !hasDocs:
+			entry.Severity = SeverityWarning
+		default:
+			entry.Severity = SeverityInfo
 		}
 
 		r.Entries = append(r.Entries, entry)
@@ -75,7 +76,7 @@ func DetectGaps(report *arch.ContextReport, root string) (*GapReport, error) {
 	return r, nil
 }
 
-func componentDir(root, modPath, component string) string {
+func componentDir(root, _ /*modPath*/, component string) string {
 	if component == "." || component == "" {
 		return root
 	}

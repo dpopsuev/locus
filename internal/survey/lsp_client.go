@@ -3,12 +3,15 @@ package survey
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"strconv"
 	"strings"
 	"sync"
 )
+
+var errMissingContentLength = errors.New("missing Content-Length header")
 
 // lspClient implements the JSON-RPC 2.0 transport for LSP communication
 // over a stdin/stdout pipe pair.
@@ -135,7 +138,7 @@ func (c *lspClient) readMessage() (*jsonRPCResponse, error) {
 	}
 
 	if contentLen < 0 {
-		return nil, fmt.Errorf("missing Content-Length header")
+		return nil, errMissingContentLength
 	}
 
 	body := make([]byte, contentLen)

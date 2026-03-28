@@ -19,6 +19,44 @@ const (
 	LayerTypeScript = "typescript"
 )
 
+// Common tree-sitter node type names used across analyzers.
+const (
+	nodeFuncDecl      = "function_declaration"
+	nodeMethodDecl    = "method_declaration"
+	nodeTypeID        = "type_identifier"
+	nodeStructType    = "struct_type"
+	nodeInterfaceType = "interface_type"
+	nodePointerType   = "pointer_type"
+	nodeQualifiedType = "qualified_type"
+)
+
+// Common kind strings for ClassInfo.
+const (
+	kindStruct    = "struct"
+	kindInterface = "interface"
+)
+
+// Common directory/file names used for skip logic.
+const (
+	dirVendor   = "vendor"
+	dirTestdata = "testdata"
+)
+
+// Common file extensions.
+const (
+	extGo   = ".go"
+	extRust = ".rs"
+	extPy   = ".py"
+	extTS   = ".ts"
+	extJS   = ".js"
+	extJava = ".java"
+	extTSX  = ".tsx"
+	extJSX  = ".jsx"
+)
+
+// pkgRoot is the package name used for files at the repository root.
+const pkgRoot = "(root)"
+
 // DeepAnalyzer extracts cross-function, cross-package structural
 // information for Tier 3 diagrams (dataflow, call graph, state machine).
 //

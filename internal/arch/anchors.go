@@ -13,6 +13,8 @@ import (
 // AnchorKind classifies the role of a semantic anchor.
 type AnchorKind string
 
+const pkgMain = "main"
+
 const (
 	AnchorEntryPoint   AnchorKind = "entry_point"
 	AnchorHTTPHandler  AnchorKind = "http_handler"
@@ -36,7 +38,7 @@ type SemanticAnchor struct {
 // ExtractAnchors scans Go source files in the given directory and returns
 // detected semantic anchors. This is a heuristic-based extraction that
 // identifies structurally important code points without requiring type info.
-func ExtractAnchors(root string, pkgPath string) []SemanticAnchor {
+func ExtractAnchors(root, pkgPath string) []SemanticAnchor {
 	absRoot, _ := filepath.Abs(root)
 	fset := token.NewFileSet()
 	var anchors []SemanticAnchor
@@ -97,7 +99,7 @@ func extractFuncAnchors(d *ast.FuncDecl, fset *token.FileSet, pkgPath, pkgName, 
 	name := d.Name.Name
 
 	// Entry points: main() and init() in package main
-	if d.Recv == nil && pkgName == "main" && (name == "main" || name == "init") {
+	if d.Recv == nil && pkgName == pkgMain && (name == "main" || name == "init") {
 		anchors = append(anchors, SemanticAnchor{
 			Kind:    AnchorEntryPoint,
 			Name:    name,
@@ -226,22 +228,19 @@ func scanBodyForAnchors(body *ast.BlockStmt, fset *token.FileSet, pkgPath, fileN
 		}
 
 		funcName := callFuncName(call)
-		switch {
-		case isHTTPRegistration(funcName):
-			if len(call.Args) >= 2 {
-				pos := fset.Position(call.Pos())
-				routeName := extractStringLit(call.Args[0])
-				if routeName == "" {
-					routeName = funcName
-				}
-				anchors = append(anchors, SemanticAnchor{
-					Kind:    AnchorHTTPHandler,
-					Name:    funcName + "(" + routeName + ")",
-					Package: pkgPath,
-					File:    fileName,
-					Line:    pos.Line,
-				})
+		if isHTTPRegistration(funcName) && len(call.Args) >= 2 {
+			pos := fset.Position(call.Pos())
+			routeName := extractStringLit(call.Args[0])
+			if routeName == "" {
+				routeName = funcName
 			}
+			anchors = append(anchors, SemanticAnchor{
+				Kind:    AnchorHTTPHandler,
+				Name:    funcName + "(" + routeName + ")",
+				Package: pkgPath,
+				File:    fileName,
+				Line:    pos.Line,
+			})
 		}
 		return true
 	})

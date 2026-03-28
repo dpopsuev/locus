@@ -6,7 +6,7 @@ import "encoding/json"
 type Language int
 
 const (
-	LangUnknown    Language = iota
+	LangUnknown Language = iota
 	LangGo
 	LangRust
 	LangPython

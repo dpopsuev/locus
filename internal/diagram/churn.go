@@ -32,9 +32,11 @@ func renderChurnTimeline(in Input, opts Options) string {
 	b.WriteString("xychart-beta\n")
 	b.WriteString("    title \"Codograph history\"\n")
 
-	var dates, components, edges []string
+	dates := make([]string, 0, len(recent))
+	components := make([]string, 0, len(recent))
+	edges := make([]string, 0, len(recent))
 	for _, e := range recent {
-		dates = append(dates, fmt.Sprintf("\"%s\"", e.Timestamp.Format("Jan 02")))
+		dates = append(dates, fmt.Sprintf("%q", e.Timestamp.Format("Jan 02")))
 		components = append(components, fmt.Sprintf("%d", e.Components))
 		edges = append(edges, fmt.Sprintf("%d", e.Edges))
 	}
@@ -49,7 +51,6 @@ func renderChurnTimeline(in Input, opts Options) string {
 
 func renderChurnBar(in Input, opts Options) string {
 	report := in.Report
-	rt := in.ResolvedTheme
 
 	fi := fanIn(report.Architecture.Edges)
 
@@ -60,7 +61,8 @@ func renderChurnBar(in Input, opts Options) string {
 	}
 
 	var entries []entry
-	for _, svc := range report.Architecture.Services {
+	for i := range report.Architecture.Services {
+		svc := &report.Architecture.Services[i]
 		if svc.Churn > 0 {
 			h := ClassifyHealth(fi[svc.Name], svc.Churn)
 			entries = append(entries, entry{name: svc.Name, churn: svc.Churn, health: h})
@@ -93,16 +95,15 @@ func renderChurnBar(in Input, opts Options) string {
 		}
 	}
 
-	_ = rt
-
 	var b strings.Builder
 	b.WriteString(in.ResolvedTheme.InitDirective() + "\n")
 	b.WriteString("xychart-beta\n")
 	b.WriteString("    title \"Component churn\"\n")
 
-	var names, values []string
+	names := make([]string, 0, len(entries))
+	values := make([]string, 0, len(entries))
 	for _, e := range entries {
-		names = append(names, fmt.Sprintf("\"%s%s\"", e.name, healthMarker(e.health)))
+		names = append(names, fmt.Sprintf("%q", e.name+healthMarker(e.health)))
 		values = append(values, fmt.Sprintf("%d", e.churn))
 	}
 

@@ -164,7 +164,7 @@ setup(name='legacy-app', version='1.0')
 }
 
 func keys(m map[string]*model.Namespace) []string {
-	var k []string
+	k := make([]string, 0, len(m))
 	for key := range m {
 		k = append(k, key)
 	}

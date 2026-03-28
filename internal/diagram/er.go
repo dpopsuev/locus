@@ -11,7 +11,7 @@ import (
 // through field references and composition.
 func renderER(in Input, opts Options) (string, error) {
 	if in.Analyzer == nil {
-		return "", fmt.Errorf("ER diagram requires a TypeAnalyzer")
+		return "", ErrTypeAnalyzerRequired
 	}
 	classes, err := in.Analyzer.Classes(in.Root)
 	if err != nil {
@@ -33,7 +33,7 @@ func renderER(in Input, opts Options) (string, error) {
 	}
 
 	if len(entities) == 0 {
-		return "", fmt.Errorf("no entities found for ER diagram")
+		return "", ErrNoEntitiesFound
 	}
 
 	var b strings.Builder
@@ -63,8 +63,8 @@ func renderER(in Input, opts Options) (string, error) {
 			continue
 		}
 		emitted[key] = true
-		b.WriteString(fmt.Sprintf("    %s ||--o{ %s : \"%s\"\n",
-			erID(ref.Owner), erID(ref.RefType), ref.Field))
+		fmt.Fprintf(&b, "    %s ||--o{ %s : %q\n",
+			erID(ref.Owner), erID(ref.RefType), ref.Field)
 	}
 
 	return b.String(), nil

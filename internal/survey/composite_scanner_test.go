@@ -96,10 +96,10 @@ func TestCompositeScanMergesPythonAndTS(t *testing.T) {
 	dir := t.TempDir()
 
 	files := map[string]string{
-		"pyproject.toml":    "[project]\nname = \"backend\"\n",
-		"backend/main.py":   "def serve():\n    pass\n",
-		"web/package.json":  `{"name": "web-ui"}`,
-		"web/src/index.ts":  `export function mount() {}`,
+		"pyproject.toml":   "[project]\nname = \"backend\"\n",
+		"backend/main.py":  "def serve():\n    pass\n",
+		"web/package.json": `{"name": "web-ui"}`,
+		"web/src/index.ts": `export function mount() {}`,
 	}
 
 	for name, content := range files {
@@ -148,9 +148,9 @@ func TestCompositeScanAutoDetectsMultipleLanguages(t *testing.T) {
 name = "backend"
 version = "0.1.0"
 `,
-		"src/lib.rs":           `pub fn serve() {}`,
-		"web/package.json":     `{"name": "web-ui"}`,
-		"web/src/index.ts":     `export function mount() {}`,
+		"src/lib.rs":       `pub fn serve() {}`,
+		"web/package.json": `{"name": "web-ui"}`,
+		"web/src/index.ts": `export function mount() {}`,
 	}
 
 	for name, content := range files {

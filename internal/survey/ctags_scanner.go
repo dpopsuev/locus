@@ -3,6 +3,7 @@ package survey
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -11,6 +12,8 @@ import (
 
 	"github.com/dpopsuev/locus/internal/model"
 )
+
+var errCtagsNotFound = errors.New("ctags not found; install with: dnf install ctags")
 
 // CtagsScanner uses Universal Ctags (--output-format=json) to extract
 // symbols from C/C++ (or any ctags-supported language) projects.
@@ -32,7 +35,7 @@ type ctagsEntry struct {
 
 func (s *CtagsScanner) Scan(root string) (*model.Project, error) {
 	if _, err := exec.LookPath("ctags"); err != nil {
-		return nil, fmt.Errorf("ctags not found; install with: dnf install ctags")
+		return nil, errCtagsNotFound
 	}
 
 	cmd := exec.Command("ctags", "--output-format=json", "--fields=*", "-R", ".")

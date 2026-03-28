@@ -28,12 +28,16 @@ var (
 	ErrURLRequired           = errors.New("url is required")
 	ErrBothBranchesRequired  = errors.New("both branch_a and branch_b are required")
 	ErrOldestOrStepsRequired = errors.New("either oldest_ref or steps is required")
+	ErrUnknownPreset         = errors.New("unknown preset")
+	ErrComponentNotFound     = errors.New("component not found")
+	ErrNoCommitsFound        = errors.New("no commits found in range")
 )
 
-const (
-	errScanFailed     = "scan failed: %w"
-	errNoCachedScan   = "no cached scan for SHA %s — run scan_local first"
-	errNoCachedReport = "no cached report for cache_key %q — run scan_local first"
+// Sentinel errors for scan failures.
+var (
+	ErrScanFailed     = errors.New("scan failed")
+	ErrNoCachedScan   = errors.New("no cached scan — run scan_local first")
+	ErrNoCachedReport = errors.New("no cached report — run scan_local first")
 )
 
 // Protocol encapsulates all Locus business logic.
@@ -138,7 +142,7 @@ func (p *Protocol) ScanProject(ctx context.Context, path string, opts ScanOpts) 
 	}
 
 	sha := p.db.ResolveHEAD(path)
-	if cached, hit, err := p.db.GetReport(ctx,path, sha); err == nil && hit {
+	if cached, hit, err := p.db.GetReport(ctx, path, sha); err == nil && hit {
 		return &ScanResult{Report: cached, CacheKey: path + "@" + sha, SHA: sha}, nil
 	}
 
@@ -156,10 +160,10 @@ func (p *Protocol) ScanProject(ctx context.Context, path string, opts ScanOpts) 
 		Since:           opts.Since,
 	})
 	if err != nil {
-		return nil, fmt.Errorf(errScanFailed, err)
+		return nil, fmt.Errorf("%w: %w", ErrScanFailed, err)
 	}
 	if sha != "" {
-		p.db.PutReport(ctx, path, sha, report)
+		_ = p.db.PutReport(ctx, path, sha, report)
 		_ = p.db.PutComponentMeta(ctx, path, sha, generateComponentMeta(report))
 		abs, _ := filepath.Abs(path)
 		_ = p.db.RecordScan(ctx, string(history.Local), abs, sha, report)
@@ -171,7 +175,7 @@ func (p *Protocol) SuggestDepth(ctx context.Context, path string) (*SuggestDepth
 	path = p.resolvePath(path)
 	report, err := arch.ScanAndBuild(path, arch.ScanOpts{ExcludeTests: true})
 	if err != nil {
-		return nil, fmt.Errorf(errScanFailed, err)
+		return nil, fmt.Errorf("%w: %w", ErrScanFailed, err)
 	}
 	r := &SuggestDepthResult{
 		SuggestedDepth: report.SuggestedDepth,
@@ -275,10 +279,10 @@ func (p *Protocol) GetCycles(ctx context.Context, path string, layers []string, 
 
 // ViolationReport holds architecture violation detection results.
 type ViolationReport struct {
-	Layers     []string             `json:"layers"`
+	Layers     []string              `json:"layers"`
 	Violations []arch.LayerViolation `json:"violations"`
-	Cycles     []arch.Cycle         `json:"cycles,omitempty"`
-	Summary    string               `json:"summary"`
+	Cycles     []arch.Cycle          `json:"cycles,omitempty"`
+	Summary    string                `json:"summary"`
 }
 
 func (p *Protocol) GetViolations(ctx context.Context, path string, layers []string, cacheKey ...string) (*ViolationReport, error) {
@@ -319,9 +323,9 @@ func inferLayerOrder(report *arch.ContextReport) []string {
 
 	// Group components by depth.
 	layerMap := make(map[int][]string)
-	for _, svc := range report.Architecture.Services {
-		d := depths[svc.Name]
-		layerMap[d] = append(layerMap[d], svc.Name)
+	for i := range report.Architecture.Services {
+		d := depths[report.Architecture.Services[i].Name]
+		layerMap[d] = append(layerMap[d], report.Architecture.Services[i].Name)
 	}
 
 	// Collect unique depth levels, sorted.
@@ -443,8 +447,8 @@ func (p *Protocol) GetDrift(ctx context.Context, path string, cacheKey ...string
 // for a given set of services and constraints (used for score calculation).
 func countBudgetChecks(services []arch.ArchService, constraints []store.HealthConstraint) int {
 	svcMap := make(map[string]bool, len(services))
-	for _, s := range services {
-		svcMap[s.Name] = true
+	for i := range services {
+		svcMap[services[i].Name] = true
 	}
 	count := 0
 	for _, c := range constraints {
@@ -476,8 +480,8 @@ func (p *Protocol) SuggestArchitecture(ctx context.Context, path string, cacheKe
 
 // StatusResult holds workspace status information.
 type StatusResult struct {
-	Version    string               `json:"version"`
-	Workspaces []string             `json:"workspaces"`
+	Version    string              `json:"version"`
+	Workspaces []string            `json:"workspaces"`
 	Projects   []store.ProjectInfo `json:"projects,omitempty"`
 }
 
@@ -513,9 +517,10 @@ func generateComponentMeta(report *arch.ContextReport) []store.ComponentMeta {
 	}
 
 	meta := make([]store.ComponentMeta, 0, len(report.Architecture.Services))
-	for _, s := range report.Architecture.Services {
+	for i := range report.Architecture.Services {
+		s := &report.Architecture.Services[i]
 		role := inferRole(s.Name)
-		keywords := extractKeywords(s)
+		keywords := extractKeywords(*s)
 		health := "healthy"
 		if fanIn[s.Name] >= arch.MinFanInHotSpot && s.Churn >= arch.MinChurnHotSpot {
 			health = "sick"
@@ -682,14 +687,14 @@ func (p *Protocol) GetCallers(ctx context.Context, path, symbol string, cacheKey
 
 // CrossRepoReport holds comparison results between two repos.
 type CrossRepoReport struct {
-	Overlap    []string `json:"overlap"`
-	OnlyInA    []string `json:"only_in_a"`
-	OnlyInB    []string `json:"only_in_b"`
-	NewCycles  int      `json:"new_cycles_if_merged"`
-	Summary    string   `json:"summary"`
+	Overlap   []string `json:"overlap"`
+	OnlyInA   []string `json:"only_in_a"`
+	OnlyInB   []string `json:"only_in_b"`
+	NewCycles int      `json:"new_cycles_if_merged"`
+	Summary   string   `json:"summary"`
 }
 
-func (p *Protocol) GetCrossRepo(ctx context.Context, pathA, pathB string, cacheKeyA, cacheKeyB string) (*CrossRepoReport, error) {
+func (p *Protocol) GetCrossRepo(ctx context.Context, pathA, pathB, cacheKeyA, cacheKeyB string) (*CrossRepoReport, error) {
 	reportA, err := p.getOrScan(p.resolvePath(pathA), cacheKeyA)
 	if err != nil {
 		return nil, fmt.Errorf("repo A: %w", err)
@@ -700,12 +705,12 @@ func (p *Protocol) GetCrossRepo(ctx context.Context, pathA, pathB string, cacheK
 	}
 
 	setA := make(map[string]bool)
-	for _, s := range reportA.Architecture.Services {
-		setA[s.Name] = true
+	for i := range reportA.Architecture.Services {
+		setA[reportA.Architecture.Services[i].Name] = true
 	}
 	setB := make(map[string]bool)
-	for _, s := range reportB.Architecture.Services {
-		setB[s.Name] = true
+	for i := range reportB.Architecture.Services {
+		setB[reportB.Architecture.Services[i].Name] = true
 	}
 
 	var overlap, onlyA, onlyB []string
@@ -726,7 +731,9 @@ func (p *Protocol) GetCrossRepo(ctx context.Context, pathA, pathB string, cacheK
 	sort.Strings(onlyB)
 
 	// Simulate merge: combine edges and detect new cycles.
-	allEdges := append(reportA.Architecture.Edges, reportB.Architecture.Edges...)
+	allEdges := make([]arch.ArchEdge, 0, len(reportA.Architecture.Edges)+len(reportB.Architecture.Edges))
+	allEdges = append(allEdges, reportA.Architecture.Edges...)
+	allEdges = append(allEdges, reportB.Architecture.Edges...)
 	mergedCycles := arch.DetectCycles(allEdges)
 	existingCycles := len(reportA.Cycles) + len(reportB.Cycles)
 	newCycles := max(len(mergedCycles)-existingCycles, 0)
@@ -762,161 +769,170 @@ func (p *Protocol) RunPreset(ctx context.Context, path, preset string, cacheKey 
 	var b strings.Builder
 	switch preset {
 	case PresetArchReview:
-		fmt.Fprintf(&b, "# Architecture Review: %s\n\n", report.ModulePath)
-		fmt.Fprintf(&b, "%d components, %d edges, %d cycles\n\n", len(report.Architecture.Services), len(report.Architecture.Edges), len(report.Cycles))
-		spots := report.HotSpots
-		if len(spots) > 5 {
-			spots = spots[:5]
-		}
-		if len(spots) > 0 {
-			b.WriteString("## Hot Spots\n")
-			for _, s := range spots {
-				fmt.Fprintf(&b, "- %s (churn:%d, fan-in:%d)\n", s.Component, s.Churn, s.FanIn)
-			}
-		}
-		if len(report.Cycles) > 0 {
-			b.WriteString("\n## Cycles\n")
-			for i, c := range report.Cycles {
-				if i >= 3 {
-					fmt.Fprintf(&b, "... and %d more\n", len(report.Cycles)-3)
-					break
-				}
-				fmt.Fprintf(&b, "- %s\n", strings.Join(c, " → "))
-			}
-		}
-
+		renderPresetArchReview(&b, report)
 	case PresetHealthCheck:
-		fmt.Fprintf(&b, "# Health Check: %s\n\n", report.ModulePath)
-		spots := report.HotSpots
-		if len(spots) > 5 {
-			spots = spots[:5]
-		}
-		for _, s := range spots {
-			fmt.Fprintf(&b, "- %s (churn:%d, fan-in:%d)\n", s.Component, s.Churn, s.FanIn)
-		}
-		if len(spots) == 0 {
-			b.WriteString("No hot spots detected.\n")
-		}
-
+		renderPresetHealthCheck(&b, report)
 	case PresetOnboarding:
-		fmt.Fprintf(&b, "# Onboarding: %s\n\n", report.ModulePath)
-		fmt.Fprintf(&b, "%d components, scanner=%s\n\n", len(report.Architecture.Services), report.Scanner)
-		b.WriteString("## Top Components\n")
-		n := min(len(report.Architecture.Services), 10)
-		for _, s := range report.Architecture.Services[:n] {
-			fmt.Fprintf(&b, "- %s (%d LOC)\n", s.Name, s.LOC)
-		}
-
+		renderPresetOnboarding(&b, report)
 	case PresetPrePR:
-		fmt.Fprintf(&b, "# Pre-PR Review: %s\n\n", report.ModulePath)
-		fmt.Fprintf(&b, "%d components, %d cycles, %d violations\n",
-			len(report.Architecture.Services), len(report.Cycles), len(report.LayerViolations))
-
+		renderPresetPrePR(&b, report)
 	case PresetNormative:
-		fmt.Fprintf(&b, "# Normative Analysis: %s\n\n", report.ModulePath)
-
-		// Import direction
-		idReport := ComputeImportDirection(report.Architecture.Edges, report.ImportDepth)
-		fmt.Fprintf(&b, "## Import Direction\n%s\n\n", idReport.Summary)
-		for i, v := range idReport.Violations {
-			if i >= 5 {
-				fmt.Fprintf(&b, "... and %d more\n", len(idReport.Violations)-5)
-				break
-			}
-			fmt.Fprintf(&b, "- [%s] %s → %s (depth %d→%d)\n", v.Severity, v.From, v.To, v.FromDepth, v.ToDepth)
-		}
-
-		// Trust boundaries
-		tbReport := ComputeTrustBoundaries(report.Architecture.Services, report.Architecture.Edges)
-		fmt.Fprintf(&b, "\n## Trust Boundaries\n%s\n", tbReport.Summary)
-
-		// Budgets (if desired state exists)
-		if desired, _ := p.db.GetDesiredState(ctx, path); desired != nil && len(desired.Constraints) > 0 {
-			budgetReport := ComputeBudgetViolations(report.Architecture.Services, report.Architecture.Edges, desired.Constraints)
-			fmt.Fprintf(&b, "\n## Budgets\n%s\n", budgetReport.Summary)
-		}
-
+		p.renderPresetNormative(ctx, &b, path, report)
 	case PresetPreRefactor:
-		fmt.Fprintf(&b, "# Pre-Refactor Analysis: %s\n\n", report.ModulePath)
-
-		// Hot spots — where risk concentrates
-		spots := report.HotSpots
-		if len(spots) > 10 {
-			spots = spots[:10]
-		}
-		b.WriteString("## Hot Spots (churn × coupling)\n")
-		for _, s := range spots {
-			fmt.Fprintf(&b, "- %s (churn:%d, fan-in:%d)\n", s.Component, s.Churn, s.FanIn)
-		}
-
-		// Interface metrics
-		da := analysis.NewFallback(path)
-		if classes, err := da.Classes(path); err == nil {
-			impls, _ := da.Implements(path)
-			imReport := ComputeInterfaceMetrics(classes, impls)
-			fmt.Fprintf(&b, "\n## Interfaces\n%s\n", imReport.Summary)
-			for _, iface := range imReport.Interfaces {
-				if iface.IsOrphan {
-					fmt.Fprintf(&b, "- ⚠ ORPHAN: %s (%d methods, 0 implementors)\n", iface.Name, iface.MethodCount)
-				}
-			}
-		}
-
-		// Import direction violations
-		idReport := ComputeImportDirection(report.Architecture.Edges, report.ImportDepth)
-		if len(idReport.Violations) > 0 {
-			fmt.Fprintf(&b, "\n## Import Direction\n%s\n", idReport.Summary)
-		}
-
+		renderPresetPreRefactor(&b, path, report)
 	case PresetFullClinic:
-		fmt.Fprintf(&b, "# Full Clinic: %s\n\n", report.ModulePath)
-		fmt.Fprintf(&b, "%d components, %d edges\n\n", len(report.Architecture.Services), len(report.Architecture.Edges))
-
-		// Architecture
-		fmt.Fprintf(&b, "## Architecture\n")
-		fmt.Fprintf(&b, "- Cycles: %d\n", len(report.Cycles))
-		fmt.Fprintf(&b, "- Layer violations: %d\n", len(report.LayerViolations))
-
-		// Import direction
-		idReport := ComputeImportDirection(report.Architecture.Edges, report.ImportDepth)
-		fmt.Fprintf(&b, "- Import direction: %s\n", idReport.Summary)
-
-		// Trust boundaries
-		tbReport := ComputeTrustBoundaries(report.Architecture.Services, report.Architecture.Edges)
-		fmt.Fprintf(&b, "- Trust zones: %s\n", tbReport.Summary)
-
-		// Hot spots
-		spots := report.HotSpots
-		if len(spots) > 5 {
-			spots = spots[:5]
-		}
-		if len(spots) > 0 {
-			fmt.Fprintf(&b, "\n## Hot Spots\n")
-			for _, s := range spots {
-				fmt.Fprintf(&b, "- %s (churn:%d, fan-in:%d)\n", s.Component, s.Churn, s.FanIn)
-			}
-		}
-
-		// Interface metrics
-		da := analysis.NewFallback(path)
-		if classes, err := da.Classes(path); err == nil {
-			impls, _ := da.Implements(path)
-			imReport := ComputeInterfaceMetrics(classes, impls)
-			fmt.Fprintf(&b, "\n## Interfaces\n%s\n", imReport.Summary)
-		}
-
-		// Budgets
-		if desired, _ := p.db.GetDesiredState(ctx, path); desired != nil && len(desired.Constraints) > 0 {
-			budgetReport := ComputeBudgetViolations(report.Architecture.Services, report.Architecture.Edges, desired.Constraints)
-			fmt.Fprintf(&b, "\n## Budgets\n%s\n", budgetReport.Summary)
-		}
-
+		p.renderPresetFullClinic(ctx, &b, path, report)
 	default:
-		return "", fmt.Errorf("unknown preset %q (valid: %s, %s, %s, %s, %s, %s, %s)",
-			preset, PresetArchReview, PresetHealthCheck, PresetOnboarding, PresetPrePR,
+		return "", fmt.Errorf("%w %q (valid: %s, %s, %s, %s, %s, %s, %s)",
+			ErrUnknownPreset, preset, PresetArchReview, PresetHealthCheck, PresetOnboarding, PresetPrePR,
 			PresetNormative, PresetPreRefactor, PresetFullClinic)
 	}
 	return b.String(), nil
+}
+
+func renderPresetArchReview(b *strings.Builder, report *arch.ContextReport) {
+	fmt.Fprintf(b, "# Architecture Review: %s\n\n", report.ModulePath)
+	fmt.Fprintf(b, "%d components, %d edges, %d cycles\n\n", len(report.Architecture.Services), len(report.Architecture.Edges), len(report.Cycles))
+	spots := report.HotSpots
+	if len(spots) > 5 {
+		spots = spots[:5]
+	}
+	if len(spots) > 0 {
+		b.WriteString("## Hot Spots\n")
+		for _, s := range spots {
+			fmt.Fprintf(b, "- %s (churn:%d, fan-in:%d)\n", s.Component, s.Churn, s.FanIn)
+		}
+	}
+	if len(report.Cycles) > 0 {
+		b.WriteString("\n## Cycles\n")
+		for i, c := range report.Cycles {
+			if i >= 3 {
+				fmt.Fprintf(b, "... and %d more\n", len(report.Cycles)-3)
+				break
+			}
+			fmt.Fprintf(b, "- %s\n", strings.Join(c, " → "))
+		}
+	}
+}
+
+func renderPresetHealthCheck(b *strings.Builder, report *arch.ContextReport) {
+	fmt.Fprintf(b, "# Health Check: %s\n\n", report.ModulePath)
+	spots := report.HotSpots
+	if len(spots) > 5 {
+		spots = spots[:5]
+	}
+	for _, s := range spots {
+		fmt.Fprintf(b, "- %s (churn:%d, fan-in:%d)\n", s.Component, s.Churn, s.FanIn)
+	}
+	if len(spots) == 0 {
+		b.WriteString("No hot spots detected.\n")
+	}
+}
+
+func renderPresetOnboarding(b *strings.Builder, report *arch.ContextReport) {
+	fmt.Fprintf(b, "# Onboarding: %s\n\n", report.ModulePath)
+	fmt.Fprintf(b, "%d components, scanner=%s\n\n", len(report.Architecture.Services), report.Scanner)
+	b.WriteString("## Top Components\n")
+	n := min(len(report.Architecture.Services), 10)
+	for i := range report.Architecture.Services[:n] {
+		fmt.Fprintf(b, "- %s (%d LOC)\n", report.Architecture.Services[i].Name, report.Architecture.Services[i].LOC)
+	}
+}
+
+func renderPresetPrePR(b *strings.Builder, report *arch.ContextReport) {
+	fmt.Fprintf(b, "# Pre-PR Review: %s\n\n", report.ModulePath)
+	fmt.Fprintf(b, "%d components, %d cycles, %d violations\n",
+		len(report.Architecture.Services), len(report.Cycles), len(report.LayerViolations))
+}
+
+func (p *Protocol) renderPresetNormative(ctx context.Context, b *strings.Builder, path string, report *arch.ContextReport) {
+	fmt.Fprintf(b, "# Normative Analysis: %s\n\n", report.ModulePath)
+
+	idReport := ComputeImportDirection(report.Architecture.Edges, report.ImportDepth)
+	fmt.Fprintf(b, "## Import Direction\n%s\n\n", idReport.Summary)
+	for i, v := range idReport.Violations {
+		if i >= 5 {
+			fmt.Fprintf(b, "... and %d more\n", len(idReport.Violations)-5)
+			break
+		}
+		fmt.Fprintf(b, "- [%s] %s → %s (depth %d→%d)\n", v.Severity, v.From, v.To, v.FromDepth, v.ToDepth)
+	}
+
+	tbReport := ComputeTrustBoundaries(report.Architecture.Services, report.Architecture.Edges)
+	fmt.Fprintf(b, "\n## Trust Boundaries\n%s\n", tbReport.Summary)
+
+	if desired, _ := p.db.GetDesiredState(ctx, path); desired != nil && len(desired.Constraints) > 0 {
+		budgetReport := ComputeBudgetViolations(report.Architecture.Services, report.Architecture.Edges, desired.Constraints)
+		fmt.Fprintf(b, "\n## Budgets\n%s\n", budgetReport.Summary)
+	}
+}
+
+func renderPresetPreRefactor(b *strings.Builder, path string, report *arch.ContextReport) {
+	fmt.Fprintf(b, "# Pre-Refactor Analysis: %s\n\n", report.ModulePath)
+
+	spots := report.HotSpots
+	if len(spots) > 10 {
+		spots = spots[:10]
+	}
+	b.WriteString("## Hot Spots (churn × coupling)\n")
+	for _, s := range spots {
+		fmt.Fprintf(b, "- %s (churn:%d, fan-in:%d)\n", s.Component, s.Churn, s.FanIn)
+	}
+
+	da := analysis.NewFallback(path)
+	if classes, err := da.Classes(path); err == nil {
+		impls, _ := da.Implements(path)
+		imReport := ComputeInterfaceMetrics(classes, impls)
+		fmt.Fprintf(b, "\n## Interfaces\n%s\n", imReport.Summary)
+		for _, iface := range imReport.Interfaces {
+			if iface.IsOrphan {
+				fmt.Fprintf(b, "- ORPHAN: %s (%d methods, 0 implementors)\n", iface.Name, iface.MethodCount)
+			}
+		}
+	}
+
+	idReport := ComputeImportDirection(report.Architecture.Edges, report.ImportDepth)
+	if len(idReport.Violations) > 0 {
+		fmt.Fprintf(b, "\n## Import Direction\n%s\n", idReport.Summary)
+	}
+}
+
+func (p *Protocol) renderPresetFullClinic(ctx context.Context, b *strings.Builder, path string, report *arch.ContextReport) {
+	fmt.Fprintf(b, "# Full Clinic: %s\n\n", report.ModulePath)
+	fmt.Fprintf(b, "%d components, %d edges\n\n", len(report.Architecture.Services), len(report.Architecture.Edges))
+
+	fmt.Fprintf(b, "## Architecture\n")
+	fmt.Fprintf(b, "- Cycles: %d\n", len(report.Cycles))
+	fmt.Fprintf(b, "- Layer violations: %d\n", len(report.LayerViolations))
+
+	idReport := ComputeImportDirection(report.Architecture.Edges, report.ImportDepth)
+	fmt.Fprintf(b, "- Import direction: %s\n", idReport.Summary)
+
+	tbReport := ComputeTrustBoundaries(report.Architecture.Services, report.Architecture.Edges)
+	fmt.Fprintf(b, "- Trust zones: %s\n", tbReport.Summary)
+
+	spots := report.HotSpots
+	if len(spots) > 5 {
+		spots = spots[:5]
+	}
+	if len(spots) > 0 {
+		fmt.Fprintf(b, "\n## Hot Spots\n")
+		for _, s := range spots {
+			fmt.Fprintf(b, "- %s (churn:%d, fan-in:%d)\n", s.Component, s.Churn, s.FanIn)
+		}
+	}
+
+	da := analysis.NewFallback(path)
+	if classes, err := da.Classes(path); err == nil {
+		impls, _ := da.Implements(path)
+		imReport := ComputeInterfaceMetrics(classes, impls)
+		fmt.Fprintf(b, "\n## Interfaces\n%s\n", imReport.Summary)
+	}
+
+	if desired, _ := p.db.GetDesiredState(ctx, path); desired != nil && len(desired.Constraints) > 0 {
+		budgetReport := ComputeBudgetViolations(report.Architecture.Services, report.Architecture.Edges, desired.Constraints)
+		fmt.Fprintf(b, "\n## Budgets\n%s\n", budgetReport.Summary)
+	}
 }
 
 // --- Component drill-down ---
@@ -950,7 +966,7 @@ func (p *Protocol) GetComponentDetail(ctx context.Context, path, name string, ca
 		}
 	}
 	if svc == nil {
-		return nil, fmt.Errorf("component %q not found", name)
+		return nil, fmt.Errorf("%w: %q", ErrComponentNotFound, name)
 	}
 
 	var imports, importers []string
@@ -990,9 +1006,9 @@ func (p *Protocol) GetComponentDetail(ctx context.Context, path, name string, ca
 
 // QueryResult holds the answer to a natural language architecture question.
 type QueryResult struct {
-	Query      string `json:"query"`
-	Action     string `json:"resolved_action"`
-	Answer     any    `json:"answer"`
+	Query  string `json:"query"`
+	Action string `json:"resolved_action"`
+	Answer any    `json:"answer"`
 }
 
 func (p *Protocol) AnswerQuery(ctx context.Context, path, query string, cacheKey ...string) (*QueryResult, error) {
@@ -1093,22 +1109,26 @@ func (p *Protocol) GetScanDiff(ctx context.Context, path, beforeSHA, afterSHA st
 		return nil, ErrBeforeSHARequired
 	}
 
-	before, hit, err := p.db.GetReport(ctx,path, beforeSHA)
+	before, hit, err := p.db.GetReport(ctx, path, beforeSHA)
 	if err != nil || !hit {
-		return nil, fmt.Errorf(errNoCachedScan, beforeSHA)
+		return nil, fmt.Errorf("%w: SHA %s", ErrNoCachedScan, beforeSHA)
 	}
-	after, hit, err := p.db.GetReport(ctx,path, afterSHA)
+	after, hit, err := p.db.GetReport(ctx, path, afterSHA)
 	if err != nil || !hit {
-		return nil, fmt.Errorf(errNoCachedScan, afterSHA)
+		return nil, fmt.Errorf("%w: SHA %s", ErrNoCachedScan, afterSHA)
 	}
 
+	return diffReports(beforeSHA, afterSHA, before, after), nil
+}
+
+func diffReports(beforeSHA, afterSHA string, before, after *arch.ContextReport) *ScanDiffReport {
 	beforeSet := make(map[string]bool)
-	for _, s := range before.Architecture.Services {
-		beforeSet[s.Name] = true
+	for i := range before.Architecture.Services {
+		beforeSet[before.Architecture.Services[i].Name] = true
 	}
 	afterSet := make(map[string]bool)
-	for _, s := range after.Architecture.Services {
-		afterSet[s.Name] = true
+	for i := range after.Architecture.Services {
+		afterSet[after.Architecture.Services[i].Name] = true
 	}
 
 	var added, removed []string
@@ -1125,33 +1145,10 @@ func (p *Protocol) GetScanDiff(ctx context.Context, path, beforeSHA, afterSHA st
 	sort.Strings(added)
 	sort.Strings(removed)
 
-	beforeEdges := make(map[[2]string]bool)
-	for _, e := range before.Architecture.Edges {
-		beforeEdges[[2]string{e.From, e.To}] = true
-	}
-	afterEdges := make(map[[2]string]bool)
-	for _, e := range after.Architecture.Edges {
-		afterEdges[[2]string{e.From, e.To}] = true
-	}
-	addedEdges, removedEdges := 0, 0
-	for e := range afterEdges {
-		if !beforeEdges[e] {
-			addedEdges++
-		}
-	}
-	for e := range beforeEdges {
-		if !afterEdges[e] {
-			removedEdges++
-		}
-	}
+	addedEdges, removedEdges := diffEdges(before.Architecture.Edges, after.Architecture.Edges)
 
-	locBefore, locAfter := 0, 0
-	for _, s := range before.Architecture.Services {
-		locBefore += s.LOC
-	}
-	for _, s := range after.Architecture.Services {
-		locAfter += s.LOC
-	}
+	locBefore := totalLOC(before)
+	locAfter := totalLOC(after)
 
 	summary := fmt.Sprintf("%d→%d components (%+d), %d→%d edges (%+d), %d→%d LOC (%+d)",
 		len(before.Architecture.Services), len(after.Architecture.Services), len(added)-len(removed),
@@ -1169,7 +1166,29 @@ func (p *Protocol) GetScanDiff(ctx context.Context, path, beforeSHA, afterSHA st
 		LOCAfter:          locAfter,
 		LOCDelta:          locAfter - locBefore,
 		Summary:           summary,
-	}, nil
+	}
+}
+
+func diffEdges(beforeEdges, afterEdges []arch.ArchEdge) (added, removed int) {
+	beforeSet := make(map[[2]string]bool)
+	for _, e := range beforeEdges {
+		beforeSet[[2]string{e.From, e.To}] = true
+	}
+	afterSet := make(map[[2]string]bool)
+	for _, e := range afterEdges {
+		afterSet[[2]string{e.From, e.To}] = true
+	}
+	for e := range afterSet {
+		if !beforeSet[e] {
+			added++
+		}
+	}
+	for e := range beforeSet {
+		if !afterSet[e] {
+			removed++
+		}
+	}
+	return added, removed
 }
 
 // CoverageReport holds per-component coverage data.
@@ -1428,7 +1447,7 @@ func (p *Protocol) GetCachedReport(cacheKey string) (*arch.ContextReport, error)
 			return report, nil
 		}
 	}
-	return nil, fmt.Errorf(errNoCachedReport, cacheKey)
+	return nil, fmt.Errorf("%w: %q", ErrNoCachedReport, cacheKey)
 }
 
 func (p *Protocol) getOrScan(path string, cacheKeys ...string) (*arch.ContextReport, error) {
@@ -1444,7 +1463,7 @@ func (p *Protocol) getOrScan(path string, cacheKeys ...string) (*arch.ContextRep
 				return report, nil
 			}
 		}
-		return nil, fmt.Errorf(errNoCachedReport, ck)
+		return nil, fmt.Errorf("%w: %q", ErrNoCachedReport, ck)
 	}
 
 	sha := p.db.ResolveHEAD(path)
@@ -1453,10 +1472,10 @@ func (p *Protocol) getOrScan(path string, cacheKeys ...string) (*arch.ContextRep
 	}
 	r, err := arch.ScanAndBuild(path, arch.ScanOpts{ExcludeTests: true, ChurnDays: 30})
 	if err != nil {
-		return nil, fmt.Errorf(errScanFailed, err)
+		return nil, fmt.Errorf("%w: %w", ErrScanFailed, err)
 	}
 	if sha != "" {
-		p.db.PutReport(context.Background(), path, sha, r)
+		_ = p.db.PutReport(context.Background(), path, sha, r)
 	}
 	return r, nil
 }
@@ -1475,14 +1494,14 @@ func (p *Protocol) scanBranch(repoPath, ref string) (*arch.ContextReport, error)
 	}
 	defer func() {
 		if currentBranch != "" {
-			checkoutRef(repoPath, currentBranch)
+			_ = checkoutRef(repoPath, currentBranch)
 		}
 	}()
 	report, err := arch.ScanAndBuild(repoPath, arch.ScanOpts{ExcludeTests: true, ChurnDays: 30})
 	if err != nil {
 		return nil, err
 	}
-	p.db.PutReport(context.Background(), repoPath, sha, report)
+	_ = p.db.PutReport(context.Background(), repoPath, sha, report)
 	return report, nil
 }
 
@@ -1551,8 +1570,10 @@ func (p *Protocol) Health(_ context.Context) *HealthResult {
 
 	// Health checks for filesystem-backed stores.
 	if fs, ok := p.db.(*store.FilesystemStore); ok {
-		r.Checks = append(r.Checks, checkDir("cache_dir", fs.CacheRoot()))
-		r.Checks = append(r.Checks, checkDir("history_dir", fs.HistoryDir()))
+		r.Checks = append(r.Checks,
+			checkDir("cache_dir", fs.CacheRoot()),
+			checkDir("history_dir", fs.HistoryDir()),
+		)
 	}
 	r.Checks = append(r.Checks, checkGit())
 	for _, ws := range p.workspaces {
@@ -1643,11 +1664,12 @@ func listCommits(repoPath, oldest, newest string, limit int) ([]CommitMeta, erro
 		newest = "HEAD"
 	}
 	args := []string{"log", "--reverse", "--format=%H||%aI||%s"}
-	if oldest != "" {
+	switch {
+	case oldest != "":
 		args = append(args, oldest+"^.."+newest)
-	} else if limit > 0 {
+	case limit > 0:
 		args = append(args, "-n", strconv.Itoa(limit), newest)
-	} else {
+	default:
 		return nil, ErrOldestOrStepsRequired
 	}
 
@@ -1692,8 +1714,8 @@ func sampleCommits(commits []CommitMeta, stride int) []CommitMeta {
 
 func totalLOC(report *arch.ContextReport) int {
 	total := 0
-	for _, svc := range report.Architecture.Services {
-		total += svc.LOC
+	for i := range report.Architecture.Services {
+		total += report.Architecture.Services[i].LOC
 	}
 	return total
 }
@@ -1707,7 +1729,7 @@ func (p *Protocol) Evolution(ctx context.Context, opts EvolutionOpts) (*Evolutio
 		return nil, fmt.Errorf("enumerate commits: %w", err)
 	}
 	if len(commits) == 0 {
-		return nil, fmt.Errorf("no commits found in range")
+		return nil, ErrNoCommitsFound
 	}
 
 	commits = sampleCommits(commits, opts.Stride)
@@ -1716,15 +1738,15 @@ func (p *Protocol) Evolution(ctx context.Context, opts EvolutionOpts) (*Evolutio
 	needsRestore := false
 	defer func() {
 		if needsRestore && currentBranch != "" {
-			checkoutRef(path, currentBranch)
+			_ = checkoutRef(path, currentBranch)
 		}
 	}()
 
-	var steps []EvolutionStep
+	steps := make([]EvolutionStep, 0, len(commits))
 	var prevReport *arch.ContextReport
 
 	for i, commit := range commits {
-		report, cached, cacheErr := p.db.GetReport(ctx,path, commit.SHA)
+		report, cached, cacheErr := p.db.GetReport(ctx, path, commit.SHA)
 		if cacheErr != nil || !cached {
 			if !needsRestore {
 				needsRestore = true
@@ -1740,7 +1762,7 @@ func (p *Protocol) Evolution(ctx context.Context, opts EvolutionOpts) (*Evolutio
 			if err != nil {
 				return nil, fmt.Errorf("scan %s: %w", commit.SHA[:8], err)
 			}
-			_ = p.db.PutReport(ctx,path, commit.SHA, report)
+			_ = p.db.PutReport(ctx, path, commit.SHA, report)
 		}
 
 		step := EvolutionStep{

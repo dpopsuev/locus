@@ -36,8 +36,9 @@ func ComputeTrustBoundaries(services []arch.ArchService, edges []arch.ArchEdge) 
 
 	// Classify each component into a trust zone.
 	zoneMap := make(map[string]string, len(services))
-	var zones []TrustZoneInfo
-	for _, svc := range services {
+	zones := make([]TrustZoneInfo, 0, len(services))
+	for i := range services {
+		svc := &services[i]
 		zone, reason := inferTrustZone(svc.Name, edgeTargets[svc.Name])
 		zoneMap[svc.Name] = zone
 		zones = append(zones, TrustZoneInfo{

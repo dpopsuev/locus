@@ -75,7 +75,7 @@ func TestComputeDiffIntelligence_HighFanInCritical(t *testing.T) {
 	nodes := []analysis.FuncNode{
 		{Name: "Log", Package: "pkg/logger"},
 	}
-	var edges []analysis.CallEdge
+	edges := make([]analysis.CallEdge, 0, 15)
 	for i := range 15 {
 		edges = append(edges, analysis.CallEdge{
 			Caller:    "Caller" + string(rune('A'+i)),

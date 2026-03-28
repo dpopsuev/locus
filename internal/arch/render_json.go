@@ -55,7 +55,8 @@ func RenderJSON(report *ContextReport) ([]byte, error) {
 	}
 
 	components := make([]jsonComponent, 0, len(report.Architecture.Services))
-	for _, svc := range report.Architecture.Services {
+	for i := range report.Architecture.Services {
+		svc := &report.Architecture.Services[i]
 		c := jsonComponent{
 			Name:       svc.Name,
 			Package:    svc.Package,

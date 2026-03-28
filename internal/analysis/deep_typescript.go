@@ -44,9 +44,9 @@ func (a *TypeScriptDeepAnalyzer) CallGraph(_ string, opts CallGraphOpts) (*CallG
 		return nil, err
 	}
 
-	funcIndex := make(map[string]*tsFunc)
-	for i := range funcs {
-		funcIndex[funcs[i].name] = &funcs[i]
+	nf := make([]namedFunc, len(funcs))
+	for i, f := range funcs {
+		nf[i] = namedFunc(f)
 	}
 
 	var roots []string
@@ -61,49 +61,10 @@ func (a *TypeScriptDeepAnalyzer) CallGraph(_ string, opts CallGraphOpts) (*CallG
 		}
 	}
 
-	nodeSet := make(map[string]FuncNode)
-	var edges []CallEdge
-	visited := make(map[string]bool)
-
-	var walk func(name string, d int)
-	walk = func(name string, d int) {
-		if d > depth || visited[name] {
-			return
-		}
-		visited[name] = true
-		fn, ok := funcIndex[name]
-		if !ok {
-			return
-		}
-		key := fn.pkg + "." + fn.name
-		nodeSet[key] = FuncNode{Name: fn.name, Package: fn.pkg, Line: fn.line}
-		for _, callee := range fn.callees {
-			cf, ok := funcIndex[callee]
-			if !ok {
-				continue
-			}
-			ck := cf.pkg + "." + cf.name
-			nodeSet[ck] = FuncNode{Name: cf.name, Package: cf.pkg, Line: cf.line}
-			edges = append(edges, CallEdge{
-				Caller: fn.name, Callee: cf.name,
-				CallerPkg: fn.pkg, CalleePkg: cf.pkg,
-				CrossPkg: fn.pkg != cf.pkg,
-			})
-			walk(callee, d+1)
-		}
-	}
-	for _, r := range roots {
-		walk(r, 0)
-	}
-
-	nodes := make([]FuncNode, 0, len(nodeSet))
-	for _, n := range nodeSet {
-		nodes = append(nodes, n)
-	}
-	return &CallGraph{Nodes: nodes, Edges: edges, Layer: LayerTypeScript}, nil
+	return buildSimpleCallGraph(nf, roots, depth, LayerTypeScript), nil
 }
 
-func (a *TypeScriptDeepAnalyzer) DataFlowTrace(_ string, entry string, maxDepth int) (*DataFlow, error) {
+func (a *TypeScriptDeepAnalyzer) DataFlowTrace(_, entry string, maxDepth int) (*DataFlow, error) {
 	if maxDepth <= 0 {
 		maxDepth = DefaultDataFlowDepth
 	}
@@ -111,44 +72,12 @@ func (a *TypeScriptDeepAnalyzer) DataFlowTrace(_ string, entry string, maxDepth 
 	if err != nil {
 		return nil, err
 	}
-	funcIndex := make(map[string]*tsFunc)
-	for i := range funcs {
-		funcIndex[funcs[i].name] = &funcs[i]
-	}
 
-	nodeMap := make(map[string]DataFlowNode)
-	var edges []DataFlowEdge
-	visited := make(map[string]bool)
-	nodeMap[entry] = DataFlowNode{Name: entry, Kind: "entry"}
-
-	var trace func(name string, d int)
-	trace = func(name string, d int) {
-		if d > maxDepth || visited[name] {
-			return
-		}
-		visited[name] = true
-		fn, ok := funcIndex[name]
-		if !ok {
-			return
-		}
-		for _, callee := range fn.callees {
-			if _, ok := funcIndex[callee]; !ok {
-				continue
-			}
-			if _, exists := nodeMap[callee]; !exists {
-				nodeMap[callee] = DataFlowNode{Name: callee, Kind: "process", Pkg: funcIndex[callee].pkg}
-			}
-			edges = append(edges, DataFlowEdge{From: name, To: callee})
-			trace(callee, d+1)
-		}
+	nf := make([]namedFunc, len(funcs))
+	for i, f := range funcs {
+		nf[i] = namedFunc(f)
 	}
-	trace(entry, 0)
-
-	nodes := make([]DataFlowNode, 0, len(nodeMap))
-	for _, n := range nodeMap {
-		nodes = append(nodes, n)
-	}
-	return &DataFlow{Nodes: nodes, Edges: edges, Layer: LayerTypeScript}, nil
+	return dataFlowTrace(nf, entry, maxDepth, LayerTypeScript), nil
 }
 
 func (a *TypeScriptDeepAnalyzer) DetectStateMachines(_ string) ([]StateMachine, error) {
@@ -177,7 +106,7 @@ func (a *TypeScriptDeepAnalyzer) parseFunctions() ([]tsFunc, error) {
 			return nil
 		}
 		ext := filepath.Ext(d.Name())
-		if ext != ".ts" && ext != ".tsx" && ext != ".js" && ext != ".jsx" {
+		if ext != extTS && ext != extTSX && ext != extJS && ext != extJSX {
 			return nil
 		}
 		src, readErr := os.ReadFile(path)
@@ -192,7 +121,7 @@ func (a *TypeScriptDeepAnalyzer) parseFunctions() ([]tsFunc, error) {
 		rel, _ := filepath.Rel(absRoot, path)
 		pkg := filepath.ToSlash(filepath.Dir(rel))
 		if pkg == "." {
-			pkg = "(root)"
+			pkg = pkgRoot
 		}
 
 		extractTSFunctions(tree.RootNode(), src, pkg, &funcs)
@@ -264,25 +193,17 @@ func extractTSCallees(node *sitter.Node, src []byte) []string {
 }
 
 func collectTSCalls(node *sitter.Node, src []byte, seen map[string]bool, callees *[]string) {
-	if node.Type() == "call_expression" {
-		fn := node.ChildByFieldName("function")
-		if fn != nil {
-			var name string
-			switch fn.Type() {
-			case "identifier":
-				name = fn.Content(src)
-			case "member_expression":
-				if prop := fn.ChildByFieldName("property"); prop != nil {
-					name = prop.Content(src)
-				}
-			}
-			if name != "" && !seen[name] {
-				seen[name] = true
-				*callees = append(*callees, name)
-			}
+	collectTreeSitterCalls(node, src, "call_expression", "function", tsNameExtractor, seen, callees)
+}
+
+func tsNameExtractor(fn *sitter.Node, src []byte) string {
+	switch fn.Type() {
+	case "identifier":
+		return fn.Content(src)
+	case "member_expression":
+		if prop := fn.ChildByFieldName("property"); prop != nil {
+			return prop.Content(src)
 		}
 	}
-	for i := 0; i < int(node.ChildCount()); i++ {
-		collectTSCalls(node.Child(i), src, seen, callees)
-	}
+	return ""
 }

@@ -193,7 +193,7 @@ func (m *mockDeepAnalyzer) CallGraph(_ string, _ analysis.CallGraphOpts) (*analy
 	}, nil
 }
 
-func (m *mockDeepAnalyzer) DataFlowTrace(_ string, _ string, _ int) (*analysis.DataFlow, error) {
+func (m *mockDeepAnalyzer) DataFlowTrace(_, _ string, _ int) (*analysis.DataFlow, error) {
 	return &analysis.DataFlow{
 		Nodes: []analysis.DataFlowNode{
 			{Name: "main", Kind: "entry"},
@@ -303,9 +303,9 @@ func assertContains(t *testing.T, out, substr string) {
 	}
 }
 
-func truncateTest(s string, max int) string {
-	if len(s) <= max {
+func truncateTest(s string, limit int) string {
+	if len(s) <= limit {
 		return s
 	}
-	return s[:max] + "..."
+	return s[:limit] + "..."
 }

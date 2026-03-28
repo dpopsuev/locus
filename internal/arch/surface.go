@@ -18,8 +18,9 @@ type BoundaryCrossing struct {
 
 // ComputeAPISurface returns the exported symbol count per component.
 func ComputeAPISurface(m ArchModel) []APISurface {
-	var surfaces []APISurface
-	for _, svc := range m.Services {
+	surfaces := make([]APISurface, 0, len(m.Services))
+	for i := range m.Services {
+		svc := &m.Services[i]
 		surfaces = append(surfaces, APISurface{
 			Component:     svc.Name,
 			ExportedCount: len(svc.Symbols),
@@ -35,7 +36,8 @@ func ComputeAPISurface(m ArchModel) []APISurface {
 // If trusted is non-empty, only crossings into non-trusted zones are reported.
 func DetectBoundaryCrossings(m ArchModel, trusted []string) []BoundaryCrossing {
 	svcZone := make(map[string]string, len(m.Services))
-	for _, svc := range m.Services {
+	for i := range m.Services {
+		svc := &m.Services[i]
 		if svc.TrustZone != "" {
 			svcZone[svc.Name] = svc.TrustZone
 		}
@@ -46,7 +48,7 @@ func DetectBoundaryCrossings(m ArchModel, trusted []string) []BoundaryCrossing {
 		trustedSet[t] = true
 	}
 
-	var crossings []BoundaryCrossing
+	crossings := make([]BoundaryCrossing, 0, len(m.Edges))
 	for _, e := range m.Edges {
 		fromZone := svcZone[e.From]
 		toZone := svcZone[e.To]

@@ -13,8 +13,8 @@ func renderTree(in Input, opts Options) string {
 
 	fi := fanIn(report.Architecture.Edges)
 	churnMap := make(map[string]int)
-	for _, s := range report.Architecture.Services {
-		churnMap[s.Name] = s.Churn
+	for i := range report.Architecture.Services {
+		churnMap[report.Architecture.Services[i].Name] = report.Architecture.Services[i].Churn
 	}
 
 	root := filepath.Base(report.ModulePath)
@@ -36,7 +36,8 @@ func renderTree(in Input, opts Options) string {
 	groups := make(map[string]*node)
 	var order []string
 
-	for _, svc := range report.Architecture.Services {
+	for i := range report.Architecture.Services {
+		svc := &report.Architecture.Services[i]
 		g := groupName(svc.Name, depth)
 		if _, ok := groups[g]; !ok {
 			groups[g] = &node{name: g}
@@ -87,9 +88,9 @@ func renderTree(in Input, opts Options) string {
 		sort.Strings(g.children)
 		for _, child := range g.children {
 			var symCount int
-			for _, svc := range report.Architecture.Services {
-				if svc.Name == child {
-					symCount = len(svc.Symbols)
+			for i := range report.Architecture.Services {
+				if report.Architecture.Services[i].Name == child {
+					symCount = len(report.Architecture.Services[i].Symbols)
 					break
 				}
 			}

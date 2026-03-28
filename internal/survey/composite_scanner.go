@@ -95,22 +95,23 @@ func discoverSubProjects(root string) []subProject {
 		}
 
 		for _, tsm := range tsMarkers {
-			if d.Name() == tsm {
-				rel, relErr := filepath.Rel(root, filepath.Dir(path))
-				if relErr != nil {
-					break
-				}
-				rel = filepath.ToSlash(rel)
-				if seen[rel] {
-					break
-				}
-				if hasNodeModulesParent(rel) {
-					break
-				}
-				seen[rel] = true
-				subs = append(subs, subProject{relPath: rel, lang: model.LangTypeScript})
+			if d.Name() != tsm {
+				continue
+			}
+			rel, relErr := filepath.Rel(root, filepath.Dir(path))
+			if relErr != nil {
 				break
 			}
+			rel = filepath.ToSlash(rel)
+			if seen[rel] {
+				break
+			}
+			if hasNodeModulesParent(rel) {
+				break
+			}
+			seen[rel] = true
+			subs = append(subs, subProject{relPath: rel, lang: model.LangTypeScript})
+			break
 		}
 
 		return nil
@@ -127,7 +128,6 @@ func hasNodeModulesParent(rel string) bool {
 	}
 	return false
 }
-
 
 func prefixImportPath(prefix, importPath string) string {
 	if prefix == "." || prefix == "" {
