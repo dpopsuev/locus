@@ -628,6 +628,9 @@ func (p *Protocol) GetSymbolBlastRadius(ctx context.Context, path, symbol string
 
 func (p *Protocol) GetDiffIntelligence(ctx context.Context, path, since string, cacheKey ...string) (*DiffIntelligenceReport, error) {
 	path = p.resolvePath(path)
+	if since == "" {
+		since = "HEAD~1"
+	}
 	report, err := p.getOrScan(path, cacheKey...)
 	if err != nil {
 		return nil, err

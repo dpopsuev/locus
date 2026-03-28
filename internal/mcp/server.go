@@ -228,7 +228,7 @@ type codographActionInput struct {
 }
 
 type analysisActionInput struct {
-	Action   string `json:"action" jsonschema:"required,deps | impact | coupling | cycles | violations | scan_diff | coverage | api_surface | conventions | gaps | blast_radius | import_direction | trust_boundaries | budgets | mod_dependencies | symbol_blast | diff_intelligence"`
+	Action   string `json:"action" jsonschema:"required,deps | impact | coupling | cycles | violations | scan_diff | coverage | api_surface | conventions | gaps | blast_radius | import_direction | trust_boundaries | budgets | mod_dependencies | symbol_blast | diff_intelligence | interface_metrics"`
 	Path     string `json:"path,omitempty" jsonschema:"absolute path to local repository (defaults to workspace root)"`
 	CacheKey string `json:"cache_key,omitempty" jsonschema:"cache key from scan_remote (use instead of path for remote repos)"`
 

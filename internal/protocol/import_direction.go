@@ -41,6 +41,11 @@ func ComputeImportDirection(edges []arch.ArchEdge, depths arch.DepthMap) *Import
 			continue
 		}
 
+		// Skip entrypoint/composition roots (depth 0) — they wire everything by design.
+		if fromDepth == 0 {
+			continue
+		}
+
 		// Violation: shallow (low depth) imports deep (high depth).
 		// In a clean architecture, From should have depth >= To's depth,
 		// meaning higher-level imports lower-level.
