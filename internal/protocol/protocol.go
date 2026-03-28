@@ -506,9 +506,11 @@ func (p *Protocol) SearchComponents(ctx context.Context, path, query string, cac
 
 // CallerSite represents a single call site for a symbol.
 type CallerSite struct {
-	Caller    string `json:"caller"`
-	CallerPkg string `json:"caller_pkg"`
-	Line      int    `json:"line,omitempty"`
+	Caller       string `json:"caller"`
+	CallerPkg    string `json:"caller_pkg"`
+	Line         int    `json:"line,omitempty"`
+	File         string `json:"file,omitempty"`
+	ReceiverType string `json:"receiver_type,omitempty"`
 }
 
 // CallersReport holds all call sites for a given symbol.
@@ -534,9 +536,11 @@ func (p *Protocol) GetCallers(ctx context.Context, path, symbol string, cacheKey
 	for _, edge := range cg.Edges {
 		if edge.Callee == symbol {
 			callers = append(callers, CallerSite{
-				Caller:    edge.Caller,
-				CallerPkg: edge.CallerPkg,
-				Line:      edge.Line,
+				Caller:       edge.Caller,
+				CallerPkg:    edge.CallerPkg,
+				Line:         edge.Line,
+				File:         edge.File,
+				ReceiverType: edge.ReceiverType,
 			})
 		}
 	}
@@ -1121,6 +1125,40 @@ func (p *Protocol) GetGaps(ctx context.Context, path string) (*GapReport, error)
 		return nil, err
 	}
 	return DetectGaps(report, path)
+}
+
+func (p *Protocol) GetBlastRadius(ctx context.Context, path string, files []string, since string, cacheKey ...string) (*BlastRadiusReport, error) {
+	path = p.resolvePath(path)
+	report, err := p.getOrScan(path, cacheKey...)
+	if err != nil {
+		return nil, err
+	}
+	return ComputeBlastRadius(
+		report.Architecture.Edges,
+		report.Architecture.Services,
+		report.ModulePath,
+		path,
+		files,
+		since,
+	)
+}
+
+func (p *Protocol) GetImportDirection(ctx context.Context, path string, cacheKey ...string) (*ImportDirectionReport, error) {
+	path = p.resolvePath(path)
+	report, err := p.getOrScan(path, cacheKey...)
+	if err != nil {
+		return nil, err
+	}
+	return ComputeImportDirection(report.Architecture.Edges, report.ImportDepth), nil
+}
+
+func (p *Protocol) GetTrustBoundaries(ctx context.Context, path string, cacheKey ...string) (*TrustBoundaryReport, error) {
+	path = p.resolvePath(path)
+	report, err := p.getOrScan(path, cacheKey...)
+	if err != nil {
+		return nil, err
+	}
+	return ComputeTrustBoundaries(report.Architecture.Services, report.Architecture.Edges), nil
 }
 
 // Workspaces returns the configured workspace root paths.

@@ -93,12 +93,14 @@ type CallGraphOpts struct {
 
 // CallEdge represents a single caller->callee edge in the call graph.
 type CallEdge struct {
-	Caller  string `json:"caller"`
-	Callee  string `json:"callee"`
-	CallerPkg string `json:"caller_pkg"`
-	CalleePkg string `json:"callee_pkg"`
-	Line    int    `json:"line,omitempty"`
-	CrossPkg bool  `json:"cross_pkg,omitempty"`
+	Caller       string `json:"caller"`
+	Callee       string `json:"callee"`
+	CallerPkg    string `json:"caller_pkg"`
+	CalleePkg    string `json:"callee_pkg"`
+	Line         int    `json:"line,omitempty"`
+	File         string `json:"file,omitempty"`
+	ReceiverType string `json:"receiver_type,omitempty"`
+	CrossPkg     bool   `json:"cross_pkg,omitempty"`
 }
 
 // FuncNode represents a function in the call graph.

@@ -29,11 +29,13 @@ func NewGoASTDeep(root string) *GoASTDeepAnalyzer {
 }
 
 type goFunc struct {
-	name    string
-	pkg     string
-	line    int
-	callees []string // function names called in the body
-	body    *ast.BlockStmt
+	name         string
+	pkg          string
+	file         string
+	line         int
+	receiverType string // non-empty for methods (e.g., "*APIDriver")
+	callees      []string // function names called in the body
+	body         *ast.BlockStmt
 }
 
 func (a *GoASTDeepAnalyzer) CallGraph(_ string, opts CallGraphOpts) (*CallGraph, error) {
@@ -98,11 +100,14 @@ func (a *GoASTDeepAnalyzer) CallGraph(_ string, opts CallGraphOpts) (*CallGraph,
 			calleeKey := calleeFn.pkg + "." + calleeFn.name
 			nodeSet[calleeKey] = FuncNode{Name: calleeFn.name, Package: calleeFn.pkg, Line: calleeFn.line}
 			edges = append(edges, CallEdge{
-				Caller:    fn.name,
-				Callee:    calleeFn.name,
-				CallerPkg: fn.pkg,
-				CalleePkg: calleeFn.pkg,
-				CrossPkg:  fn.pkg != calleeFn.pkg,
+				Caller:       fn.name,
+				Callee:       calleeFn.name,
+				CallerPkg:    fn.pkg,
+				CalleePkg:    calleeFn.pkg,
+				Line:         fn.line,
+				File:         fn.file,
+				ReceiverType: fn.receiverType,
+				CrossPkg:     fn.pkg != calleeFn.pkg,
 			})
 			walk(callee, d+1)
 		}
@@ -335,20 +340,27 @@ func (a *GoASTDeepAnalyzer) parseFunctions() ([]goFunc, error) {
 			pkg = "(root)"
 		}
 
+		relFile := filepath.ToSlash(rel)
 		for _, decl := range f.Decls {
 			fd, ok := decl.(*ast.FuncDecl)
 			if !ok || fd.Body == nil {
 				continue
 			}
-			// Skip methods (have receiver) for now — focus on top-level functions.
 			name := fd.Name.Name
+			var recvType string
+			if fd.Recv != nil && len(fd.Recv.List) > 0 {
+				recvType = receiverTypeName(fd.Recv.List[0].Type)
+				name = recvType + "." + name // index as ReceiverType.Method
+			}
 			callees := extractCallees(fd.Body)
 			funcs = append(funcs, goFunc{
-				name:    name,
-				pkg:     pkg,
-				line:    fset.Position(fd.Pos()).Line,
-				callees: callees,
-				body:    fd.Body,
+				name:         name,
+				pkg:          pkg,
+				file:         relFile,
+				line:         fset.Position(fd.Pos()).Line,
+				receiverType: recvType,
+				callees:      callees,
+				body:         fd.Body,
 			})
 		}
 		return nil
@@ -381,4 +393,18 @@ func extractCallees(body *ast.BlockStmt) []string {
 		return true
 	})
 	return callees
+}
+
+// receiverTypeName extracts the type name from a method receiver expression.
+// Handles both value (*ast.Ident) and pointer (*ast.StarExpr → *ast.Ident) receivers.
+func receiverTypeName(expr ast.Expr) string {
+	switch t := expr.(type) {
+	case *ast.Ident:
+		return t.Name
+	case *ast.StarExpr:
+		if id, ok := t.X.(*ast.Ident); ok {
+			return "*" + id.Name
+		}
+	}
+	return ""
 }

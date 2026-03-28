@@ -46,8 +46,11 @@ const (
 	ActionComponent   = "component"
 	ActionQuery       = "query"
 	ActionSearch      = "search"
-	ActionDrift       = "drift"
-	ActionSuggestArch = "suggest_architecture"
+	ActionDrift            = "drift"
+	ActionSuggestArch      = "suggest_architecture"
+	ActionBlastRadius      = "blast_radius"
+	ActionImportDirection  = "import_direction"
+	ActionTrustBoundaries  = "trust_boundaries"
 )
 
 // Coupling view names.
@@ -239,6 +242,8 @@ type analysisActionInput struct {
 	CacheKeyB string   `json:"cache_key_b,omitempty" jsonschema:"second cache key for cross_repo comparison"`
 	Preset    string   `json:"preset,omitempty" jsonschema:"preset name: architecture_review, health_check, onboarding, pre_pr"`
 	Query     string   `json:"query,omitempty" jsonschema:"natural language architecture question"`
+	Files     []string `json:"files,omitempty" jsonschema:"changed files for blast_radius analysis"`
+	Since     string   `json:"since,omitempty" jsonschema:"git ref for blast_radius (e.g. HEAD~1, main)"`
 }
 
 // --- dispatchers ---
@@ -393,10 +398,29 @@ func (h *handler) handleAnalysis(ctx context.Context, req *sdkmcp.CallToolReques
 			return nil, nil, err
 		}
 		return jsonResult(r)
+	case ActionBlastRadius:
+		r, err := h.proto.GetBlastRadius(ctx, in.Path, in.Files, in.Since, in.CacheKey)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
+	case ActionImportDirection:
+		r, err := h.proto.GetImportDirection(ctx, in.Path, in.CacheKey)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
+	case ActionTrustBoundaries:
+		r, err := h.proto.GetTrustBoundaries(ctx, in.Path, in.CacheKey)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
 	default:
-		return nil, nil, fmt.Errorf("unknown analysis action %q (valid: %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+		return nil, nil, fmt.Errorf("unknown analysis action %q (valid: %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
 			in.Action, ActionDeps, ActionImpact, ActionCoupling, ActionCycles,
-			ActionViolations, ActionScanDiff, ActionCoverage, ActionAPISurface, ActionConventions, ActionGaps)
+			ActionViolations, ActionScanDiff, ActionCoverage, ActionAPISurface, ActionConventions, ActionGaps,
+			ActionBlastRadius, ActionImportDirection, ActionTrustBoundaries)
 	}
 }
 
