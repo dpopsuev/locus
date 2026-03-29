@@ -1,4 +1,4 @@
-.PHONY: build version test vet fmt lint preflight install-hooks
+.PHONY: build version test test-e2e vet fmt lint preflight install-hooks
 
 VERSION ?= $(shell git describe --tags --always --dirty)
 
@@ -10,6 +10,9 @@ build:
 
 test:
 	go test ./... -count=1
+
+test-e2e:
+	go test -tags=e2e ./internal/testkit/... -count=1 -v
 
 fmt:
 	go fmt ./...
