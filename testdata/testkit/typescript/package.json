@@ -1,0 +1,5 @@
+{
+  "name": "testkit-typescript",
+  "version": "0.1.0",
+  "dependencies": { "zod": "^3.22" }
+}

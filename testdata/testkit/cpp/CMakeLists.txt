@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 3.20)
+project(testkit_cpp CXX)
+set(CMAKE_CXX_STANDARD 20)
+find_package(Threads REQUIRED)
+add_library(domain src/entity.cpp)
+target_include_directories(domain PUBLIC include)
+add_executable(main src/main.cpp)
+target_link_libraries(main domain Threads::Threads)

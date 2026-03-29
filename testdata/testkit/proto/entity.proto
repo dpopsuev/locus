@@ -1,0 +1,25 @@
+syntax = "proto3";
+package testkit;
+option go_package = "testkit/proto";
+
+import "google/protobuf/timestamp.proto";
+
+message Entity {
+  string id = 1;
+  string name = 2;
+  map<string, string> data = 3;
+  google.protobuf.Timestamp created_at = 4;
+}
+
+service EntityService {
+  rpc GetEntity(GetEntityRequest) returns (Entity);
+  rpc SaveEntity(Entity) returns (SaveEntityResponse);
+}
+
+message GetEntityRequest {
+  string id = 1;
+}
+
+message SaveEntityResponse {
+  bool success = 1;
+}

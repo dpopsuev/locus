@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 3.20)
+project(testkit_c C)
+find_package(Threads REQUIRED)
+add_library(domain src/entity.c)
+target_include_directories(domain PUBLIC include)
+add_executable(main src/main.c)
+target_link_libraries(main domain Threads::Threads)

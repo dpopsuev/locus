@@ -1,0 +1,8 @@
+{
+  "language": "java",
+  "marker": "pom.xml",
+  "expected_components_min": 2,
+  "expected_edges_min": 0,
+  "scan_intent": "architecture",
+  "expected_diagrams": ["dependency", "tree"]
+}

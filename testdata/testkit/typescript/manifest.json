@@ -1,0 +1,8 @@
+{
+  "language": "typescript",
+  "marker": "tsconfig.json",
+  "expected_components_min": 3,
+  "expected_edges_min": 1,
+  "scan_intent": "architecture",
+  "expected_diagrams": ["dependency", "tree"]
+}
