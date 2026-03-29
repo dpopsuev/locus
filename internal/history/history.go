@@ -11,8 +11,14 @@ import (
 	"time"
 
 	"github.com/dpopsuev/locus/internal/arch"
-	"github.com/dpopsuev/locus/internal/cache"
 )
+
+// CacheReadWriter abstracts the scan cache for dependency inversion.
+// *cache.ScanCache satisfies this interface.
+type CacheReadWriter interface {
+	Get(repoPath, sha string) (*arch.ContextReport, bool, error)
+	Put(repoPath, sha string, report *arch.ContextReport) error
+}
 
 // Sentinel errors for history operations.
 var (
@@ -57,7 +63,7 @@ func DefaultHistoryDir() string {
 
 // Record appends a history entry to the JSONL file and stores the full report
 // in the scan cache for later retrieval.
-func Record(sc *cache.ScanCache, historyDir string, source Source, repoPath, headSHA string, report *arch.ContextReport) error {
+func Record(sc CacheReadWriter, historyDir string, source Source, repoPath, headSHA string, report *arch.ContextReport) error {
 	if err := sc.Put(repoPath, headSHA, report); err != nil {
 		return fmt.Errorf("cache report: %w", err)
 	}
@@ -110,7 +116,7 @@ func List(historyDir, repoPath string, limit int) ([]EntrySummary, error) {
 
 // GetReport retrieves the full report for a specific history index.
 // Negative indices count from the end (-1 = latest, -2 = previous).
-func GetReport(sc *cache.ScanCache, historyDir, repoPath string, index int) (*arch.ContextReport, error) {
+func GetReport(sc CacheReadWriter, historyDir, repoPath string, index int) (*arch.ContextReport, error) {
 	entries, err := readEntries(historyDir, repoPath)
 	if err != nil {
 		return nil, err

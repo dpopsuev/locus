@@ -40,15 +40,34 @@ var (
 	ErrNoCachedReport = errors.New("no cached report — run scan_local first")
 )
 
+// ProtocolStore is the subset of store.Store that Protocol requires.
+// Defined here to invert the dependency direction: protocol depends on its own
+// interface, not on the concrete store package's composite interface.
+type ProtocolStore interface {
+	store.ReportStore
+	store.HistoryStore
+	store.GitResolver
+	store.DesiredStateStore
+	PutComponentMeta(ctx context.Context, project, sha string, meta []store.ComponentMeta) error
+	SearchComponents(ctx context.Context, project, sha, query string) ([]store.ComponentMeta, error)
+	ListProjects(ctx context.Context) ([]store.ProjectInfo, error)
+}
+
+// HealthCheckable is implemented by stores that expose filesystem paths for health checks.
+type HealthCheckable interface {
+	CacheRoot() string
+	HistoryDir() string
+}
+
 // Protocol encapsulates all Locus business logic.
 // Both CLI and MCP are thin wrappers around this.
 type Protocol struct {
-	db         store.Store
+	db         ProtocolStore
 	workspaces []string
 }
 
 // New creates a Protocol with the given store and workspace roots.
-func New(s store.Store, workspaces []string) *Protocol {
+func New(s ProtocolStore, workspaces []string) *Protocol {
 	return &Protocol{db: s, workspaces: workspaces}
 }
 
@@ -1672,11 +1691,11 @@ type HealthCheck struct {
 func (p *Protocol) Health(_ context.Context) *HealthResult {
 	r := &HealthResult{OK: true}
 
-	// Health checks for filesystem-backed stores.
-	if fs, ok := p.db.(*store.FilesystemStore); ok {
+	// Health checks for stores that expose filesystem paths.
+	if hc, ok := p.db.(HealthCheckable); ok {
 		r.Checks = append(r.Checks,
-			checkDir("cache_dir", fs.CacheRoot()),
-			checkDir("history_dir", fs.HistoryDir()),
+			checkDir("cache_dir", hc.CacheRoot()),
+			checkDir("history_dir", hc.HistoryDir()),
 		)
 	}
 	r.Checks = append(r.Checks, checkGit())
