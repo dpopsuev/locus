@@ -107,6 +107,7 @@ var exemptPrefixes = []string{
 
 // typeSuffixes identify symbols that are likely type declarations rather than functions.
 var typeSuffixes = []string{
+	// Common suffixes
 	"Error", "Handler", "Server", "Client", "Config", "Options",
 	"Result", "Response", "Request", "Store", "Cache", "Pool",
 	"Queue", "Stack", "Buffer", "Builder", "Factory", "Provider",
@@ -121,6 +122,23 @@ var typeSuffixes = []string{
 	"Frame", "Record", "Entry", "Item", "Node", "Edge", "Graph",
 	"Tree", "Spec", "Rule", "Policy", "Strategy", "Pattern",
 	"Template", "Schema", "Model", "Entity", "DTO", "VO",
+	// Enum/classification types
+	"Kind", "Type", "Mode", "State", "Status", "Level", "Phase",
+	"Role", "Scope", "Zone", "Layer", "Tier", "Class", "Category",
+	// Data/metric types
+	"Info", "Data", "Metric", "Metrics", "Report", "Summary",
+	"Depth", "Width", "Height", "Size", "Count", "Index", "Offset",
+	// Identifier/reference types
+	"Key", "Value", "Name", "Path", "Dir", "File", "Ref",
+	"ID", "URI", "URL", "Opt", "Opts", "Param", "Params",
+	// AST/compiler types
+	"Def", "Decl", "Stmt", "Expr", "Tok", "Op",
+	// Domain-specific architectural types
+	"Crossing", "Violation", "Constraint", "Threshold",
+	"Component", "Package", "Module", "Namespace",
+	"Anchor", "Symbol", "Token", "Annotation",
+	"Cycle", "HotSpot", "Surface", "Drift",
+	"Fingerprint", "Detection", "Catalog", "Evidence",
 }
 
 // knownSynonyms maps variant terms to a canonical form for vocabulary consistency checks.
@@ -242,9 +260,13 @@ func checkGenericName(sym, pkg string, svcFanIn int) []SymbolIssue {
 	return nil
 }
 
+// verblessMinLen is the minimum symbol length to consider for verbless check.
+// Short names (≤6 chars) are usually types (Config, Signal, etc.).
+const verblessMinLen = 7
+
 // checkVerblessExport flags exported symbols that lack a verb prefix and don't look like types.
 func checkVerblessExport(sym, pkg string, svcFanIn int) []SymbolIssue {
-	if len(sym) <= minDomainPrefixLen {
+	if len(sym) <= verblessMinLen {
 		return nil
 	}
 
@@ -271,6 +293,17 @@ func checkVerblessExport(sym, pkg string, svcFanIn int) []SymbolIssue {
 	for _, suffix := range typeSuffixes {
 		if strings.HasSuffix(sym, suffix) {
 			return nil
+		}
+	}
+
+	// Skip symbols where any camelCase token matches a type suffix.
+	// This catches "BoundaryCrossing" (Crossing is a suffix) and "ArchModel" (Model is a suffix).
+	tokens := splitCamelCase(sym)
+	for _, tok := range tokens {
+		for _, suffix := range typeSuffixes {
+			if strings.EqualFold(tok, suffix) {
+				return nil
+			}
 		}
 	}
 

@@ -446,9 +446,9 @@ var fingerprints = []patternFingerprint{
 	{patternID: "builder", rules: []fingerprintRule{{signal: "newFunctions", weight: 1.0}}, threshold: fingerprintHighThreshold},
 	{patternID: "singleton", rules: []fingerprintRule{{signal: "highFanIn", weight: 1.0, threshold: 10}}, threshold: fingerprintHighThreshold},
 	{patternID: "composite", rules: []fingerprintRule{{signal: "singleMethodInterface", weight: 1.0}}, threshold: fingerprintHighThreshold},
-	// Smells with high thresholds
-	{patternID: "data_clump", rules: []fingerprintRule{{signal: "highSymbolCount", weight: 1.0, threshold: 20}}, threshold: fingerprintHighThreshold},
-	{patternID: "long_parameter_list", rules: []fingerprintRule{{signal: "highSymbolCount", weight: 1.0, threshold: 15}}, threshold: fingerprintHighThreshold},
+	// Smells disabled until proper AST signals are implemented (BUG-21).
+	{patternID: "data_clump", rules: []fingerprintRule{{signal: "highSymbolCount", weight: 1.0, threshold: 20}}, threshold: 1.1},
+	{patternID: "long_parameter_list", rules: []fingerprintRule{{signal: "highSymbolCount", weight: 1.0, threshold: 15}}, threshold: 1.1},
 	{patternID: "dead_code", rules: []fingerprintRule{{signal: "lowFanIn", weight: 1.0, threshold: 1}}, threshold: fingerprintHighThreshold},
 	{patternID: "unstable_interface", rules: []fingerprintRule{{signal: "highChurn", weight: 1.0, threshold: 15}}, threshold: fingerprintHighThreshold},
 }

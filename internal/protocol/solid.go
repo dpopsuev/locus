@@ -46,8 +46,8 @@ const (
 	ocpCasesWarning = 5
 )
 
-// Score penalty per violation.
-const solidViolationPenalty = 5
+// solidPrincipleCount is the number of SOLID principles checked per component.
+const solidPrincipleCount = 4
 
 // SOLIDViolation records a single SOLID principle violation.
 type SOLIDViolation struct {
@@ -154,13 +154,7 @@ func extractDomain(target string) string {
 
 // ComputeISPViolations detects Interface Segregation Principle violations
 // based on interface method counts and implementor completeness.
-func ComputeISPViolations(classes []analysis.ClassInfo, impls []analysis.ImplEdge) []SOLIDViolation {
-	// Index classes by name for lookup.
-	classMap := make(map[string]*analysis.ClassInfo, len(classes))
-	for i := range classes {
-		classMap[classes[i].Name] = &classes[i]
-	}
-
+func ComputeISPViolations(classes []analysis.ClassInfo, _ []analysis.ImplEdge) []SOLIDViolation {
 	var violations []SOLIDViolation
 
 	for i := range classes {
@@ -188,26 +182,6 @@ func ComputeISPViolations(classes []analysis.ClassInfo, impls []analysis.ImplEdg
 				Severity:   SeverityWarning,
 				Suggestion: "Split into smaller role-specific interfaces",
 			})
-		}
-
-		// Check implementors for incomplete coverage.
-		for _, edge := range impls {
-			if edge.To != c.Name {
-				continue
-			}
-			impl, ok := classMap[edge.From]
-			if !ok {
-				continue
-			}
-			if len(impl.Methods) < methodCount {
-				violations = append(violations, SOLIDViolation{
-					Principle:  PrincipleISP,
-					Component:  edge.From,
-					Detail:     fmt.Sprintf("%s may have empty methods for %s", edge.From, c.Name),
-					Severity:   SeverityWarning,
-					Suggestion: "Split into smaller role-specific interfaces",
-				})
-			}
 		}
 	}
 
@@ -420,8 +394,12 @@ func ComputeSOLIDScan(
 		byPrinciple[string(v.Principle)]++
 	}
 
-	// Score: each violation costs solidViolationPenalty points, minimum 0.
-	score := float64(100 - len(allViolations)*solidViolationPenalty)
+	// Score: percentage-based — violations / total checks.
+	totalChecks := len(services) * solidPrincipleCount
+	if totalChecks == 0 {
+		totalChecks = 1
+	}
+	score := 100 - float64(len(allViolations))/float64(totalChecks)*100
 	if score < 0 {
 		score = 0
 	}

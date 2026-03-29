@@ -162,7 +162,9 @@ func TestComputeISPViolations_SmallInterface(t *testing.T) {
 	}
 }
 
-func TestComputeISPViolations_ImplementorEmptyMethods(t *testing.T) {
+func TestComputeISPViolations_ImplementorNotFlagged(t *testing.T) {
+	// BUG-19: implementor sub-check removed — Go compiler enforces interface satisfaction.
+	// Only fat interfaces (>5 methods) should be flagged, not implementors.
 	ifaceMethods := make([]analysis.MethodInfo, 4)
 	for i := range ifaceMethods {
 		ifaceMethods[i] = analysis.MethodInfo{Name: "Method" + string(rune('A'+i)), Exported: true}
@@ -178,14 +180,8 @@ func TestComputeISPViolations_ImplementorEmptyMethods(t *testing.T) {
 
 	violations := ComputeISPViolations(classes, impls)
 
-	found := false
-	for _, v := range violations {
-		if v.Component == "PartialImpl" && v.Severity == SeverityWarning {
-			found = true
-		}
-	}
-	if !found {
-		t.Error("expected warning for PartialImpl having fewer methods than MyInterface")
+	if len(violations) != 0 {
+		t.Errorf("expected 0 violations (4-method interface is fine, implementors not checked), got %d", len(violations))
 	}
 }
 
@@ -267,7 +263,7 @@ func TestComputeDIPViolations_AppToAdapter(t *testing.T) {
 
 func TestComputeSOLIDScan_Score(t *testing.T) {
 	// Setup: 1 SRP violation (warning) + 1 ISP violation (error) = 2 violations.
-	// Score should be 100 - 2*5 = 90.
+	// 1 service × 4 principles = 4 checks. Score = 100 - 2/4*100 = 50.
 	services := []arch.ArchService{
 		{Name: "internal/big", LOC: 600, Symbols: make([]string, 5)},
 	}
@@ -291,7 +287,7 @@ func TestComputeSOLIDScan_Score(t *testing.T) {
 		t.Fatalf("expected %d violations, got %d", expectedViolations, len(report.Violations))
 	}
 
-	expectedScore := float64(100 - expectedViolations*solidViolationPenalty)
+	expectedScore := 50.0 // 100 - 2/4*100
 	if report.Score != expectedScore {
 		t.Errorf("expected score %.0f, got %.0f", expectedScore, report.Score)
 	}

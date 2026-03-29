@@ -38,12 +38,13 @@ var hexaRoleOrder = map[HexaRole]int{
 var adapterKeywords = []string{
 	"handler", "server", "client", "repository", "repo", "gateway",
 	"driver", "adapter", "grpc", "http", "api", "db",
-	"postgres", "mysql", "redis", "kafka", "rabbitmq",
+	"postgres", "mysql", "redis", "kafka", "rabbitmq", "mcp",
 }
 
 // Infra-matching keywords for service name classification.
 var infraKeywords = []string{
 	"config", "logging", "telemetry", "metrics", "middleware",
+	"store", "storage", "persist", "cache",
 }
 
 // App-matching keywords for service name classification.
