@@ -13,6 +13,15 @@ const (
 	LangTypeScript
 	LangC
 	LangCpp
+	LangJava
+	LangJavaScript
+	LangZig
+	LangKotlin
+	LangSwift
+	LangCSharp
+	LangLua
+	LangProto
+	LangShell
 )
 
 var langNames = [...]string{
@@ -23,6 +32,15 @@ var langNames = [...]string{
 	LangTypeScript: "typescript",
 	LangC:          "c",
 	LangCpp:        "cpp",
+	LangJava:       "java",
+	LangJavaScript: "javascript",
+	LangZig:        "zig",
+	LangKotlin:     "kotlin",
+	LangSwift:      "swift",
+	LangCSharp:     "csharp",
+	LangLua:        "lua",
+	LangProto:      "proto",
+	LangShell:      "shell",
 }
 
 func (l Language) String() string {

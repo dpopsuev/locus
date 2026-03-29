@@ -1,0 +1,20 @@
+{
+  "language": "go",
+  "marker": "go.mod",
+  "expected_components_min": 5,
+  "expected_edges_min": 3,
+  "scan_intent": "health",
+  "expected_hexa": {
+    "adapter": ["adapter"],
+    "max_violations": 2
+  },
+  "expected_solid": {
+    "max_violations": 10,
+    "principles": ["ISP"]
+  },
+  "expected_symbols": {
+    "abbreviations": ["Cfg"]
+  },
+  "expected_diagrams": ["dependency", "c4", "tree", "layers"],
+  "expected_presets": ["architecture_review", "code_health"]
+}
