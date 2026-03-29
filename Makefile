@@ -26,7 +26,7 @@ lint:
 lint-new:
 	golangci-lint run --new-from-rev=HEAD ./...
 
-preflight: fmt vet lint test
+preflight: fmt vet lint test test-e2e
 
 install-hooks:
 	@echo '#!/bin/sh' > .git/hooks/pre-commit
