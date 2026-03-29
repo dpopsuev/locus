@@ -301,7 +301,9 @@ These produce large output best viewed interactively. Run to generate for any re
 
 ```bash
 locus diagram . --type zones --theme natural             # architecture zones with health
+locus diagram . --type hexa --theme natural              # hexagonal architecture (ports/adapters)
 locus diagram . --type classes --theme natural           # class diagram with health colors
+locus diagram . --type interfaces --theme natural        # interface implementation graph
 locus diagram . --type classes --exported-only            # exported symbols only
 locus diagram . --type er --theme natural                 # entity-relationship
 locus diagram . --type sequence --entry ScanAndBuild      # call trace from entry point
@@ -311,17 +313,48 @@ locus diagram . --type state                              # state machine detect
 locus diagram . --type dependency --enrich loc,fan_in     # metrics on node labels
 ```
 
+## Code Health Clinic
+
+Locus includes a full clinical analysis system that goes beyond spatial awareness into engineering principle enforcement. Six analysis actions, all heuristic-only (zero LLM cost):
+
+| Action | What it detects |
+|---|---|
+| `pattern_scan` | 10 design patterns (Factory, Strategy, Observer, Decorator, Adapter, Repository, Middleware, Builder, Singleton, Composite) + 10 code smells (God Component, Feature Envy, Shotgun Surgery, Circular Dependency, Lazy Component, and more). Confidence scoring with weighted fingerprint engine. |
+| `pattern_catalog` | Browse the 20-entry pattern encyclopedia. Filter by kind (pattern/smell), category, or name. |
+| `hexa_validate` | Hexagonal architecture compliance. Auto-classifies packages as domain/port/adapter/infra/entrypoint. Flags dependency direction violations (domain importing adapter). Compliance score. |
+| `solid_scan` | SOLID principle detection. SRP (fan-out clusters), OCP (type switches via AST), ISP (fat interfaces >5 methods), DIP (concrete deps crossing layers). Score per principle. |
+| `symbol_quality` | Naming clarity: abbreviations (Cfg, Mgr), generic names (Manager, Helper), verb-less exports. Weighted by fan-in. |
+| `vocab_map` | Vocabulary consistency across packages. Detects synonym drift (Get vs Fetch vs Retrieve for the same concept). |
+
+### Presets
+
+Combine multiple analyses in a single call:
+
+```bash
+# Quick architecture overview
+locus analysis . --preset architecture_review
+
+# Full clinical scan — all pillars
+locus analysis . --preset code_health
+
+# Everything: architecture + normative + interfaces + clinic
+locus analysis . --preset full_clinic
+```
+
+All 8 presets: `architecture_review`, `health_check`, `onboarding`, `pre_pr`, `normative`, `pre_refactor`, `full_clinic`, `code_health`.
+
 ## Packages
 
 | Package | Symbols | Churn | Role |
 |---|---|---|---|
 | `cmd/locus` | 1 | 9 | CLI entry point (Cobra). Every MCP tool has a CLI equivalent. |
 | `internal/mcp` | 1 | 10 | MCP server. Thin handlers that delegate to `protocol`. |
-| `internal/protocol` | 27 | 11 | All business logic: scan, diff, coverage, cycles, evolution. Both CLI and MCP call through this layer. |
-| `internal/arch` | 54 | 21 | Architecture model: scan, render, churn, hot spots, cycles, coverage, API surface. |
-| `internal/analysis` | 38 | 16 | Type analysis (classes, interfaces, field refs, call chains, nesting) and deep analysis (call graph, data flow, state machines). |
-| `internal/diagram` | 14 | 32 | Mermaid diagram renderers for all 12 diagram types with theming. |
-| `internal/survey` | 12 | 20 | Language-specific scanners: Go, Rust, Python, TypeScript, C/C++, LSP, ctags. |
+| `internal/protocol` | 128 | 78 | All business logic: scan, diff, coverage, cycles, normative analysis, Code Health Clinic (pattern scan, hexa, SOLID, symbol quality). Both CLI and MCP call through this layer. |
+| `internal/arch` | 66 | 38 | Architecture model: scan, render, churn, hot spots, cycles, coverage, API surface, semantic anchors. |
+| `internal/analysis` | 64 | 44 | Type analysis (classes, interfaces, field refs, call chains, nesting) and deep analysis (call graph, data flow, state machines). Multi-language: Go AST, tree-sitter, LSP, Python, TypeScript. |
+| `internal/diagram` | 28 | 67 | Mermaid diagram renderers for all 15 diagram types with theming. |
+| `internal/survey` | 23 | 48 | Language-specific scanners with Strategy + Registry pattern. Go, Rust, Python, TypeScript, Java, JavaScript, C/C++, LSP, ctags. |
+| `internal/testkit` | 4 | new | E2E test framework: JSON manifest schema, fixture builder, multi-language test runner. 15-language ground-truth fixtures. |
 | `internal/model` | 45 | 3 | Data model: `Project`, `Namespace`, `File`, `Symbol`, `DependencyGraph`. |
 | `internal/store` | — | new | Hexagonal storage port: `Store` interface + FilesystemStore adapter + LRU decorator. |
 | `internal/config` | — | new | Backend selection and dependency wiring from env vars. |
@@ -336,8 +369,8 @@ locus diagram . --type dependency --enrich loc,fan_in     # metrics on node labe
 | Tool | Description |
 |---|---|
 | `codograph` | Scan and compare repository architectures. Actions: `scan_local`, `scan_remote`, `history`, `diff`, `status`, `set_desired_state`, `get_desired_state`. Use `intent` for scan depth (architecture/coupling/health/full). Returns `cache_key` for downstream tools. |
-| `analysis` | 16 analysis actions: `deps`, `impact`, `coupling` (view=hot_spots/edges), `cycles`, `violations`, `scan_diff`, `callers`, `cross_repo`, `drift`, `suggest_architecture`, `search`, `component`, `preset` (architecture_review/health_check/onboarding/pre_pr), `query` (natural language), `coverage`, `api_surface`, `conventions`, `gaps`. Pass `cache_key` from scan to avoid re-scanning. `format=summary` for <500 tokens. |
-| `render_diagram` | 13 diagram types: dependency, c4, coupling, churn, layers, tree, zones, classes, sequence, er, dataflow, callgraph, state. `format=facts` for plain-text assertions. `enrich=loc,fan_in,churn` for metrics on nodes. `theme` (light/dark/natural). |
+| `analysis` | 32 analysis actions across 5 categories. **Core:** `deps`, `impact`, `coupling`, `cycles`, `violations`, `scan_diff`, `callers`, `cross_repo`, `coverage`, `api_surface`, `conventions`, `gaps`. **Orchestration:** `preset`, `component`, `drift`, `suggest_architecture`, `search`, `query`. **Normative:** `blast_radius`, `import_direction`, `trust_boundaries`, `budgets`, `mod_dependencies`, `symbol_blast`, `diff_intelligence`, `interface_metrics`. **Code Health Clinic:** `pattern_scan`, `pattern_catalog`, `hexa_validate`, `solid_scan`, `symbol_quality`, `vocab_map`. Pass `cache_key` from scan to avoid re-scanning. `format=summary` for <500 tokens. |
+| `render_diagram` | 15 diagram types: dependency, c4, coupling, churn, layers, tree, zones, classes, interfaces, sequence, er, dataflow, callgraph, state, hexa. `format=facts` for plain-text assertions. `enrich=loc,fan_in,churn` for metrics on nodes. `theme` (light/dark/natural). |
 | `triage` | Map natural language intent to ranked tool list (no LLM). |
 
 ### Agent Workflow
@@ -394,15 +427,25 @@ All tools grouped by category:
 
 ## Supported Languages
 
-| Language | Scanner | Symbols | Dependencies |
-|---|---|---|---|
-| Go | `go/ast` native | functions, types, methods, interfaces | import graph + call graph (GoAST analyzer) |
-| Rust | Cargo.toml + regex | functions, structs, traits, impls | crate dependency graph |
-| Python | tree-sitter-python | functions, classes, async functions | import graph + call graph (PythonDeep analyzer) |
-| TypeScript | tree-sitter-typescript | functions, classes, arrow functions | import graph + call graph (TypeScriptDeep analyzer) |
-| C/C++ | `#include` + ctags | functions, structs, typedefs | include graph |
-| Any | LSP (gopls, etc.) | workspace/symbol | references |
-| Any | ctags (universal) | all ctags kinds | import heuristics |
+| Language | Scanner | Symbols | Dependencies | Testkit |
+|---|---|---|---|---|
+| Go | `go/ast` + `go/packages` | functions, types, methods, interfaces | import graph + call graph (GoAST analyzer) | Full (all 54 actions) |
+| Python | tree-sitter-python | functions, classes, async functions | import graph + call graph (PythonDeep analyzer) | Components + diagrams |
+| TypeScript | tree-sitter-typescript | functions, classes, arrow functions | import graph + call graph (TypeScriptDeep analyzer) | Components + edges + diagrams |
+| Rust | Cargo.toml + regex | functions, structs, traits, impls | crate dependency graph | Components + diagrams |
+| Java | ctags fallback | classes, methods, interfaces | import heuristics | Components + diagrams |
+| JavaScript | tree-sitter (shared with TS) | functions, classes, arrow functions | import graph | Components + diagrams |
+| C | `#include` + ctags | functions, structs, typedefs | include graph | Components + diagrams |
+| C++ | `#include` + ctags | classes, functions, templates | include graph | Components + diagrams |
+| Kotlin | ctags fallback | classes, functions, interfaces | import heuristics | Components + diagrams |
+| Swift | ctags fallback | protocols, structs, classes | import heuristics | Components + diagrams |
+| C# | ctags fallback | classes, interfaces, records | import heuristics | Components + diagrams |
+| Zig | regex fallback | functions, structs | import heuristics | Components + diagrams |
+| Lua | regex fallback | functions, tables | require graph | Components + diagrams |
+| Proto/gRPC | regex fallback | services, messages | import graph | Components + diagrams |
+| Shell | regex fallback | functions | source graph | Components + diagrams |
+| Any | LSP (gopls, etc.) | workspace/symbol | references | — |
+| Any | ctags (universal) | all ctags kinds | import heuristics | — |
 
 ## Diagram Theming
 
