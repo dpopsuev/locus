@@ -23,10 +23,20 @@ func ComputeChurn(root string, days int, modPath string) map[string]int {
 	}
 
 	absRoot, _ := filepath.Abs(root)
+	return aggregateChurn(string(out), absRoot)
+}
+
+// aggregateChurn parses git log --name-only output and returns churn counts
+// per directory. Test files (_test.go) are excluded — their churn is expected
+// and should not inflate smell thresholds (Shotgun Surgery, Unstable Interface).
+func aggregateChurn(gitOutput, absRoot string) map[string]int {
 	result := make(map[string]int)
-	for _, line := range strings.Split(string(out), "\n") {
+	for _, line := range strings.Split(gitOutput, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
+			continue
+		}
+		if strings.HasSuffix(line, "_test.go") {
 			continue
 		}
 		dir := filepath.Dir(line)
@@ -41,6 +51,5 @@ func ComputeChurn(root string, days int, modPath string) map[string]int {
 		rel = filepath.ToSlash(rel)
 		result[rel]++
 	}
-
 	return result
 }

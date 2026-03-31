@@ -376,6 +376,21 @@ func (p *Protocol) GetDesiredState(ctx context.Context, path string) (*store.Des
 	return p.db.GetDesiredState(ctx, path)
 }
 
+// AcceptViolation appends an accepted violation to the project's desired state
+// and persists it. If no desired state exists yet, one is created.
+func (p *Protocol) AcceptViolation(ctx context.Context, path string, av store.AcceptedViolation) error {
+	path = p.resolvePath(path)
+	ds, err := p.db.GetDesiredState(ctx, path)
+	if err != nil {
+		return err
+	}
+	if ds == nil {
+		ds = &store.DesiredState{}
+	}
+	ds.Accepted = append(ds.Accepted, av)
+	return p.db.PutDesiredState(ctx, path, ds)
+}
+
 // DriftReport holds architecture drift analysis results.
 type DriftReport struct {
 	HasDesiredState    bool                  `json:"has_desired_state"`
@@ -961,14 +976,17 @@ func (p *Protocol) renderPresetFullClinic(ctx context.Context, b *strings.Builde
 	if classes, err := fa.Classes(path); err == nil {
 		impls, _ := fa.Implements(path)
 
-		patternReport := ComputePatternScan(report.Architecture.Services, report.Architecture.Edges, report.Cycles, classes, impls)
+		hexaClass := ComputeHexaClassification(report.Architecture.Services, report.Architecture.Edges, classes)
+		desired, _ := p.db.GetDesiredState(ctx, path)
+		roles, accepted := resolveRolesAndAccepted(hexaClass, desired)
+
+		patternReport := ComputePatternScan(report.Architecture.Services, report.Architecture.Edges, report.Cycles, classes, impls, roles, accepted)
 		fmt.Fprintf(b, "\n## Patterns & Smells\n%s\n", patternReport.Summary)
 
 		hexaReport := ComputeHexaViolations(report.Architecture.Services, report.Architecture.Edges, classes)
 		fmt.Fprintf(b, "\n## Hexagonal Architecture\n%s\n", hexaReport.Summary)
 
-		hexaClass := ComputeHexaClassification(report.Architecture.Services, report.Architecture.Edges, classes)
-		solidReport := ComputeSOLIDScan(report.Architecture.Services, report.Architecture.Edges, classes, impls, hexaClass, path)
+		solidReport := ComputeSOLIDScan(report.Architecture.Services, report.Architecture.Edges, classes, impls, hexaClass, path, roles, accepted)
 		fmt.Fprintf(b, "\n## SOLID Principles\n%s\n", solidReport.Summary)
 	}
 
@@ -984,14 +1002,15 @@ func (p *Protocol) renderPresetCodeHealth(b *strings.Builder, path string, repor
 	classes, _ := fa.Classes(path)
 	impls, _ := fa.Implements(path)
 
-	patternReport := ComputePatternScan(report.Architecture.Services, report.Architecture.Edges, report.Cycles, classes, impls)
+	hexaClass := ComputeHexaClassification(report.Architecture.Services, report.Architecture.Edges, classes)
+
+	patternReport := ComputePatternScan(report.Architecture.Services, report.Architecture.Edges, report.Cycles, classes, impls, nil, nil)
 	fmt.Fprintf(b, "## Patterns & Smells\n%s\n\n", patternReport.Summary)
 
 	hexaReport := ComputeHexaViolations(report.Architecture.Services, report.Architecture.Edges, classes)
 	fmt.Fprintf(b, "## Hexagonal Architecture\n%s\n\n", hexaReport.Summary)
 
-	hexaClass := ComputeHexaClassification(report.Architecture.Services, report.Architecture.Edges, classes)
-	solidReport := ComputeSOLIDScan(report.Architecture.Services, report.Architecture.Edges, classes, impls, hexaClass, path)
+	solidReport := ComputeSOLIDScan(report.Architecture.Services, report.Architecture.Edges, classes, impls, hexaClass, path, nil, nil)
 	fmt.Fprintf(b, "## SOLID Principles\n%s\n\n", solidReport.Summary)
 
 	sqReport := ComputeSymbolQuality(report.Architecture.Services, report.Architecture.Edges)
@@ -1517,7 +1536,9 @@ func (p *Protocol) GetSOLIDScan(ctx context.Context, path string, cacheKey ...st
 	classes, _ := fa.Classes(path)
 	impls, _ := fa.Implements(path)
 	hexaClass := ComputeHexaClassification(report.Architecture.Services, report.Architecture.Edges, classes)
-	return ComputeSOLIDScan(report.Architecture.Services, report.Architecture.Edges, classes, impls, hexaClass, path), nil
+	desired, _ := p.db.GetDesiredState(ctx, path)
+	roles, accepted := resolveRolesAndAccepted(hexaClass, desired)
+	return ComputeSOLIDScan(report.Architecture.Services, report.Architecture.Edges, classes, impls, hexaClass, path, roles, accepted), nil
 }
 
 func (p *Protocol) GetSymbolQuality(_ context.Context, path string, cacheKey ...string) (*SymbolQualityReport, error) {
@@ -1538,7 +1559,7 @@ func (p *Protocol) GetVocabMap(_ context.Context, path string, cacheKey ...strin
 	return ComputeVocabMap(report.Architecture.Services), nil
 }
 
-func (p *Protocol) GetPatternScan(_ context.Context, path string, cacheKey ...string) (*PatternScanReport, error) {
+func (p *Protocol) GetPatternScan(ctx context.Context, path string, cacheKey ...string) (*PatternScanReport, error) {
 	path = p.resolvePath(path)
 	report, err := p.getOrScan(path, cacheKey...)
 	if err != nil {
@@ -1547,7 +1568,10 @@ func (p *Protocol) GetPatternScan(_ context.Context, path string, cacheKey ...st
 	fa := analysis.NewFallback(path)
 	classes, _ := fa.Classes(path)
 	impls, _ := fa.Implements(path)
-	return ComputePatternScan(report.Architecture.Services, report.Architecture.Edges, report.Cycles, classes, impls), nil
+	hexaClass := ComputeHexaClassification(report.Architecture.Services, report.Architecture.Edges, classes)
+	desired, _ := p.db.GetDesiredState(ctx, path)
+	roles, accepted := resolveRolesAndAccepted(hexaClass, desired)
+	return ComputePatternScan(report.Architecture.Services, report.Architecture.Edges, report.Cycles, classes, impls, roles, accepted), nil
 }
 
 func (p *Protocol) GetPatternCatalog(filter string) *PatternCatalogReport {
@@ -1571,6 +1595,25 @@ func (p *Protocol) GetCachedReport(cacheKey string) (*arch.ContextReport, error)
 		}
 	}
 	return nil, fmt.Errorf("%w: %q", ErrNoCachedReport, cacheKey)
+}
+
+// resolveRolesAndAccepted extracts roles and accepted violations from
+// hexa classification and desired state. Either may be nil.
+func resolveRolesAndAccepted(hexaClass *HexaClassificationReport, desired *store.DesiredState) (map[string]HexaRole, []store.AcceptedViolation) {
+	var roles map[string]HexaRole
+	var accepted []store.AcceptedViolation
+
+	if hexaClass != nil {
+		var overrides map[string]string
+		if desired != nil {
+			overrides = desired.Roles
+		}
+		roles = ResolveRoles(hexaClass, overrides)
+	}
+	if desired != nil {
+		accepted = desired.Accepted
+	}
+	return roles, accepted
 }
 
 func (p *Protocol) getOrScan(path string, cacheKeys ...string) (*arch.ContextReport, error) {

@@ -40,6 +40,7 @@ const (
 	ActionDiff            = "diff"
 	ActionSetDesiredState = "set_desired_state"
 	ActionGetDesiredState = "get_desired_state"
+	ActionAcceptViolation = "accept_violation"
 	ActionStatus          = "status"
 )
 
@@ -225,7 +226,7 @@ type handler struct {
 // --- consolidated input types ---
 
 type codographActionInput struct {
-	Action string `json:"action" jsonschema:"required,scan_local | scan_remote | history | diff"`
+	Action string `json:"action" jsonschema:"required,scan_local | scan_remote | history | diff | set_desired_state | get_desired_state | accept_violation | status"`
 
 	Path            string `json:"path,omitempty" jsonschema:"absolute path to local repository"`
 	Depth           int    `json:"depth,omitempty" jsonschema:"directory grouping depth for components"`
@@ -246,9 +247,12 @@ type codographActionInput struct {
 	Last int  `json:"last,omitempty" jsonschema:"number of history entries to return"`
 	Diff bool `json:"diff,omitempty" jsonschema:"if true, compare latest two scans (history)"`
 
-	Layers  []string `json:"layers,omitempty" jsonschema:"ordered layer names for desired state"`
-	BranchA string   `json:"branch_a,omitempty" jsonschema:"first branch to compare (diff)"`
-	BranchB string   `json:"branch_b,omitempty" jsonschema:"second branch to compare (diff)"`
+	Layers    []string `json:"layers,omitempty" jsonschema:"ordered layer names for desired state"`
+	BranchA   string   `json:"branch_a,omitempty" jsonschema:"first branch to compare (diff)"`
+	BranchB   string   `json:"branch_b,omitempty" jsonschema:"second branch to compare (diff)"`
+	Component string   `json:"component,omitempty" jsonschema:"component name for accept_violation"`
+	Principle string   `json:"principle,omitempty" jsonschema:"principle or smell ID for accept_violation (e.g. SRP, god_component)"`
+	Reason    string   `json:"reason,omitempty" jsonschema:"reason for accepting a violation"`
 }
 
 type analysisActionInput struct {
@@ -279,7 +283,7 @@ type analysisActionInput struct {
 
 // --- dispatchers ---
 
-func (h *handler) handleCodograph(ctx context.Context, req *sdkmcp.CallToolRequest, in codographActionInput) (*sdkmcp.CallToolResult, any, error) {
+func (h *handler) handleCodograph(ctx context.Context, req *sdkmcp.CallToolRequest, in codographActionInput) (*sdkmcp.CallToolResult, any, error) { //nolint:gocritic // signature constrained by MCP SDK ToolHandlerFor generic type
 	switch in.Action {
 	case ActionScanLocal:
 		return h.handleScanProject(ctx, req, scanProjectInput{
@@ -317,6 +321,15 @@ func (h *handler) handleCodograph(ctx context.Context, req *sdkmcp.CallToolReque
 			return text("no desired state configured"), nil, nil
 		}
 		return jsonResult(ds)
+	case ActionAcceptViolation:
+		if err := h.proto.AcceptViolation(ctx, in.Path, store.AcceptedViolation{
+			Component: in.Component,
+			Principle: in.Principle,
+			Reason:    in.Reason,
+		}); err != nil {
+			return nil, nil, err
+		}
+		return text(fmt.Sprintf("accepted violation: %s/%s", in.Component, in.Principle)), nil, nil
 	case ActionStatus:
 		r, err := h.proto.Status(ctx)
 		if err != nil {
@@ -324,8 +337,10 @@ func (h *handler) handleCodograph(ctx context.Context, req *sdkmcp.CallToolReque
 		}
 		return jsonResult(r)
 	default:
-		return nil, nil, fmt.Errorf("%w %q (valid: %s, %s, %s, %s)",
-			ErrUnknownCodographAction, in.Action, ActionScanLocal, ActionScanRemote, ActionHistory, ActionDiff)
+		return nil, nil, fmt.Errorf("%w %q (valid: %s, %s, %s, %s, %s, %s, %s, %s)",
+			ErrUnknownCodographAction, in.Action,
+			ActionScanLocal, ActionScanRemote, ActionHistory, ActionDiff,
+			ActionSetDesiredState, ActionGetDesiredState, ActionAcceptViolation, ActionStatus)
 	}
 }
 

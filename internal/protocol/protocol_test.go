@@ -489,6 +489,104 @@ func TestGenerateHints(t *testing.T) {
 	}
 }
 
+func TestAcceptViolation(t *testing.T) {
+	s := testStore(filepath.Join(t.TempDir(), "cache"), t.TempDir())
+	p := New(s, nil)
+	ctx := context.Background()
+	path := "/test/project"
+
+	// Accept a violation when no desired state exists yet.
+	err := p.AcceptViolation(ctx, path, store.AcceptedViolation{
+		Component: "pkg_a",
+		Principle: "SRP",
+		Reason:    "composition root, expected",
+	})
+	if err != nil {
+		t.Fatalf("AcceptViolation (first): %v", err)
+	}
+
+	// Verify it was persisted.
+	ds, err := p.GetDesiredState(ctx, path)
+	if err != nil {
+		t.Fatalf("GetDesiredState: %v", err)
+	}
+	if ds == nil {
+		t.Fatal("expected non-nil desired state")
+	}
+	if len(ds.Accepted) != 1 {
+		t.Fatalf("expected 1 accepted violation, got %d", len(ds.Accepted))
+	}
+	if ds.Accepted[0].Component != "pkg_a" {
+		t.Errorf("component = %q, want pkg_a", ds.Accepted[0].Component)
+	}
+	if ds.Accepted[0].Principle != "SRP" {
+		t.Errorf("principle = %q, want SRP", ds.Accepted[0].Principle)
+	}
+	if ds.Accepted[0].Reason != "composition root, expected" {
+		t.Errorf("reason = %q, want 'composition root, expected'", ds.Accepted[0].Reason)
+	}
+
+	// Accept a second violation — should append, not replace.
+	err = p.AcceptViolation(ctx, path, store.AcceptedViolation{
+		Component: "pkg_b",
+		Principle: "god_component",
+	})
+	if err != nil {
+		t.Fatalf("AcceptViolation (second): %v", err)
+	}
+
+	ds, err = p.GetDesiredState(ctx, path)
+	if err != nil {
+		t.Fatalf("GetDesiredState (second): %v", err)
+	}
+	if len(ds.Accepted) != 2 {
+		t.Fatalf("expected 2 accepted violations, got %d", len(ds.Accepted))
+	}
+	if ds.Accepted[1].Component != "pkg_b" {
+		t.Errorf("second component = %q, want pkg_b", ds.Accepted[1].Component)
+	}
+	if ds.Accepted[1].Principle != "god_component" {
+		t.Errorf("second principle = %q, want god_component", ds.Accepted[1].Principle)
+	}
+}
+
+func TestAcceptViolation_PreservesExistingState(t *testing.T) {
+	s := testStore(filepath.Join(t.TempDir(), "cache"), t.TempDir())
+	p := New(s, nil)
+	ctx := context.Background()
+	path := "/test/project"
+
+	// Set up initial desired state with layers.
+	err := p.SetDesiredState(ctx, path, &store.DesiredState{
+		Layers: []string{"domain", "service", "handler"},
+	})
+	if err != nil {
+		t.Fatalf("SetDesiredState: %v", err)
+	}
+
+	// Accept a violation.
+	err = p.AcceptViolation(ctx, path, store.AcceptedViolation{
+		Component: "handler/api",
+		Principle: "DIP",
+		Reason:    "adapter layer",
+	})
+	if err != nil {
+		t.Fatalf("AcceptViolation: %v", err)
+	}
+
+	// Verify layers are preserved.
+	ds, err := p.GetDesiredState(ctx, path)
+	if err != nil {
+		t.Fatalf("GetDesiredState: %v", err)
+	}
+	if len(ds.Layers) != 3 {
+		t.Errorf("layers lost: got %d, want 3", len(ds.Layers))
+	}
+	if len(ds.Accepted) != 1 {
+		t.Fatalf("expected 1 accepted violation, got %d", len(ds.Accepted))
+	}
+}
+
 func shas(commits []CommitMeta) []string {
 	out := make([]string, len(commits))
 	for i, c := range commits {

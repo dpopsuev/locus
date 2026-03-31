@@ -94,9 +94,18 @@ type ComponentMeta struct {
 
 // DesiredState defines architecture rules for a project.
 type DesiredState struct {
-	Layers      []string           `json:"layers" yaml:"layers"`
-	Boundaries  []BoundaryRule     `json:"boundaries,omitempty" yaml:"boundaries"`
-	Constraints []HealthConstraint `json:"constraints,omitempty" yaml:"constraints"`
+	Layers      []string            `json:"layers" yaml:"layers"`
+	Boundaries  []BoundaryRule      `json:"boundaries,omitempty" yaml:"boundaries"`
+	Constraints []HealthConstraint  `json:"constraints,omitempty" yaml:"constraints"`
+	Roles       map[string]string   `json:"roles,omitempty" yaml:"roles"`       // manual hexagonal role overrides per component
+	Accepted    []AcceptedViolation `json:"accepted,omitempty" yaml:"accepted"` // suppressed violations
+}
+
+// AcceptedViolation records a known violation that should be suppressed.
+type AcceptedViolation struct {
+	Component string `json:"component" yaml:"component"`
+	Principle string `json:"principle" yaml:"principle"` // "SRP", "DIP", "ISP", "OCP", or smell ID like "god_component"
+	Reason    string `json:"reason" yaml:"reason"`
 }
 
 // BoundaryRule defines an allowed or denied dependency path.

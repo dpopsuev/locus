@@ -182,6 +182,40 @@ func classifyService(
 	return HexaRoleDomain, "default classification"
 }
 
+// ResolveRoles returns the effective hexagonal role for each component.
+// Auto-classified roles from ComputeHexaClassification are used as the base;
+// manual overrides from DesiredState.Roles take precedence.
+func ResolveRoles(classification *HexaClassificationReport, overrides map[string]string) map[string]HexaRole {
+	roles := make(map[string]HexaRole, len(classification.Components))
+	for _, c := range classification.Components {
+		roles[c.Name] = c.Role
+	}
+	for comp, role := range overrides {
+		roles[comp] = HexaRole(role)
+	}
+	return roles
+}
+
+// RoleMultiplier returns a scaling factor for thresholds based on hexagonal role.
+// Values > 1.0 are more lenient (composition roots tolerate more).
+// Values < 1.0 are stricter (domain should be focused).
+func RoleMultiplier(role HexaRole) float64 {
+	switch role {
+	case HexaRoleEntry:
+		return 2.0 // cmd/ naturally large
+	case HexaRoleApp:
+		return 1.5 // composition roots have high fan-out
+	case HexaRoleAdapter:
+		return 1.3 // adapters have integration complexity
+	case HexaRoleInfra:
+		return 1.2 // infra has config complexity
+	case HexaRoleDomain:
+		return 0.8 // domain should be focused
+	default:
+		return 1.0 // port, unknown
+	}
+}
+
 // ComputeHexaViolations validates hexagonal architecture rules and returns
 // a report with violations and a compliance score.
 func ComputeHexaViolations(

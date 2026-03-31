@@ -205,6 +205,53 @@ func TestComputeHexaViolations_MultipleRules(t *testing.T) {
 	}
 }
 
+func TestResolveRoles_ManualOverride(t *testing.T) {
+	classification := &HexaClassificationReport{
+		Components: []HexaComponent{
+			{Name: "internal/driver", Role: HexaRoleAdapter, Reason: "name contains adapter keyword"},
+			{Name: "internal/domain", Role: HexaRoleDomain, Reason: "default classification"},
+		},
+	}
+
+	overrides := map[string]string{
+		"internal/driver": "port",
+	}
+
+	roles := ResolveRoles(classification, overrides)
+
+	if roles["internal/driver"] != HexaRolePort {
+		t.Errorf("expected 'port' for internal/driver (override), got %q", roles["internal/driver"])
+	}
+	if roles["internal/domain"] != HexaRoleDomain {
+		t.Errorf("expected 'domain' for internal/domain, got %q", roles["internal/domain"])
+	}
+}
+
+func TestResolveRoles_NoOverride(t *testing.T) {
+	classification := &HexaClassificationReport{
+		Components: []HexaComponent{
+			{Name: "internal/handler", Role: HexaRoleAdapter, Reason: "name contains adapter keyword"},
+			{Name: "internal/domain", Role: HexaRoleDomain, Reason: "default classification"},
+			{Name: "cmd/server", Role: HexaRoleEntry, Reason: "command entrypoint"},
+		},
+	}
+
+	roles := ResolveRoles(classification, nil)
+
+	if len(roles) != 3 {
+		t.Fatalf("expected 3 roles, got %d", len(roles))
+	}
+	if roles["internal/handler"] != HexaRoleAdapter {
+		t.Errorf("expected adapter, got %q", roles["internal/handler"])
+	}
+	if roles["internal/domain"] != HexaRoleDomain {
+		t.Errorf("expected domain, got %q", roles["internal/domain"])
+	}
+	if roles["cmd/server"] != HexaRoleEntry {
+		t.Errorf("expected entrypoint, got %q", roles["cmd/server"])
+	}
+}
+
 func TestComputeHexaViolations_PortToAdapter(t *testing.T) {
 	services := []arch.ArchService{
 		{Name: "internal/ports", Package: "github.com/example/app/internal/ports"},

@@ -12,6 +12,7 @@ import (
 
 	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/arch"
+	"github.com/dpopsuev/locus/internal/store"
 )
 
 // SOLIDPrinciple identifies one of the four SOLID principles detected.
@@ -32,6 +33,12 @@ const (
 	srpFanOutWarning  = 5
 	srpDomainDivThres = 3
 	srpSymbolThres    = 20
+)
+
+// SRP fan-in (blast radius) thresholds for severity escalation.
+const (
+	srpFanInMedium = 3
+	srpFanInHigh   = 8
 )
 
 // ISP thresholds.
@@ -66,14 +73,32 @@ type SOLIDReport struct {
 	Summary     string           `json:"summary"`
 }
 
+// IsAccepted checks if a violation is in the accepted list.
+func IsAccepted(accepted []store.AcceptedViolation, component, principle string) bool {
+	for _, a := range accepted {
+		if a.Component == component && a.Principle == principle {
+			return true
+		}
+	}
+	return false
+}
+
 // ComputeSRPViolations detects Single Responsibility Principle violations
 // based on LOC, fan-out count, and fan-out domain diversity.
-func ComputeSRPViolations(services []arch.ArchService, edges []arch.ArchEdge) []SOLIDViolation {
+// Thresholds are scaled by role multiplier; accepted violations are suppressed.
+// Severity is weighted by blast radius (fan-in count):
+//   - fan-in 0-2 → warning  (low blast radius, safe to refactor)
+//   - fan-in 3-7 → error    (medium blast radius)
+//   - fan-in 8+  → critical (high blast radius, many dependents break)
+func ComputeSRPViolations(services []arch.ArchService, edges []arch.ArchEdge, roles map[string]HexaRole, accepted []store.AcceptedViolation) []SOLIDViolation {
 	// Build fan-out: count of outbound edges per service.
 	fanOut := make(map[string]int, len(services))
 	fanOutTargets := make(map[string]map[string]bool, len(services))
+	// Build fan-in: count of inbound edges per service (blast radius).
+	fanIn := make(map[string]int, len(services))
 	for _, e := range edges {
 		fanOut[e.From]++
+		fanIn[e.To]++
 		if fanOutTargets[e.From] == nil {
 			fanOutTargets[e.From] = make(map[string]bool)
 		}
@@ -84,24 +109,36 @@ func ComputeSRPViolations(services []arch.ArchService, edges []arch.ArchEdge) []
 
 	for i := range services {
 		svc := &services[i]
+
+		if IsAccepted(accepted, svc.Name, string(PrincipleSRP)) {
+			continue
+		}
+
 		fo := fanOut[svc.Name]
+		fi := fanIn[svc.Name]
+		mult := RoleMultiplier(roles[svc.Name])
+
+		locError := int(float64(srpLOCError) * mult)
+		locWarning := int(float64(srpLOCWarning) * mult)
+		foError := int(float64(srpFanOutError) * mult)
+		foWarning := int(float64(srpFanOutWarning) * mult)
 
 		// Check LOC + fan-out thresholds.
 		switch {
-		case svc.LOC > srpLOCError && fo > srpFanOutError:
+		case svc.LOC > locError && fo > foError:
 			violations = append(violations, SOLIDViolation{
 				Principle:  PrincipleSRP,
 				Component:  svc.Name,
-				Detail:     fmt.Sprintf("%s has %d LOC and fan-out %d", svc.Name, svc.LOC, fo),
-				Severity:   SeverityError,
+				Detail:     fmt.Sprintf("%s has %d LOC and fan-out %d (fan-in %d)", svc.Name, svc.LOC, fo, fi),
+				Severity:   srpSeverityByFanIn(fi),
 				Suggestion: "Split into focused packages by responsibility",
 			})
-		case svc.LOC > srpLOCWarning && fo > srpFanOutWarning:
+		case svc.LOC > locWarning && fo > foWarning:
 			violations = append(violations, SOLIDViolation{
 				Principle:  PrincipleSRP,
 				Component:  svc.Name,
-				Detail:     fmt.Sprintf("%s has %d LOC and fan-out %d", svc.Name, svc.LOC, fo),
-				Severity:   SeverityWarning,
+				Detail:     fmt.Sprintf("%s has %d LOC and fan-out %d (fan-in %d)", svc.Name, svc.LOC, fo, fi),
+				Severity:   srpSeverityByFanIn(fi),
 				Suggestion: "Consider extracting related functionality",
 			})
 		}
@@ -112,14 +149,27 @@ func ComputeSRPViolations(services []arch.ArchService, edges []arch.ArchEdge) []
 			violations = append(violations, SOLIDViolation{
 				Principle:  PrincipleSRP,
 				Component:  svc.Name,
-				Detail:     fmt.Sprintf("%s touches %d domains with %d symbols", svc.Name, diversity, len(svc.Symbols)),
-				Severity:   SeverityWarning,
+				Detail:     fmt.Sprintf("%s touches %d domains with %d symbols (fan-in %d)", svc.Name, diversity, len(svc.Symbols), fi),
+				Severity:   srpSeverityByFanIn(fi),
 				Suggestion: "Component touches too many domains",
 			})
 		}
 	}
 
 	return violations
+}
+
+// srpSeverityByFanIn returns SRP severity based on fan-in (blast radius).
+// A component with many dependents is riskier to refactor.
+func srpSeverityByFanIn(fanIn int) string {
+	switch {
+	case fanIn >= srpFanInHigh:
+		return SeverityCritical
+	case fanIn >= srpFanInMedium:
+		return SeverityError
+	default:
+		return SeverityWarning
+	}
 }
 
 // countDomainDiversity counts the number of distinct domains among targets.
@@ -152,10 +202,28 @@ func extractDomain(target string) string {
 	return target
 }
 
+// ISP implementor-count thresholds for severity escalation.
+const (
+	ispImplCountMedium = 3
+	ispImplCountHigh   = 6
+)
+
 // ComputeISPViolations detects Interface Segregation Principle violations
-// based on interface method counts and implementor completeness.
-func ComputeISPViolations(classes []analysis.ClassInfo, _ []analysis.ImplEdge) []SOLIDViolation {
-	var violations []SOLIDViolation
+// based on interface method counts, weighted by implementor count.
+// More implementors means changing the interface has higher impact:
+//   - 1-2 implementors → warning
+//   - 3-5 implementors → error
+//   - 6+  implementors → critical
+func ComputeISPViolations(classes []analysis.ClassInfo, impls []analysis.ImplEdge, accepted []store.AcceptedViolation) []SOLIDViolation {
+	// Build implementor count per interface.
+	implCount := make(map[string]int)
+	for _, edge := range impls {
+		if edge.Kind == "implements" {
+			implCount[edge.To]++
+		}
+	}
+
+	violations := make([]SOLIDViolation, 0, len(classes))
 
 	for i := range classes {
 		c := &classes[i]
@@ -163,34 +231,65 @@ func ComputeISPViolations(classes []analysis.ClassInfo, _ []analysis.ImplEdge) [
 			continue
 		}
 
+		if IsAccepted(accepted, c.Name, string(PrincipleISP)) {
+			continue
+		}
+
 		methodCount := len(c.Methods)
 
+		var baseSeverity string
 		switch {
 		case methodCount > ispMethodsError:
-			violations = append(violations, SOLIDViolation{
-				Principle:  PrincipleISP,
-				Component:  c.Name,
-				Detail:     fmt.Sprintf("%s has %d methods (threshold: %d)", c.Name, methodCount, ispMethodsError),
-				Severity:   SeverityError,
-				Suggestion: "Split into smaller role-specific interfaces",
-			})
+			baseSeverity = SeverityError
 		case methodCount > ispMethodsWarning:
-			violations = append(violations, SOLIDViolation{
-				Principle:  PrincipleISP,
-				Component:  c.Name,
-				Detail:     fmt.Sprintf("%s has %d methods (threshold: %d)", c.Name, methodCount, ispMethodsWarning),
-				Severity:   SeverityWarning,
-				Suggestion: "Split into smaller role-specific interfaces",
-			})
+			baseSeverity = SeverityWarning
+		default:
+			continue
 		}
+
+		// Weight severity by implementor count.
+		severity := ispSeverityByImplCount(baseSeverity, implCount[c.Name])
+
+		detail := fmt.Sprintf("%s has %d methods (threshold: %d)", c.Name, methodCount, ispMethodsWarning)
+		if n := implCount[c.Name]; n > 0 {
+			detail = fmt.Sprintf("%s has %d methods, %d implementor(s)", c.Name, methodCount, n)
+		}
+
+		violations = append(violations, SOLIDViolation{
+			Principle:  PrincipleISP,
+			Component:  c.Name,
+			Detail:     detail,
+			Severity:   severity,
+			Suggestion: "Split into smaller role-specific interfaces",
+		})
 	}
 
 	return violations
 }
 
+// ispSeverityByImplCount adjusts ISP severity based on implementor count.
+// A fat interface with many implementors is harder to refactor.
+func ispSeverityByImplCount(baseSeverity string, implCount int) string {
+	switch {
+	case implCount >= ispImplCountHigh:
+		return SeverityCritical
+	case implCount >= ispImplCountMedium:
+		if baseSeverity == SeverityWarning {
+			return SeverityError
+		}
+		return SeverityError
+	default:
+		// 0-2 implementors: keep base but cap at warning when few.
+		if implCount > 0 && baseSeverity == SeverityError {
+			return SeverityWarning
+		}
+		return baseSeverity
+	}
+}
+
 // ComputeOCPViolations detects Open/Closed Principle violations by finding
 // type switch statements in Go source files under root.
-func ComputeOCPViolations(root string) []SOLIDViolation {
+func ComputeOCPViolations(root string, accepted []store.AcceptedViolation) []SOLIDViolation {
 	if root == "" {
 		return nil
 	}
@@ -218,7 +317,11 @@ func ComputeOCPViolations(root string) []SOLIDViolation {
 		}
 
 		found := findTypeSwitchViolations(path)
-		violations = append(violations, found...)
+		for _, v := range found {
+			if !IsAccepted(accepted, v.Component, string(PrincipleOCP)) {
+				violations = append(violations, v)
+			}
+		}
 		return nil
 	})
 
@@ -319,6 +422,7 @@ func ComputeDIPViolations(
 	services []arch.ArchService,
 	edges []arch.ArchEdge,
 	hexaClassification *HexaClassificationReport,
+	accepted []store.AcceptedViolation,
 ) []SOLIDViolation {
 	if hexaClassification == nil {
 		return nil
@@ -333,6 +437,10 @@ func ComputeDIPViolations(
 	var violations []SOLIDViolation
 
 	for _, e := range edges {
+		if IsAccepted(accepted, e.From, string(PrincipleDIP)) {
+			continue
+		}
+
 		fromRole := roleMap[e.From]
 		toRole := roleMap[e.To]
 
@@ -364,6 +472,7 @@ func ComputeDIPViolations(
 }
 
 // ComputeSOLIDScan runs all four SOLID detectors and produces a unified report.
+// Thresholds are scaled by role multiplier; accepted violations are suppressed.
 func ComputeSOLIDScan(
 	services []arch.ArchService,
 	edges []arch.ArchEdge,
@@ -371,12 +480,14 @@ func ComputeSOLIDScan(
 	impls []analysis.ImplEdge,
 	hexaClassification *HexaClassificationReport,
 	root string,
+	roles map[string]HexaRole,
+	accepted []store.AcceptedViolation,
 ) *SOLIDReport {
 	var allViolations []SOLIDViolation
-	allViolations = append(allViolations, ComputeSRPViolations(services, edges)...)
-	allViolations = append(allViolations, ComputeISPViolations(classes, impls)...)
-	allViolations = append(allViolations, ComputeOCPViolations(root)...)
-	allViolations = append(allViolations, ComputeDIPViolations(services, edges, hexaClassification)...)
+	allViolations = append(allViolations, ComputeSRPViolations(services, edges, roles, accepted)...)
+	allViolations = append(allViolations, ComputeISPViolations(classes, impls, accepted)...)
+	allViolations = append(allViolations, ComputeOCPViolations(root, accepted)...)
+	allViolations = append(allViolations, ComputeDIPViolations(services, edges, hexaClassification, accepted)...)
 
 	// Sort: errors first, then warnings, then by component name.
 	sort.Slice(allViolations, func(i, j int) bool {
@@ -417,14 +528,16 @@ func ComputeSOLIDScan(
 // severityRank returns a sort rank for severity (lower = more severe = first).
 func severityRank(severity string) int {
 	switch severity {
-	case SeverityError:
+	case SeverityCritical:
 		return 0
-	case SeverityWarning:
+	case SeverityError:
 		return 1
-	case SeverityInfo:
+	case SeverityWarning:
 		return 2
-	default:
+	case SeverityInfo:
 		return 3
+	default:
+		return 4
 	}
 }
 

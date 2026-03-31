@@ -69,7 +69,7 @@ func checkPatternScan(t *testing.T, report *arch.ContextReport, m *Manifest) {
 	t.Run("pattern_scan", func(t *testing.T) {
 		pr := protocol.ComputePatternScan(
 			report.Architecture.Services, report.Architecture.Edges,
-			report.Cycles, nil, nil,
+			report.Cycles, nil, nil, nil, nil,
 		)
 		for _, exp := range m.ExpectedSmells {
 			if !hasDetection(pr.Detections, exp.ID) {
@@ -117,7 +117,7 @@ func checkSOLID(t *testing.T, report *arch.ContextReport, m *Manifest, root stri
 	t.Run("solid", func(t *testing.T) {
 		sr := protocol.ComputeSOLIDScan(
 			report.Architecture.Services, report.Architecture.Edges,
-			nil, nil, nil, root,
+			nil, nil, nil, root, nil, nil,
 		)
 		if len(sr.Violations) > m.ExpectedSOLID.MaxViolations {
 			t.Errorf("expected <= %d SOLID violations, got %d",

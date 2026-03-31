@@ -27,7 +27,7 @@ func TestComputePatternScan_GodComponent(t *testing.T) {
 		edges = append(edges, arch.ArchEdge{From: "pkg/monolith", To: fmtPkg(100 + i)})
 	}
 
-	report := ComputePatternScan(services, edges, nil, nil, nil)
+	report := ComputePatternScan(services, edges, nil, nil, nil, nil, nil)
 
 	found := false
 	for _, d := range report.Detections {
@@ -65,7 +65,7 @@ func TestComputePatternScan_CircularDependency(t *testing.T) {
 		{"pkg/a", "pkg/b"},
 	}
 
-	report := ComputePatternScan(services, edges, cycles, nil, nil)
+	report := ComputePatternScan(services, edges, cycles, nil, nil, nil, nil)
 
 	foundA := false
 	foundB := false
@@ -99,7 +99,7 @@ func TestComputePatternScan_LazyComponent(t *testing.T) {
 		{From: "pkg/tiny", To: "pkg/other"},
 	}
 
-	report := ComputePatternScan(services, edges, nil, nil, nil)
+	report := ComputePatternScan(services, edges, nil, nil, nil, nil, nil)
 
 	found := false
 	for _, d := range report.Detections {
@@ -125,7 +125,7 @@ func TestComputePatternScan_Clean(t *testing.T) {
 		{From: "pkg/core", To: "pkg/util", CallSites: 2},
 	}
 
-	report := ComputePatternScan(services, edges, nil, nil, nil)
+	report := ComputePatternScan(services, edges, nil, nil, nil, nil, nil)
 
 	for _, d := range report.Detections {
 		if d.Kind == PatternKindSmell {
@@ -158,7 +158,7 @@ func TestComputePatternScan_SortOrder(t *testing.T) {
 		edges = append(edges, arch.ArchEdge{From: "pkg/big", To: fmtPkg(100 + i)})
 	}
 
-	report := ComputePatternScan(services, edges, nil, nil, nil)
+	report := ComputePatternScan(services, edges, nil, nil, nil, nil, nil)
 
 	if len(report.Detections) == 0 {
 		t.Fatal("expected at least one detection")
@@ -185,7 +185,7 @@ func TestComputePatternScan_FeatureEnvy(t *testing.T) {
 		{From: "pkg/envious", To: "pkg/other", CallSites: 2},
 	}
 
-	report := ComputePatternScan(services, edges, nil, nil, nil)
+	report := ComputePatternScan(services, edges, nil, nil, nil, nil, nil)
 
 	found := false
 	for _, d := range report.Detections {
@@ -219,7 +219,7 @@ func TestComputePatternScan_Strategy(t *testing.T) {
 		{From: "MergeSort", To: "Sorter", Kind: "implements"},
 	}
 
-	report := ComputePatternScan(services, nil, nil, classes, impls)
+	report := ComputePatternScan(services, nil, nil, classes, impls, nil, nil)
 
 	found := false
 	for _, d := range report.Detections {
@@ -256,7 +256,7 @@ func TestComputePatternScan_SeverityEscalation(t *testing.T) {
 		edges = append(edges, arch.ArchEdge{From: "pkg/mega", To: fmtPkg(200 + i)})
 	}
 
-	report := ComputePatternScan(services, edges, nil, nil, nil)
+	report := ComputePatternScan(services, edges, nil, nil, nil, nil, nil)
 
 	for _, d := range report.Detections {
 		if d.PatternID == "god_component" && d.Component == "pkg/mega" {
@@ -271,7 +271,7 @@ func TestComputePatternScan_SeverityEscalation(t *testing.T) {
 }
 
 func TestComputePatternScan_EmptyInput(t *testing.T) {
-	report := ComputePatternScan(nil, nil, nil, nil, nil)
+	report := ComputePatternScan(nil, nil, nil, nil, nil, nil, nil)
 
 	if report.PatternsFound != 0 {
 		t.Errorf("expected 0 patterns, got %d", report.PatternsFound)
@@ -287,10 +287,10 @@ func TestComputePatternScan_EmptyInput(t *testing.T) {
 func TestGetPatternCatalog_All(t *testing.T) {
 	report := GetPatternCatalog("")
 
-	if len(report.Entries) != 20 {
-		t.Fatalf("expected 20 entries, got %d", len(report.Entries))
+	if len(report.Entries) != 24 {
+		t.Fatalf("expected 24 entries, got %d", len(report.Entries))
 	}
-	if report.Summary != "20 catalog entries" {
+	if report.Summary != "24 catalog entries" {
 		t.Errorf("unexpected summary: %s", report.Summary)
 	}
 }
@@ -298,8 +298,8 @@ func TestGetPatternCatalog_All(t *testing.T) {
 func TestGetPatternCatalog_FilterSmells(t *testing.T) {
 	report := GetPatternCatalog("smell")
 
-	if len(report.Entries) != 10 {
-		t.Fatalf("expected 10 smell entries, got %d", len(report.Entries))
+	if len(report.Entries) != 13 {
+		t.Fatalf("expected 13 smell entries, got %d", len(report.Entries))
 	}
 	for _, e := range report.Entries {
 		if e.Kind != PatternKindSmell {
@@ -311,8 +311,8 @@ func TestGetPatternCatalog_FilterSmells(t *testing.T) {
 func TestGetPatternCatalog_FilterPatterns(t *testing.T) {
 	report := GetPatternCatalog("pattern")
 
-	if len(report.Entries) != 10 {
-		t.Fatalf("expected 10 pattern entries, got %d", len(report.Entries))
+	if len(report.Entries) != 11 {
+		t.Fatalf("expected 11 pattern entries, got %d", len(report.Entries))
 	}
 	for _, e := range report.Entries {
 		if e.Kind != PatternKindPattern {
@@ -357,6 +357,260 @@ func TestGetPatternCatalog_FilterCaseInsensitive(t *testing.T) {
 	}
 	if report.Entries[0].ID != "god_component" {
 		t.Errorf("expected god_component, got %s", report.Entries[0].ID)
+	}
+}
+
+func TestCoverageGap(t *testing.T) {
+	// Component with fan-in > 3 but no edges from test packages → coverage_gap.
+	services := []arch.ArchService{
+		{Name: "pkg/core", Package: "example.com/pkg/core", LOC: 200, Symbols: makeSymbols(10)},
+	}
+	edges := make([]arch.ArchEdge, 0, 5)
+	for i := range 5 {
+		edges = append(edges, arch.ArchEdge{From: fmtPkg(i), To: "pkg/core"})
+	}
+
+	report := ComputePatternScan(services, edges, nil, nil, nil, nil, nil)
+
+	found := false
+	for _, d := range report.Detections {
+		if d.PatternID == "coverage_gap" && d.Component == "pkg/core" {
+			found = true
+			if d.Kind != PatternKindSmell {
+				t.Errorf("expected smell kind, got %s", d.Kind)
+			}
+			if d.Confidence < 0.6 {
+				t.Errorf("expected confidence >= 0.6, got %f", d.Confidence)
+			}
+			if len(d.Evidence) == 0 {
+				t.Error("expected non-empty evidence")
+			}
+		}
+	}
+	if !found {
+		t.Fatal("coverage_gap not detected for pkg/core")
+	}
+}
+
+func TestCoverageGap_WithIntegration(t *testing.T) {
+	// Component imported from a test package → no coverage gap.
+	services := []arch.ArchService{
+		{Name: "pkg/core", Package: "example.com/pkg/core", LOC: 200, Symbols: makeSymbols(10)},
+	}
+	edges := []arch.ArchEdge{
+		{From: "pkg/dep1", To: "pkg/core"},
+		{From: "pkg/dep2", To: "pkg/core"},
+		{From: "pkg/dep3", To: "pkg/core"},
+		{From: "pkg/dep4", To: "pkg/core"},
+		{From: "acceptance/smoke_test", To: "pkg/core"},
+	}
+
+	report := ComputePatternScan(services, edges, nil, nil, nil, nil, nil)
+
+	for _, d := range report.Detections {
+		if d.PatternID == "coverage_gap" && d.Component == "pkg/core" {
+			t.Error("coverage_gap should NOT be detected when acceptance test imports the component")
+		}
+	}
+}
+
+func TestFragileContract(t *testing.T) {
+	// Component with fan-in > 5 but no New* constructor → fragile_contract.
+	services := []arch.ArchService{
+		{Name: "pkg/config", Package: "example.com/pkg/config", LOC: 300, Symbols: []string{"Load", "Save", "Validate", "Parse"}},
+	}
+	edges := make([]arch.ArchEdge, 0, 8)
+	for i := range 8 {
+		edges = append(edges, arch.ArchEdge{From: fmtPkg(i), To: "pkg/config"})
+	}
+
+	report := ComputePatternScan(services, edges, nil, nil, nil, nil, nil)
+
+	found := false
+	for _, d := range report.Detections {
+		if d.PatternID == "fragile_contract" && d.Component == "pkg/config" {
+			found = true
+			if d.Kind != PatternKindSmell {
+				t.Errorf("expected smell kind, got %s", d.Kind)
+			}
+			if d.Confidence < 0.6 {
+				t.Errorf("expected confidence >= 0.6, got %f", d.Confidence)
+			}
+			if len(d.Evidence) == 0 {
+				t.Error("expected non-empty evidence")
+			}
+		}
+	}
+	if !found {
+		t.Fatal("fragile_contract not detected for pkg/config")
+	}
+}
+
+func TestFragileContract_WithConstructor(t *testing.T) {
+	// Component with fan-in > 5 AND a New* constructor → not fragile.
+	services := []arch.ArchService{
+		{Name: "pkg/config", Package: "example.com/pkg/config", LOC: 300, Symbols: []string{"NewConfig", "Load", "Save", "Validate"}},
+	}
+	edges := make([]arch.ArchEdge, 0, 8)
+	for i := range 8 {
+		edges = append(edges, arch.ArchEdge{From: fmtPkg(i), To: "pkg/config"})
+	}
+
+	report := ComputePatternScan(services, edges, nil, nil, nil, nil, nil)
+
+	for _, d := range report.Detections {
+		if d.PatternID == "fragile_contract" && d.Component == "pkg/config" {
+			t.Error("fragile_contract should NOT be detected when component has New* constructor")
+		}
+	}
+}
+
+func TestStateMachineCandidate(t *testing.T) {
+	// Component with a struct containing a state-like field + enough methods → detected.
+	services := []arch.ArchService{
+		{
+			Name:    "pkg/workflow",
+			Package: "example.com/pkg/workflow",
+			LOC:     200,
+			Symbols: makeSymbols(8), // 8 symbols > threshold 5
+		},
+	}
+	classes := []analysis.ClassInfo{
+		{
+			Name:    "Workflow",
+			Package: "example.com/pkg/workflow",
+			Kind:    "struct",
+			Fields: []analysis.FieldInfo{
+				{Name: "State", Type: "WorkflowState", Exported: true},
+				{Name: "Name", Type: "string", Exported: true},
+			},
+			Exported: true,
+		},
+	}
+
+	report := ComputePatternScan(services, nil, nil, classes, nil, nil, nil)
+
+	found := false
+	for _, d := range report.Detections {
+		if d.PatternID == "state_machine_candidate" && d.Component == "pkg/workflow" {
+			found = true
+			if d.Kind != PatternKindPattern {
+				t.Errorf("expected pattern kind, got %s", d.Kind)
+			}
+			if d.Severity != SeverityInfo {
+				t.Errorf("expected info severity for pattern, got %s", d.Severity)
+			}
+			if len(d.Evidence) == 0 {
+				t.Error("expected non-empty evidence")
+			}
+		}
+	}
+	if !found {
+		t.Fatal("state_machine_candidate not detected for pkg/workflow")
+	}
+}
+
+func TestStateMachineCandidate_NoStateField(t *testing.T) {
+	// Component with methods but no state-like field → NOT detected.
+	services := []arch.ArchService{
+		{
+			Name:    "pkg/util",
+			Package: "example.com/pkg/util",
+			LOC:     200,
+			Symbols: makeSymbols(10),
+		},
+	}
+	classes := []analysis.ClassInfo{
+		{
+			Name:    "Helper",
+			Package: "example.com/pkg/util",
+			Kind:    "struct",
+			Fields: []analysis.FieldInfo{
+				{Name: "Name", Type: "string", Exported: true},
+				{Name: "Value", Type: "int", Exported: true},
+			},
+			Exported: true,
+		},
+	}
+
+	report := ComputePatternScan(services, nil, nil, classes, nil, nil, nil)
+
+	for _, d := range report.Detections {
+		if d.PatternID == "state_machine_candidate" && d.Component == "pkg/util" {
+			t.Error("state_machine_candidate should NOT be detected without state-like field")
+		}
+	}
+}
+
+func TestMissingPattern(t *testing.T) {
+	// High churn component with no patterns detected → missing_pattern smell emitted.
+	services := []arch.ArchService{
+		{
+			Name:    "pkg/churn",
+			Package: "example.com/pkg/churn",
+			LOC:     300,
+			Churn:   15,
+			Symbols: makeSymbols(10),
+		},
+	}
+
+	report := ComputePatternScan(services, nil, nil, nil, nil, nil, nil)
+
+	found := false
+	for _, d := range report.Detections {
+		if d.PatternID == "missing_pattern" && d.Component == "pkg/churn" {
+			found = true
+			if d.Kind != PatternKindSmell {
+				t.Errorf("expected smell kind, got %s", d.Kind)
+			}
+			if len(d.Evidence) < 2 {
+				t.Errorf("expected at least 2 evidence items, got %d", len(d.Evidence))
+			}
+		}
+	}
+	if !found {
+		t.Fatal("missing_pattern not detected for high-churn component with no patterns")
+	}
+}
+
+func TestMissingPattern_WithPattern(t *testing.T) {
+	// High churn but Strategy pattern detected → no missing_pattern.
+	services := []arch.ArchService{
+		{
+			Name:    "pkg/sorter",
+			Package: "example.com/pkg/sorter",
+			LOC:     200,
+			Churn:   15,
+		},
+	}
+	classes := []analysis.ClassInfo{
+		{
+			Name: "Sorter", Package: "example.com/pkg/sorter", Kind: "interface",
+			Methods:  []analysis.MethodInfo{{Name: "Sort", Signature: "Sort([]int)", Exported: true}},
+			Exported: true,
+		},
+		{Name: "QuickSort", Package: "example.com/pkg/sorter", Kind: "struct", Exported: true},
+		{Name: "MergeSort", Package: "example.com/pkg/sorter", Kind: "struct", Exported: true},
+	}
+	impls := []analysis.ImplEdge{
+		{From: "QuickSort", To: "Sorter", Kind: "implements"},
+		{From: "MergeSort", To: "Sorter", Kind: "implements"},
+	}
+
+	report := ComputePatternScan(services, nil, nil, classes, impls, nil, nil)
+
+	// Strategy should be detected.
+	strategyFound := false
+	for _, d := range report.Detections {
+		if d.PatternID == "strategy" && d.Component == "pkg/sorter" {
+			strategyFound = true
+		}
+		if d.PatternID == "missing_pattern" && d.Component == "pkg/sorter" {
+			t.Error("missing_pattern should NOT be detected when Strategy pattern is present")
+		}
+	}
+	if !strategyFound {
+		t.Fatal("strategy pattern should be detected for pkg/sorter")
 	}
 }
 

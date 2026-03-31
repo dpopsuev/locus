@@ -7,6 +7,7 @@ import (
 
 	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/arch"
+	"github.com/dpopsuev/locus/internal/store"
 )
 
 // PatternKind distinguishes design patterns from code smells.
@@ -55,17 +56,19 @@ type PatternCatalogReport struct {
 
 // Threshold constants for signal functions.
 const (
-	thresholdGodLOC          = 1000
-	thresholdGodSymbols      = 30
-	thresholdGodFan          = 5
-	thresholdLazyLOC         = 20
-	thresholdLazyFanIn       = 1
-	thresholdShotgunChurn    = 10
-	thresholdShotgunFanIn    = 5
-	thresholdFeatureEnvyPct  = 0.5
-	thresholdStrategyImpls   = 2
-	fingerprintGodThreshold  = 0.5
-	fingerprintHighThreshold = 0.9
+	thresholdGodLOC             = 1000
+	thresholdGodSymbols         = 30
+	thresholdGodFan             = 5
+	thresholdLazyLOC            = 20
+	thresholdLazyFanIn          = 1
+	thresholdShotgunChurn       = 10
+	thresholdShotgunFanIn       = 5
+	thresholdFeatureEnvyPct     = 0.5
+	thresholdStrategyImpls      = 2
+	fingerprintGodThreshold     = 0.5
+	fingerprintHighThreshold    = 0.9
+	thresholdCoverageGapFanIn   = 3
+	thresholdFragileContractFan = 5
 )
 
 // patternCatalog is the compile-time catalog of known patterns and smells.
@@ -120,6 +123,11 @@ var patternCatalog = []CatalogEntry{
 		ID: "composite", Name: "Composite", Kind: PatternKindPattern,
 		Category: "structural", Description: "Tree structure with uniform interface",
 		Indicators: []string{"interface field holding slice of same interface", "recursive method calls"},
+	},
+	{
+		ID: "state_machine_candidate", Name: "State Machine Candidate", Kind: PatternKindPattern,
+		Category: "behavioral", Description: "Struct with state/status field and methods that switch on it",
+		Indicators: []string{"field named state/status/phase/mode", "switch/if-else on state field in methods"},
 	},
 	// ── Smells ──
 	{
@@ -181,6 +189,24 @@ var patternCatalog = []CatalogEntry{
 		Category: "smell", Description: "Mutual dependency cycle",
 		Indicators:  []string{"cycle in dependency graph"},
 		Remediation: "Break cycle with dependency inversion",
+	},
+	{
+		ID: "coverage_gap", Name: "Coverage Gap", Kind: PatternKindSmell,
+		Category: "testing", Description: "Component has high fan-in but lacks cross-package test coverage",
+		Indicators:  []string{"has _test.go files", "no acceptance/ or integration/ test files reference this component"},
+		Remediation: "Add integration tests that exercise this component's boundaries with its dependencies",
+	},
+	{
+		ID: "fragile_contract", Name: "Fragile Contract", Kind: PatternKindSmell,
+		Category: "reliability", Description: "Widely-used component without a constructor — callers must know hidden initialization rules",
+		Indicators:  []string{"high fan-in", "no New* constructor among exported symbols"},
+		Remediation: "Make preconditions explicit via constructor validation, Option pattern, or Builder",
+	},
+	{
+		ID: "missing_pattern", Name: "Missing Pattern", Kind: PatternKindSmell,
+		Category: "smell", Description: "High-churn component with no recognized design pattern — may benefit from Strategy, Observer, or Facade",
+		Indicators:  []string{"churn > threshold", "no positive pattern detected"},
+		Remediation: "Analyze the change reasons — if multiple axes of change, introduce Strategy. If many dependents react to changes, introduce Observer.",
 	},
 }
 
@@ -362,6 +388,58 @@ func signalLowFanIn(svcName string, edges []arch.ArchEdge, threshold int) (detec
 	return false, 0, ""
 }
 
+// signalNoConstructor checks whether a service has no New* constructor among its symbols.
+func signalNoConstructor(svc arch.ArchService) (detected bool, confidence float64, evidence string) {
+	for _, sym := range svc.Symbols {
+		if strings.HasPrefix(sym, "New") {
+			return false, 0, ""
+		}
+	}
+	return true, 0.8, "no New* constructor found"
+}
+
+// stateFieldKeywords are substrings (case-insensitive) that indicate a state-like field.
+var stateFieldKeywords = []string{"state", "status", "phase", "mode"}
+
+// signalStateField checks whether any struct in the package has a field whose name
+// contains a state-like keyword (state, status, phase, mode). This is a heuristic
+// signal for state machine candidate detection.
+func signalStateField(classes []analysis.ClassInfo, pkg string) (detected bool, confidence float64, evidence string) {
+	for _, c := range classes {
+		if c.Package != pkg || c.Kind != "struct" {
+			continue
+		}
+		for _, f := range c.Fields {
+			lower := strings.ToLower(f.Name)
+			for _, kw := range stateFieldKeywords {
+				if strings.Contains(lower, kw) {
+					return true, 0.8, fmt.Sprintf("struct %s has state-like field: %s", c.Name, f.Name)
+				}
+			}
+		}
+	}
+	return false, 0, ""
+}
+
+// signalNoExternalTestImporter checks whether NO edge coming into svcName originates
+// from a test-related package (one whose name contains "test" or "acceptance").
+// Returns true when the component is only tested by its own co-located _test.go files.
+func signalNoExternalTestImporter(svcName string, edges []arch.ArchEdge) (detected bool, confidence float64, evidence string) {
+	for _, e := range edges {
+		if e.To != svcName {
+			continue
+		}
+		from := strings.ToLower(e.From)
+		if strings.HasSuffix(from, "_test") ||
+			strings.Contains(from, "test") ||
+			strings.Contains(from, "acceptance") ||
+			strings.Contains(from, "integration") {
+			return false, 0, ""
+		}
+	}
+	return true, 0.7, "no cross-package test imports"
+}
+
 // ── Fingerprint engine ──
 
 type fingerprintRule struct {
@@ -419,6 +497,22 @@ var fingerprints = []patternFingerprint{
 		threshold: 0.6,
 	},
 	// feature_envy handled as special case in evaluateFeatureEnvy
+	{
+		patternID: "coverage_gap",
+		rules: []fingerprintRule{
+			{signal: "highFanIn", weight: 0.5, threshold: thresholdCoverageGapFanIn},
+			{signal: "noExternalTestImporter", weight: 0.5},
+		},
+		threshold: 0.6,
+	},
+	{
+		patternID: "fragile_contract",
+		rules: []fingerprintRule{
+			{signal: "highFanIn", weight: 0.5, threshold: thresholdFragileContractFan},
+			{signal: "noConstructor", weight: 0.5},
+		},
+		threshold: 0.6,
+	},
 
 	// ── Patterns ──
 	{
@@ -446,6 +540,14 @@ var fingerprints = []patternFingerprint{
 	{patternID: "builder", rules: []fingerprintRule{{signal: "newFunctions", weight: 1.0}}, threshold: fingerprintHighThreshold},
 	{patternID: "singleton", rules: []fingerprintRule{{signal: "highFanIn", weight: 1.0, threshold: 10}}, threshold: fingerprintHighThreshold},
 	{patternID: "composite", rules: []fingerprintRule{{signal: "singleMethodInterface", weight: 1.0}}, threshold: fingerprintHighThreshold},
+	{
+		patternID: "state_machine_candidate",
+		rules: []fingerprintRule{
+			{signal: "stateField", weight: 0.5},
+			{signal: "highSymbolCount", weight: 0.5, threshold: 5},
+		},
+		threshold: 0.6,
+	},
 	// Smells disabled until proper AST signals are implemented (BUG-21).
 	{patternID: "data_clump", rules: []fingerprintRule{{signal: "highSymbolCount", weight: 1.0, threshold: 20}}, threshold: 1.1},
 	{patternID: "long_parameter_list", rules: []fingerprintRule{{signal: "highSymbolCount", weight: 1.0, threshold: 15}}, threshold: 1.1},
@@ -498,6 +600,12 @@ func evaluateSignal(
 		return signalMultipleImplementors(classes, impls, svc.Package)
 	case "lowFanIn":
 		return signalLowFanIn(svc.Name, edges, rule.threshold)
+	case "noConstructor":
+		return signalNoConstructor(svc)
+	case "noExternalTestImporter":
+		return signalNoExternalTestImporter(svc.Name, edges)
+	case "stateField":
+		return signalStateField(classes, svc.Package)
 	default:
 		return false, 0, ""
 	}
@@ -505,6 +613,7 @@ func evaluateSignal(
 
 // evaluateFingerprint checks a single fingerprint against a service and returns
 // a detection if the weighted score meets the threshold.
+// roleMultiplier scales integer thresholds in rules (>1.0 = more lenient).
 func evaluateFingerprint(
 	fp patternFingerprint,
 	svc arch.ArchService,
@@ -512,6 +621,7 @@ func evaluateFingerprint(
 	cycles []arch.Cycle,
 	classes []analysis.ClassInfo,
 	impls []analysis.ImplEdge,
+	roleMultiplier float64,
 ) *PatternDetection {
 	entry := catalogByID[fp.patternID]
 	if entry == nil {
@@ -521,7 +631,12 @@ func evaluateFingerprint(
 	var weightedSum float64
 	evidence := make([]string, 0, len(fp.rules))
 	for _, rule := range fp.rules {
-		detected, conf, ev := evaluateSignal(rule, svc, edges, cycles, classes, impls)
+		// Scale integer thresholds by role multiplier for smell fingerprints.
+		scaledRule := rule
+		if roleMultiplier != 1.0 && scaledRule.threshold > 0 && entry.Kind == PatternKindSmell {
+			scaledRule.threshold = int(float64(scaledRule.threshold) * roleMultiplier)
+		}
+		detected, conf, ev := evaluateSignal(scaledRule, svc, edges, cycles, classes, impls)
 		if detected {
 			weightedSum += rule.weight * conf
 			evidence = append(evidence, ev)
@@ -594,31 +709,97 @@ func severityForDetection(kind PatternKind, confidence float64) string {
 	return SeverityWarning
 }
 
+// detectMissingPattern is a post-processing step that flags high-churn components
+// with no recognized design pattern. If a component has churn > thresholdShotgunChurn
+// and no positive pattern (Kind == PatternKindPattern) was detected, it emits a
+// missing_pattern smell suggesting the component may benefit from a structural pattern.
+func detectMissingPattern(
+	services []arch.ArchService,
+	detections []PatternDetection,
+	accepted []store.AcceptedViolation,
+) []PatternDetection {
+	entry := catalogByID["missing_pattern"]
+	if entry == nil {
+		return nil
+	}
+
+	// Build a set of components that already have a positive pattern detected.
+	hasPattern := make(map[string]bool)
+	for _, d := range detections {
+		if d.Kind == PatternKindPattern {
+			hasPattern[d.Component] = true
+		}
+	}
+
+	extra := make([]PatternDetection, 0, len(services))
+	for i := range services {
+		svc := &services[i]
+		if svc.Churn < thresholdShotgunChurn {
+			continue
+		}
+		if hasPattern[svc.Name] {
+			continue
+		}
+		if IsAccepted(accepted, svc.Name, "missing_pattern") {
+			continue
+		}
+		conf := float64(svc.Churn) / float64(thresholdShotgunChurn) * 0.5
+		if conf > 1.0 {
+			conf = 1.0
+		}
+		extra = append(extra, PatternDetection{
+			PatternID:   entry.ID,
+			PatternName: entry.Name,
+			Kind:        entry.Kind,
+			Component:   svc.Name,
+			Confidence:  conf,
+			Evidence: []string{
+				fmt.Sprintf("churn=%d (threshold %d)", svc.Churn, thresholdShotgunChurn),
+				"no positive design pattern detected",
+			},
+			Severity: severityForDetection(entry.Kind, conf),
+		})
+	}
+	return extra
+}
+
 // ComputePatternScan evaluates all fingerprints against the provided architecture
 // data and returns a report of detected patterns and smells.
+// Thresholds for smell fingerprints are scaled by role multiplier; accepted
+// violations (matched by pattern_id as principle) are suppressed.
 func ComputePatternScan(
 	services []arch.ArchService,
 	edges []arch.ArchEdge,
 	cycles []arch.Cycle,
 	classes []analysis.ClassInfo,
 	impls []analysis.ImplEdge,
+	roles map[string]HexaRole,
+	accepted []store.AcceptedViolation,
 ) *PatternScanReport {
 	var detections []PatternDetection
 
 	for i := range services {
 		svc := &services[i]
+		mult := RoleMultiplier(roles[svc.Name])
 		// Evaluate each fingerprint against this service.
 		for _, fp := range fingerprints {
-			det := evaluateFingerprint(fp, *svc, edges, cycles, classes, impls)
+			det := evaluateFingerprint(fp, *svc, edges, cycles, classes, impls, mult)
 			if det != nil {
-				detections = append(detections, *det)
+				if !IsAccepted(accepted, det.Component, det.PatternID) {
+					detections = append(detections, *det)
+				}
 			}
 		}
 		// Special case: feature envy.
 		if det := evaluateFeatureEnvy(*svc, edges); det != nil {
-			detections = append(detections, *det)
+			if !IsAccepted(accepted, det.Component, det.PatternID) {
+				detections = append(detections, *det)
+			}
 		}
 	}
+
+	// Post-processing: flag high-churn components with no recognized pattern.
+	detections = append(detections, detectMissingPattern(services, detections, accepted)...)
 
 	// Sort: smells before patterns, then by confidence descending.
 	sort.Slice(detections, func(i, j int) bool {
