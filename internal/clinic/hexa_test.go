@@ -1,10 +1,11 @@
-package protocol
+package clinic
 
 import (
 	"testing"
 
 	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/arch"
+	"github.com/dpopsuev/locus/internal/port"
 )
 
 func TestComputeHexaClassification_BasicRoles(t *testing.T) {
@@ -138,7 +139,7 @@ func TestComputeHexaViolations_DomainImportsAdapter(t *testing.T) {
 	if v.ToRole != HexaRoleAdapter {
 		t.Errorf("expected to_role adapter, got %s", v.ToRole)
 	}
-	if v.Severity != SeverityError {
+	if v.Severity != port.SeverityError {
 		t.Errorf("expected error severity, got %s", v.Severity)
 	}
 	if v.Rule != "domain must not depend on adapter" {
@@ -184,10 +185,10 @@ func TestComputeHexaViolations_MultipleRules(t *testing.T) {
 	errorsSeen := 0
 	warningStartIdx := -1
 	for i, v := range report.Violations {
-		if v.Severity == SeverityError {
+		if v.Severity == port.SeverityError {
 			errorsSeen++
 		}
-		if v.Severity == SeverityWarning && warningStartIdx == -1 {
+		if v.Severity == port.SeverityWarning && warningStartIdx == -1 {
 			warningStartIdx = i
 		}
 	}
@@ -273,7 +274,7 @@ func TestComputeHexaViolations_PortToAdapter(t *testing.T) {
 	if v.Rule != "port must not depend on adapter" {
 		t.Errorf("unexpected rule: %s", v.Rule)
 	}
-	if v.Severity != SeverityError {
+	if v.Severity != port.SeverityError {
 		t.Errorf("expected error severity, got %s", v.Severity)
 	}
 }

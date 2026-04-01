@@ -1,4 +1,4 @@
-package protocol
+package impact
 
 import (
 	"github.com/dpopsuev/locus/internal/arch"

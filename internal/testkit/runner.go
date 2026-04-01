@@ -8,6 +8,7 @@ import (
 
 	"github.com/dpopsuev/locus/internal/arch"
 	"github.com/dpopsuev/locus/internal/cache"
+	"github.com/dpopsuev/locus/internal/clinic"
 	"github.com/dpopsuev/locus/internal/diagram"
 	"github.com/dpopsuev/locus/internal/history"
 	"github.com/dpopsuev/locus/internal/protocol"
@@ -67,7 +68,7 @@ func checkPatternScan(t *testing.T, report *arch.ContextReport, m *Manifest) {
 		return
 	}
 	t.Run("pattern_scan", func(t *testing.T) {
-		pr := protocol.ComputePatternScan(
+		pr := clinic.ComputePatternScan(
 			report.Architecture.Services, report.Architecture.Edges,
 			report.Cycles, nil, nil, nil, nil,
 		)
@@ -90,7 +91,7 @@ func checkHexa(t *testing.T, report *arch.ContextReport, m *Manifest) {
 		return
 	}
 	t.Run("hexa", func(t *testing.T) {
-		hr := protocol.ComputeHexaViolations(
+		hr := clinic.ComputeHexaViolations(
 			report.Architecture.Services, report.Architecture.Edges, nil,
 		)
 		if len(hr.Violations) > m.ExpectedHexa.MaxViolations {
@@ -115,7 +116,7 @@ func checkSOLID(t *testing.T, report *arch.ContextReport, m *Manifest, root stri
 		return
 	}
 	t.Run("solid", func(t *testing.T) {
-		sr := protocol.ComputeSOLIDScan(
+		sr := clinic.ComputeSOLIDScan(
 			report.Architecture.Services, report.Architecture.Edges,
 			nil, nil, nil, root, nil, nil,
 		)
@@ -132,7 +133,7 @@ func checkSymbols(t *testing.T, report *arch.ContextReport, m *Manifest) {
 		return
 	}
 	t.Run("symbols", func(t *testing.T) {
-		sq := protocol.ComputeSymbolQuality(
+		sq := clinic.ComputeSymbolQuality(
 			report.Architecture.Services, report.Architecture.Edges,
 		)
 		for _, abbr := range m.ExpectedSymbols.Abbreviations {
@@ -196,7 +197,7 @@ func checkPresets(t *testing.T, m *Manifest, root, intent string) {
 	})
 }
 
-func hasDetection(detections []protocol.PatternDetection, id string) bool {
+func hasDetection(detections []clinic.PatternDetection, id string) bool {
 	for _, d := range detections {
 		if d.PatternID == id {
 			return true
@@ -205,7 +206,7 @@ func hasDetection(detections []protocol.PatternDetection, id string) bool {
 	return false
 }
 
-func hasIssue(issues []protocol.SymbolIssue, issueType, substr string) bool {
+func hasIssue(issues []clinic.SymbolIssue, issueType, substr string) bool {
 	for _, i := range issues {
 		if i.Issue == issueType && strings.Contains(i.Symbol, substr) {
 			return true

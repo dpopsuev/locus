@@ -15,8 +15,11 @@ import (
 
 	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/arch"
+	"github.com/dpopsuev/locus/internal/clinic"
+	"github.com/dpopsuev/locus/internal/constraint"
 	"github.com/dpopsuev/locus/internal/cursor"
 	"github.com/dpopsuev/locus/internal/history"
+	"github.com/dpopsuev/locus/internal/impact"
 	"github.com/dpopsuev/locus/internal/port"
 	"github.com/dpopsuev/locus/internal/remote"
 )
@@ -393,15 +396,15 @@ func (p *Protocol) AcceptViolation(ctx context.Context, path string, av port.Acc
 
 // DriftReport holds architecture drift analysis results.
 type DriftReport struct {
-	HasDesiredState    bool                  `json:"has_desired_state"`
-	LayerViolations    []arch.LayerViolation `json:"layer_violations,omitempty"`
-	BoundaryViolations []BoundaryViolation   `json:"boundary_violations,omitempty"`
-	BudgetViolations   []BudgetViolation     `json:"budget_violations,omitempty"`
-	BoundaryBreaches   int                   `json:"boundary_breaches"`
-	ConstraintBreaches int                   `json:"constraint_breaches"`
-	Score              float64               `json:"score"`
-	Clean              bool                  `json:"clean"`
-	Summary            string                `json:"summary"`
+	HasDesiredState    bool                           `json:"has_desired_state"`
+	LayerViolations    []arch.LayerViolation          `json:"layer_violations,omitempty"`
+	BoundaryViolations []constraint.BoundaryViolation `json:"boundary_violations,omitempty"`
+	BudgetViolations   []constraint.BudgetViolation   `json:"budget_violations,omitempty"`
+	BoundaryBreaches   int                            `json:"boundary_breaches"`
+	ConstraintBreaches int                            `json:"constraint_breaches"`
+	Score              float64                        `json:"score"`
+	Clean              bool                           `json:"clean"`
+	Summary            string                         `json:"summary"`
 }
 
 func (p *Protocol) GetDrift(ctx context.Context, path string, cacheKey ...string) (*DriftReport, error) {
@@ -422,12 +425,12 @@ func (p *Protocol) GetDrift(ctx context.Context, path string, cacheKey ...string
 	layerViolations := arch.CheckLayerPurity(report.Architecture.Edges, ds.Layers)
 
 	// 2. Boundary rules (new).
-	boundaryViolations := CheckBoundaryRules(report.Architecture.Edges, ds.Boundaries)
+	boundaryViolations := constraint.CheckBoundaryRules(report.Architecture.Edges, ds.Boundaries)
 
 	// 3. Budget violations (new).
-	var budgetViolations []BudgetViolation
+	var budgetViolations []constraint.BudgetViolation
 	if len(ds.Constraints) > 0 {
-		budgetReport := ComputeBudgetViolations(
+		budgetReport := constraint.ComputeBudgetViolations(
 			report.Architecture.Services,
 			report.Architecture.Edges,
 			ds.Constraints,
@@ -617,14 +620,8 @@ func (p *Protocol) SearchComponents(ctx context.Context, path, query string, cac
 	return p.db.SearchComponents(ctx, path, sha, query)
 }
 
-// CallerSite represents a single call site for a symbol.
-type CallerSite struct {
-	Caller       string `json:"caller"`
-	CallerPkg    string `json:"caller_pkg"`
-	Line         int    `json:"line,omitempty"`
-	File         string `json:"file,omitempty"`
-	ReceiverType string `json:"receiver_type,omitempty"`
-}
+// CallerSite is a type alias for port.CallerSite, kept for backward compatibility.
+type CallerSite = port.CallerSite
 
 // CallersReport holds all call sites for a given symbol.
 type CallersReport struct {
@@ -633,7 +630,7 @@ type CallersReport struct {
 	Summary string       `json:"summary"`
 }
 
-func (p *Protocol) GetInterfaceMetrics(ctx context.Context, path string, cacheKey ...string) (*InterfaceMetricsReport, error) {
+func (p *Protocol) GetInterfaceMetrics(ctx context.Context, path string, cacheKey ...string) (*constraint.InterfaceMetricsReport, error) {
 	path = p.resolvePath(path)
 	fa := analysis.NewFallback(path)
 	classes, err := fa.Classes(path)
@@ -644,10 +641,10 @@ func (p *Protocol) GetInterfaceMetrics(ctx context.Context, path string, cacheKe
 	if err != nil {
 		return nil, fmt.Errorf("implements: %w", err)
 	}
-	return ComputeInterfaceMetrics(classes, impls), nil
+	return constraint.ComputeInterfaceMetrics(classes, impls), nil
 }
 
-func (p *Protocol) GetSymbolBlastRadius(ctx context.Context, path, symbol string, cacheKey ...string) (*SymbolBlastReport, error) {
+func (p *Protocol) GetSymbolBlastRadius(ctx context.Context, path, symbol string, cacheKey ...string) (*impact.SymbolBlastReport, error) {
 	path = p.resolvePath(path)
 	if symbol == "" {
 		return nil, ErrComponentRequired
@@ -662,7 +659,7 @@ func (p *Protocol) GetSymbolBlastRadius(ctx context.Context, path, symbol string
 	for _, n := range cg.Nodes {
 		pkgs[n.Package] = true
 	}
-	return ComputeSymbolBlastRadius(cg.Edges, symbol, len(pkgs)), nil
+	return impact.ComputeSymbolBlastRadius(cg.Edges, symbol, len(pkgs)), nil
 }
 
 func (p *Protocol) GetDiffIntelligence(ctx context.Context, path, since string, cacheKey ...string) (*DiffIntelligenceReport, error) {
@@ -885,7 +882,7 @@ func renderPresetPrePR(b *strings.Builder, report *arch.ContextReport) {
 func (p *Protocol) renderPresetNormative(ctx context.Context, b *strings.Builder, path string, report *arch.ContextReport) {
 	fmt.Fprintf(b, "# Normative Analysis: %s\n\n", report.ModulePath)
 
-	idReport := ComputeImportDirection(report.Architecture.Edges, report.ImportDepth)
+	idReport := constraint.ComputeImportDirection(report.Architecture.Edges, report.ImportDepth)
 	fmt.Fprintf(b, "## Import Direction\n%s\n\n", idReport.Summary)
 	for i, v := range idReport.Violations {
 		if i >= 5 {
@@ -895,11 +892,11 @@ func (p *Protocol) renderPresetNormative(ctx context.Context, b *strings.Builder
 		fmt.Fprintf(b, "- [%s] %s → %s (depth %d→%d)\n", v.Severity, v.From, v.To, v.FromDepth, v.ToDepth)
 	}
 
-	tbReport := ComputeTrustBoundaries(report.Architecture.Services, report.Architecture.Edges)
+	tbReport := constraint.ComputeTrustBoundaries(report.Architecture.Services, report.Architecture.Edges)
 	fmt.Fprintf(b, "\n## Trust Boundaries\n%s\n", tbReport.Summary)
 
 	if desired, _ := p.db.GetDesiredState(ctx, path); desired != nil && len(desired.Constraints) > 0 {
-		budgetReport := ComputeBudgetViolations(report.Architecture.Services, report.Architecture.Edges, desired.Constraints)
+		budgetReport := constraint.ComputeBudgetViolations(report.Architecture.Services, report.Architecture.Edges, desired.Constraints)
 		fmt.Fprintf(b, "\n## Budgets\n%s\n", budgetReport.Summary)
 	}
 }
@@ -919,7 +916,7 @@ func renderPresetPreRefactor(b *strings.Builder, path string, report *arch.Conte
 	da := analysis.NewFallback(path)
 	if classes, err := da.Classes(path); err == nil {
 		impls, _ := da.Implements(path)
-		imReport := ComputeInterfaceMetrics(classes, impls)
+		imReport := constraint.ComputeInterfaceMetrics(classes, impls)
 		fmt.Fprintf(b, "\n## Interfaces\n%s\n", imReport.Summary)
 		for _, iface := range imReport.Interfaces {
 			if iface.IsOrphan {
@@ -928,7 +925,7 @@ func renderPresetPreRefactor(b *strings.Builder, path string, report *arch.Conte
 		}
 	}
 
-	idReport := ComputeImportDirection(report.Architecture.Edges, report.ImportDepth)
+	idReport := constraint.ComputeImportDirection(report.Architecture.Edges, report.ImportDepth)
 	if len(idReport.Violations) > 0 {
 		fmt.Fprintf(b, "\n## Import Direction\n%s\n", idReport.Summary)
 	}
@@ -942,10 +939,10 @@ func (p *Protocol) renderPresetFullClinic(ctx context.Context, b *strings.Builde
 	fmt.Fprintf(b, "- Cycles: %d\n", len(report.Cycles))
 	fmt.Fprintf(b, "- Layer violations: %d\n", len(report.LayerViolations))
 
-	idReport := ComputeImportDirection(report.Architecture.Edges, report.ImportDepth)
+	idReport := constraint.ComputeImportDirection(report.Architecture.Edges, report.ImportDepth)
 	fmt.Fprintf(b, "- Import direction: %s\n", idReport.Summary)
 
-	tbReport := ComputeTrustBoundaries(report.Architecture.Services, report.Architecture.Edges)
+	tbReport := constraint.ComputeTrustBoundaries(report.Architecture.Services, report.Architecture.Edges)
 	fmt.Fprintf(b, "- Trust zones: %s\n", tbReport.Summary)
 
 	spots := report.HotSpots
@@ -962,12 +959,12 @@ func (p *Protocol) renderPresetFullClinic(ctx context.Context, b *strings.Builde
 	da := analysis.NewFallback(path)
 	if classes, err := da.Classes(path); err == nil {
 		impls, _ := da.Implements(path)
-		imReport := ComputeInterfaceMetrics(classes, impls)
+		imReport := constraint.ComputeInterfaceMetrics(classes, impls)
 		fmt.Fprintf(b, "\n## Interfaces\n%s\n", imReport.Summary)
 	}
 
 	if desired, _ := p.db.GetDesiredState(ctx, path); desired != nil && len(desired.Constraints) > 0 {
-		budgetReport := ComputeBudgetViolations(report.Architecture.Services, report.Architecture.Edges, desired.Constraints)
+		budgetReport := constraint.ComputeBudgetViolations(report.Architecture.Services, report.Architecture.Edges, desired.Constraints)
 		fmt.Fprintf(b, "\n## Budgets\n%s\n", budgetReport.Summary)
 	}
 
@@ -976,21 +973,21 @@ func (p *Protocol) renderPresetFullClinic(ctx context.Context, b *strings.Builde
 	if classes, err := fa.Classes(path); err == nil {
 		impls, _ := fa.Implements(path)
 
-		hexaClass := ComputeHexaClassification(report.Architecture.Services, report.Architecture.Edges, classes)
+		hexaClass := clinic.ComputeHexaClassification(report.Architecture.Services, report.Architecture.Edges, classes)
 		desired, _ := p.db.GetDesiredState(ctx, path)
 		roles, accepted := resolveRolesAndAccepted(hexaClass, desired)
 
-		patternReport := ComputePatternScan(report.Architecture.Services, report.Architecture.Edges, report.Cycles, classes, impls, roles, accepted)
+		patternReport := clinic.ComputePatternScan(report.Architecture.Services, report.Architecture.Edges, report.Cycles, classes, impls, roles, accepted)
 		fmt.Fprintf(b, "\n## Patterns & Smells\n%s\n", patternReport.Summary)
 
-		hexaReport := ComputeHexaViolations(report.Architecture.Services, report.Architecture.Edges, classes)
+		hexaReport := clinic.ComputeHexaViolations(report.Architecture.Services, report.Architecture.Edges, classes)
 		fmt.Fprintf(b, "\n## Hexagonal Architecture\n%s\n", hexaReport.Summary)
 
-		solidReport := ComputeSOLIDScan(report.Architecture.Services, report.Architecture.Edges, classes, impls, hexaClass, path, roles, accepted)
+		solidReport := clinic.ComputeSOLIDScan(report.Architecture.Services, report.Architecture.Edges, classes, impls, hexaClass, path, roles, accepted)
 		fmt.Fprintf(b, "\n## SOLID Principles\n%s\n", solidReport.Summary)
 	}
 
-	sqReport := ComputeSymbolQuality(report.Architecture.Services, report.Architecture.Edges)
+	sqReport := clinic.ComputeSymbolQuality(report.Architecture.Services, report.Architecture.Edges)
 	fmt.Fprintf(b, "\n## Symbol Quality\n%s\n", sqReport.Summary)
 }
 
@@ -1002,18 +999,18 @@ func (p *Protocol) renderPresetCodeHealth(b *strings.Builder, path string, repor
 	classes, _ := fa.Classes(path)
 	impls, _ := fa.Implements(path)
 
-	hexaClass := ComputeHexaClassification(report.Architecture.Services, report.Architecture.Edges, classes)
+	hexaClass := clinic.ComputeHexaClassification(report.Architecture.Services, report.Architecture.Edges, classes)
 
-	patternReport := ComputePatternScan(report.Architecture.Services, report.Architecture.Edges, report.Cycles, classes, impls, nil, nil)
+	patternReport := clinic.ComputePatternScan(report.Architecture.Services, report.Architecture.Edges, report.Cycles, classes, impls, nil, nil)
 	fmt.Fprintf(b, "## Patterns & Smells\n%s\n\n", patternReport.Summary)
 
-	hexaReport := ComputeHexaViolations(report.Architecture.Services, report.Architecture.Edges, classes)
+	hexaReport := clinic.ComputeHexaViolations(report.Architecture.Services, report.Architecture.Edges, classes)
 	fmt.Fprintf(b, "## Hexagonal Architecture\n%s\n\n", hexaReport.Summary)
 
-	solidReport := ComputeSOLIDScan(report.Architecture.Services, report.Architecture.Edges, classes, impls, hexaClass, path, nil, nil)
+	solidReport := clinic.ComputeSOLIDScan(report.Architecture.Services, report.Architecture.Edges, classes, impls, hexaClass, path, nil, nil)
 	fmt.Fprintf(b, "## SOLID Principles\n%s\n\n", solidReport.Summary)
 
-	sqReport := ComputeSymbolQuality(report.Architecture.Services, report.Architecture.Edges)
+	sqReport := clinic.ComputeSymbolQuality(report.Architecture.Services, report.Architecture.Edges)
 	fmt.Fprintf(b, "## Symbol Quality\n%s\n", sqReport.Summary)
 }
 
@@ -1435,7 +1432,7 @@ func (p *Protocol) GetConventions(ctx context.Context, path string) (*analysis.C
 	return analysis.DetectConventions(path)
 }
 
-func (p *Protocol) GetImpact(ctx context.Context, path, component string, cacheKey ...string) (*ImpactResult, error) {
+func (p *Protocol) GetImpact(ctx context.Context, path, component string, cacheKey ...string) (*impact.ImpactResult, error) {
 	path = p.resolvePath(path)
 	if component == "" {
 		return nil, ErrComponentRequired
@@ -1444,23 +1441,23 @@ func (p *Protocol) GetImpact(ctx context.Context, path, component string, cacheK
 	if err != nil {
 		return nil, err
 	}
-	return ComputeImpact(
+	return impact.ComputeImpact(
 		report.Architecture.Edges,
 		report.Architecture.Services,
 		component,
 	)
 }
 
-func (p *Protocol) GetGaps(ctx context.Context, path string) (*GapReport, error) {
+func (p *Protocol) GetGaps(ctx context.Context, path string) (*constraint.GapReport, error) {
 	path = p.resolvePath(path)
 	report, err := p.getOrScan(path)
 	if err != nil {
 		return nil, err
 	}
-	return DetectGaps(report, path)
+	return constraint.DetectGaps(report, path)
 }
 
-func (p *Protocol) GetBudgets(ctx context.Context, path string, cacheKey ...string) (*BudgetReport, error) {
+func (p *Protocol) GetBudgets(ctx context.Context, path string, cacheKey ...string) (*constraint.BudgetReport, error) {
 	path = p.resolvePath(path)
 	report, err := p.getOrScan(path, cacheKey...)
 	if err != nil {
@@ -1468,18 +1465,18 @@ func (p *Protocol) GetBudgets(ctx context.Context, path string, cacheKey ...stri
 	}
 	desired, _ := p.db.GetDesiredState(ctx, path)
 	if desired == nil || len(desired.Constraints) == 0 {
-		return &BudgetReport{Summary: "no budgets defined"}, nil
+		return &constraint.BudgetReport{Summary: "no budgets defined"}, nil
 	}
-	return ComputeBudgetViolations(report.Architecture.Services, report.Architecture.Edges, desired.Constraints), nil
+	return constraint.ComputeBudgetViolations(report.Architecture.Services, report.Architecture.Edges, desired.Constraints), nil
 }
 
-func (p *Protocol) GetBlastRadius(ctx context.Context, path string, files []string, since string, cacheKey ...string) (*BlastRadiusReport, error) {
+func (p *Protocol) GetBlastRadius(ctx context.Context, path string, files []string, since string, cacheKey ...string) (*impact.BlastRadiusReport, error) {
 	path = p.resolvePath(path)
 	report, err := p.getOrScan(path, cacheKey...)
 	if err != nil {
 		return nil, err
 	}
-	return ComputeBlastRadius(
+	return impact.ComputeBlastRadius(
 		report.Architecture.Edges,
 		report.Architecture.Services,
 		report.ModulePath,
@@ -1489,13 +1486,13 @@ func (p *Protocol) GetBlastRadius(ctx context.Context, path string, files []stri
 	)
 }
 
-func (p *Protocol) GetImportDirection(ctx context.Context, path string, cacheKey ...string) (*ImportDirectionReport, error) {
+func (p *Protocol) GetImportDirection(ctx context.Context, path string, cacheKey ...string) (*constraint.ImportDirectionReport, error) {
 	path = p.resolvePath(path)
 	report, err := p.getOrScan(path, cacheKey...)
 	if err != nil {
 		return nil, err
 	}
-	return ComputeImportDirection(report.Architecture.Edges, report.ImportDepth), nil
+	return constraint.ComputeImportDirection(report.Architecture.Edges, report.ImportDepth), nil
 }
 
 func (p *Protocol) GetModuleDependencies(_ context.Context, path string, _ ...string) (*DependencyReport, error) {
@@ -1504,18 +1501,18 @@ func (p *Protocol) GetModuleDependencies(_ context.Context, path string, _ ...st
 	return ComputeDependencies(goModPath)
 }
 
-func (p *Protocol) GetTrustBoundaries(ctx context.Context, path string, cacheKey ...string) (*TrustBoundaryReport, error) {
+func (p *Protocol) GetTrustBoundaries(ctx context.Context, path string, cacheKey ...string) (*constraint.TrustBoundaryReport, error) {
 	path = p.resolvePath(path)
 	report, err := p.getOrScan(path, cacheKey...)
 	if err != nil {
 		return nil, err
 	}
-	return ComputeTrustBoundaries(report.Architecture.Services, report.Architecture.Edges), nil
+	return constraint.ComputeTrustBoundaries(report.Architecture.Services, report.Architecture.Edges), nil
 }
 
 // --- Code Health Clinic methods ---
 
-func (p *Protocol) GetHexaValidation(ctx context.Context, path string, cacheKey ...string) (*HexaValidationReport, error) {
+func (p *Protocol) GetHexaValidation(ctx context.Context, path string, cacheKey ...string) (*clinic.HexaValidationReport, error) {
 	path = p.resolvePath(path)
 	report, err := p.getOrScan(path, cacheKey...)
 	if err != nil {
@@ -1523,43 +1520,10 @@ func (p *Protocol) GetHexaValidation(ctx context.Context, path string, cacheKey 
 	}
 	fa := analysis.NewFallback(path)
 	classes, _ := fa.Classes(path)
-	return ComputeHexaViolations(report.Architecture.Services, report.Architecture.Edges, classes), nil
+	return clinic.ComputeHexaViolations(report.Architecture.Services, report.Architecture.Edges, classes), nil
 }
 
-func (p *Protocol) GetSOLIDScan(ctx context.Context, path string, cacheKey ...string) (*SOLIDReport, error) {
-	path = p.resolvePath(path)
-	report, err := p.getOrScan(path, cacheKey...)
-	if err != nil {
-		return nil, err
-	}
-	fa := analysis.NewFallback(path)
-	classes, _ := fa.Classes(path)
-	impls, _ := fa.Implements(path)
-	hexaClass := ComputeHexaClassification(report.Architecture.Services, report.Architecture.Edges, classes)
-	desired, _ := p.db.GetDesiredState(ctx, path)
-	roles, accepted := resolveRolesAndAccepted(hexaClass, desired)
-	return ComputeSOLIDScan(report.Architecture.Services, report.Architecture.Edges, classes, impls, hexaClass, path, roles, accepted), nil
-}
-
-func (p *Protocol) GetSymbolQuality(_ context.Context, path string, cacheKey ...string) (*SymbolQualityReport, error) {
-	path = p.resolvePath(path)
-	report, err := p.getOrScan(path, cacheKey...)
-	if err != nil {
-		return nil, err
-	}
-	return ComputeSymbolQuality(report.Architecture.Services, report.Architecture.Edges), nil
-}
-
-func (p *Protocol) GetVocabMap(_ context.Context, path string, cacheKey ...string) (*VocabMapReport, error) {
-	path = p.resolvePath(path)
-	report, err := p.getOrScan(path, cacheKey...)
-	if err != nil {
-		return nil, err
-	}
-	return ComputeVocabMap(report.Architecture.Services), nil
-}
-
-func (p *Protocol) GetPatternScan(ctx context.Context, path string, cacheKey ...string) (*PatternScanReport, error) {
+func (p *Protocol) GetSOLIDScan(ctx context.Context, path string, cacheKey ...string) (*clinic.SOLIDReport, error) {
 	path = p.resolvePath(path)
 	report, err := p.getOrScan(path, cacheKey...)
 	if err != nil {
@@ -1568,14 +1532,47 @@ func (p *Protocol) GetPatternScan(ctx context.Context, path string, cacheKey ...
 	fa := analysis.NewFallback(path)
 	classes, _ := fa.Classes(path)
 	impls, _ := fa.Implements(path)
-	hexaClass := ComputeHexaClassification(report.Architecture.Services, report.Architecture.Edges, classes)
+	hexaClass := clinic.ComputeHexaClassification(report.Architecture.Services, report.Architecture.Edges, classes)
 	desired, _ := p.db.GetDesiredState(ctx, path)
 	roles, accepted := resolveRolesAndAccepted(hexaClass, desired)
-	return ComputePatternScan(report.Architecture.Services, report.Architecture.Edges, report.Cycles, classes, impls, roles, accepted), nil
+	return clinic.ComputeSOLIDScan(report.Architecture.Services, report.Architecture.Edges, classes, impls, hexaClass, path, roles, accepted), nil
 }
 
-func (p *Protocol) GetPatternCatalog(filter string) *PatternCatalogReport {
-	return GetPatternCatalog(filter)
+func (p *Protocol) GetSymbolQuality(_ context.Context, path string, cacheKey ...string) (*clinic.SymbolQualityReport, error) {
+	path = p.resolvePath(path)
+	report, err := p.getOrScan(path, cacheKey...)
+	if err != nil {
+		return nil, err
+	}
+	return clinic.ComputeSymbolQuality(report.Architecture.Services, report.Architecture.Edges), nil
+}
+
+func (p *Protocol) GetVocabMap(_ context.Context, path string, cacheKey ...string) (*clinic.VocabMapReport, error) {
+	path = p.resolvePath(path)
+	report, err := p.getOrScan(path, cacheKey...)
+	if err != nil {
+		return nil, err
+	}
+	return clinic.ComputeVocabMap(report.Architecture.Services), nil
+}
+
+func (p *Protocol) GetPatternScan(ctx context.Context, path string, cacheKey ...string) (*clinic.PatternScanReport, error) {
+	path = p.resolvePath(path)
+	report, err := p.getOrScan(path, cacheKey...)
+	if err != nil {
+		return nil, err
+	}
+	fa := analysis.NewFallback(path)
+	classes, _ := fa.Classes(path)
+	impls, _ := fa.Implements(path)
+	hexaClass := clinic.ComputeHexaClassification(report.Architecture.Services, report.Architecture.Edges, classes)
+	desired, _ := p.db.GetDesiredState(ctx, path)
+	roles, accepted := resolveRolesAndAccepted(hexaClass, desired)
+	return clinic.ComputePatternScan(report.Architecture.Services, report.Architecture.Edges, report.Cycles, classes, impls, roles, accepted), nil
+}
+
+func (p *Protocol) GetPatternCatalog(filter string) *clinic.PatternCatalogReport {
+	return clinic.GetPatternCatalog(filter)
 }
 
 // Workspaces returns the configured workspace root paths.
@@ -1599,8 +1596,8 @@ func (p *Protocol) GetCachedReport(cacheKey string) (*arch.ContextReport, error)
 
 // resolveRolesAndAccepted extracts roles and accepted violations from
 // hexa classification and desired state. Either may be nil.
-func resolveRolesAndAccepted(hexaClass *HexaClassificationReport, desired *port.DesiredState) (map[string]HexaRole, []port.AcceptedViolation) {
-	var roles map[string]HexaRole
+func resolveRolesAndAccepted(hexaClass *clinic.HexaClassificationReport, desired *port.DesiredState) (map[string]clinic.HexaRole, []port.AcceptedViolation) {
+	var roles map[string]clinic.HexaRole
 	var accepted []port.AcceptedViolation
 
 	if hexaClass != nil {
@@ -1608,7 +1605,7 @@ func resolveRolesAndAccepted(hexaClass *HexaClassificationReport, desired *port.
 		if desired != nil {
 			overrides = desired.Roles
 		}
-		roles = ResolveRoles(hexaClass, overrides)
+		roles = clinic.ResolveRoles(hexaClass, overrides)
 	}
 	if desired != nil {
 		accepted = desired.Accepted
@@ -2009,4 +2006,21 @@ func RenderEvolutionTable(r *EvolutionResult) string {
 
 	fmt.Fprintf(&b, "\n%s\n", r.Summary)
 	return b.String()
+}
+
+// changedFilesSince returns the list of changed files since a git ref.
+func changedFilesSince(repoPath, since string) ([]string, error) {
+	cmd := exec.Command("git", "diff", "--name-only", since)
+	cmd.Dir = repoPath
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+	var files []string
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if line != "" {
+			files = append(files, line)
+		}
+	}
+	return files, nil
 }

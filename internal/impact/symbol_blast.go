@@ -1,22 +1,23 @@
-package protocol
+package impact
 
 import (
 	"fmt"
 	"sort"
 
 	"github.com/dpopsuev/locus/internal/analysis"
+	"github.com/dpopsuev/locus/internal/port"
 )
 
 // SymbolBlastReport holds the blast radius analysis for a single symbol,
 // showing all direct and transitive callers plus affected packages.
 type SymbolBlastReport struct {
-	Symbol        string       `json:"symbol"`
-	DirectCallers []CallerSite `json:"direct_callers"`
-	TransCallers  []CallerSite `json:"transitive_callers"`
-	AffectedPkgs  []string     `json:"affected_packages"`
-	BlastRadius   int          `json:"blast_radius"`
-	RiskLevel     string       `json:"risk_level"`
-	Summary       string       `json:"summary"`
+	Symbol        string            `json:"symbol"`
+	DirectCallers []port.CallerSite `json:"direct_callers"`
+	TransCallers  []port.CallerSite `json:"transitive_callers"`
+	AffectedPkgs  []string          `json:"affected_packages"`
+	BlastRadius   int               `json:"blast_radius"`
+	RiskLevel     string            `json:"risk_level"`
+	Summary       string            `json:"summary"`
 }
 
 // ComputeSymbolBlastRadius computes direct and transitive callers for a symbol,
@@ -94,9 +95,9 @@ func ComputeSymbolBlastRadius(edges []analysis.CallEdge, symbol string, totalPkg
 	return report
 }
 
-// edgeToCallerSite converts a CallEdge to a CallerSite.
-func edgeToCallerSite(e analysis.CallEdge) CallerSite {
-	return CallerSite{
+// edgeToCallerSite converts a CallEdge to a port.CallerSite.
+func edgeToCallerSite(e analysis.CallEdge) port.CallerSite {
+	return port.CallerSite{
 		Caller:       e.Caller,
 		CallerPkg:    e.CallerPkg,
 		Line:         e.Line,

@@ -11,6 +11,7 @@ import (
 
 	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/arch"
+	"github.com/dpopsuev/locus/internal/clinic"
 	"github.com/dpopsuev/locus/internal/diagram"
 	"github.com/dpopsuev/locus/internal/protocol"
 	"github.com/dpopsuev/locus/internal/store"
@@ -911,7 +912,7 @@ func (h *handler) handleRenderDiagram(ctx context.Context, _ *sdkmcp.CallToolReq
 		if in.Type == DiagramHexa {
 			fa := analysis.NewFallback(path)
 			classes, _ := fa.Classes(path)
-			hexaClass := protocol.ComputeHexaClassification(report.Architecture.Services, report.Architecture.Edges, classes)
+			hexaClass := clinic.ComputeHexaClassification(report.Architecture.Services, report.Architecture.Edges, classes)
 			input.HexaRoles = make(map[string]string, len(hexaClass.Components))
 			for _, c := range hexaClass.Components {
 				input.HexaRoles[c.Name] = string(c.Role)

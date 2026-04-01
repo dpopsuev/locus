@@ -1,4 +1,4 @@
-package protocol
+package constraint
 
 import (
 	"fmt"
@@ -30,7 +30,7 @@ func ComputeInterfaceMetrics(classes []analysis.ClassInfo, impls []analysis.Impl
 	// Step 1: Filter interfaces from ClassInfo.
 	ifaceMap := make(map[string]*InterfaceMetric)
 	for _, c := range classes {
-		if c.Kind != classKindInterface {
+		if c.Kind != "interface" {
 			continue
 		}
 		ifaceMap[c.Name] = &InterfaceMetric{

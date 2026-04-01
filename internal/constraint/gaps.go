@@ -1,4 +1,4 @@
-package protocol
+package constraint
 
 import (
 	"os"
@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/dpopsuev/locus/internal/arch"
+	"github.com/dpopsuev/locus/internal/port"
 )
 
 // GapEntry represents knowledge gaps for a single component.
@@ -62,11 +63,11 @@ func DetectGaps(report *arch.ContextReport, root string) (*GapReport, error) {
 		fi := fanIn[comp]
 		switch {
 		case !hasTests && fi >= 3:
-			entry.Severity = SeverityCritical
+			entry.Severity = port.SeverityCritical
 		case !hasDocs:
-			entry.Severity = SeverityWarning
+			entry.Severity = port.SeverityWarning
 		default:
-			entry.Severity = SeverityInfo
+			entry.Severity = port.SeverityInfo
 		}
 
 		r.Entries = append(r.Entries, entry)

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/dpopsuev/locus/internal/analysis"
+	"github.com/dpopsuev/locus/internal/impact"
 )
 
 // SemanticChange describes a symbol in a changed package and its caller impact.
@@ -103,12 +104,12 @@ func ComputeDiffIntelligence(changedFiles []string, modulePath string, graph *an
 func callerSeverity(count int) string {
 	switch {
 	case count > 10:
-		return RiskCritical
+		return impact.RiskCritical
 	case count > 3:
-		return RiskHigh
+		return impact.RiskHigh
 	case count > 0:
-		return RiskMedium
+		return impact.RiskMedium
 	default:
-		return RiskLow
+		return impact.RiskLow
 	}
 }

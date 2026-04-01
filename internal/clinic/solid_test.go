@@ -1,4 +1,4 @@
-package protocol
+package clinic
 
 import (
 	"testing"
@@ -27,7 +27,7 @@ func TestComputeSRPViolations_HighFanOut(t *testing.T) {
 
 	found := false
 	for _, v := range violations {
-		if v.Severity == SeverityWarning && v.Principle == PrincipleSRP {
+		if v.Severity == port.SeverityWarning && v.Principle == PrincipleSRP {
 			found = true
 		}
 	}
@@ -52,7 +52,7 @@ func TestComputeSRPViolations_Warning(t *testing.T) {
 	}
 
 	for _, v := range violations {
-		if v.Severity != SeverityWarning {
+		if v.Severity != port.SeverityWarning {
 			t.Errorf("expected warning severity, got %s", v.Severity)
 		}
 	}
@@ -119,7 +119,7 @@ func TestComputeISPViolations_FatInterface(t *testing.T) {
 	}
 
 	v := violations[0]
-	if v.Severity != SeverityError {
+	if v.Severity != port.SeverityError {
 		t.Errorf("expected error severity for 9 methods (threshold 8), got %s", v.Severity)
 	}
 	if v.Principle != PrincipleISP {
@@ -143,7 +143,7 @@ func TestComputeISPViolations_WarningThreshold(t *testing.T) {
 	}
 
 	v := violations[0]
-	if v.Severity != SeverityWarning {
+	if v.Severity != port.SeverityWarning {
 		t.Errorf("expected warning severity for 6 methods (threshold 5), got %s", v.Severity)
 	}
 }
@@ -228,7 +228,7 @@ func TestComputeDIPViolations_DomainToAdapter(t *testing.T) {
 	}
 
 	v := violations[0]
-	if v.Severity != SeverityError {
+	if v.Severity != port.SeverityError {
 		t.Errorf("expected error severity for domain → adapter, got %s", v.Severity)
 	}
 	if v.Principle != PrincipleDIP {
@@ -258,7 +258,7 @@ func TestComputeDIPViolations_AppToAdapter(t *testing.T) {
 	}
 
 	v := violations[0]
-	if v.Severity != SeverityWarning {
+	if v.Severity != port.SeverityWarning {
 		t.Errorf("expected warning severity for app → adapter, got %s", v.Severity)
 	}
 }
@@ -360,11 +360,11 @@ func TestComputeSOLIDScan_SortOrder(t *testing.T) {
 	}
 
 	// First violation should be the error.
-	if report.Violations[0].Severity != SeverityError {
+	if report.Violations[0].Severity != port.SeverityError {
 		t.Errorf("expected first violation to be error, got %s", report.Violations[0].Severity)
 	}
 	// Second violation should be the warning.
-	if report.Violations[1].Severity != SeverityWarning {
+	if report.Violations[1].Severity != port.SeverityWarning {
 		t.Errorf("expected second violation to be warning, got %s", report.Violations[1].Severity)
 	}
 }
@@ -413,7 +413,7 @@ func TestISPSeverity_FewImplementors(t *testing.T) {
 		t.Fatal("expected ISP violation for 9-method interface")
 	}
 	v := violations[0]
-	if v.Severity != SeverityWarning {
+	if v.Severity != port.SeverityWarning {
 		t.Errorf("expected warning severity for 2 implementors, got %s", v.Severity)
 	}
 	if v.Principle != PrincipleISP {
@@ -445,7 +445,7 @@ func TestISPSeverity_ManyImplementors(t *testing.T) {
 		t.Fatal("expected ISP violation for 9-method interface with 7 implementors")
 	}
 	v := violations[0]
-	if v.Severity != SeverityCritical {
+	if v.Severity != port.SeverityCritical {
 		t.Errorf("expected critical severity for 7 implementors, got %s", v.Severity)
 	}
 }
@@ -470,7 +470,7 @@ func TestSRPSeverity_LowFanIn(t *testing.T) {
 		t.Fatal("expected SRP violation for LOC=1200, fan-out=10")
 	}
 	v := violations[0]
-	if v.Severity != SeverityWarning {
+	if v.Severity != port.SeverityWarning {
 		t.Errorf("expected warning severity for fan-in=1, got %s", v.Severity)
 	}
 }
@@ -495,7 +495,7 @@ func TestSRPSeverity_HighFanIn(t *testing.T) {
 		t.Fatal("expected SRP violation for LOC=1200, fan-out=10")
 	}
 	v := violations[0]
-	if v.Severity != SeverityCritical {
+	if v.Severity != port.SeverityCritical {
 		t.Errorf("expected critical severity for fan-in=10, got %s", v.Severity)
 	}
 }
@@ -547,7 +547,7 @@ func TestSRPWithRoleMultiplier_AppLenient(t *testing.T) {
 		if v.Principle == PrincipleSRP {
 			// With fan-in=0 (no inbound edges), severity from srpSeverityByFanIn is warning.
 			// The violation should be warning level (not error/critical) because LOC < error threshold.
-			if v.Severity == SeverityCritical {
+			if v.Severity == port.SeverityCritical {
 				t.Errorf("app role with LOC=1400 should NOT be critical (error threshold=1500)")
 			}
 		}

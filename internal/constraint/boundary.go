@@ -1,4 +1,4 @@
-package protocol
+package constraint
 
 import (
 	"path"
@@ -39,7 +39,7 @@ func CheckBoundaryRules(edges []arch.ArchEdge, rules []port.BoundaryRule) []Boun
 					From:     e.From,
 					To:       e.To,
 					Rule:     r.FromPattern + " -> " + r.ToPattern,
-					Severity: SeverityError,
+					Severity: port.SeverityError,
 				})
 			}
 		}

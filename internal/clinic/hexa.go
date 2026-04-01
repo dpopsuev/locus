@@ -1,4 +1,4 @@
-package protocol
+package clinic
 
 import (
 	"fmt"
@@ -7,6 +7,7 @@ import (
 
 	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/arch"
+	"github.com/dpopsuev/locus/internal/port"
 )
 
 // classKindInterface is the Kind value for interfaces in analysis.ClassInfo.
@@ -253,7 +254,7 @@ func ComputeHexaViolations(
 	// Sort: errors first, then by From name.
 	sort.Slice(violations, func(i, j int) bool {
 		if violations[i].Severity != violations[j].Severity {
-			return violations[i].Severity == SeverityError
+			return violations[i].Severity == port.SeverityError
 		}
 		return violations[i].From < violations[j].From
 	})
@@ -275,15 +276,15 @@ func ComputeHexaViolations(
 func checkViolation(from, to HexaRole) (rule, severity string) {
 	switch {
 	case from == HexaRoleDomain && to == HexaRoleAdapter:
-		return "domain must not depend on adapter", SeverityError
+		return "domain must not depend on adapter", port.SeverityError
 	case from == HexaRoleDomain && to == HexaRoleInfra:
-		return "domain must not depend on infrastructure", SeverityError
+		return "domain must not depend on infrastructure", port.SeverityError
 	case from == HexaRolePort && to == HexaRoleAdapter:
-		return "port must not depend on adapter", SeverityError
+		return "port must not depend on adapter", port.SeverityError
 	case from == HexaRolePort && to == HexaRoleInfra:
-		return "port must not depend on infrastructure", SeverityError
+		return "port must not depend on infrastructure", port.SeverityError
 	case from == HexaRoleDomain && to == HexaRoleApp:
-		return "domain should not depend on application layer", SeverityWarning
+		return "domain should not depend on application layer", port.SeverityWarning
 	default:
 		return "", ""
 	}
@@ -318,14 +319,24 @@ func buildViolationSummary(score float64, violations []HexaViolation) string {
 	errors, warnings := 0, 0
 	for _, v := range violations {
 		switch v.Severity {
-		case SeverityError:
+		case port.SeverityError:
 			errors++
-		case SeverityWarning:
+		case port.SeverityWarning:
 			warnings++
 		}
 	}
 
 	return fmt.Sprintf("Hexagonal compliance: %.0f%% — %d error(s), %d warning(s)", score, errors, warnings)
+}
+
+// containsAny returns true if s contains any of the given substrings.
+func containsAny(s string, subs ...string) bool {
+	for _, sub := range subs {
+		if strings.Contains(s, sub) {
+			return true
+		}
+	}
+	return false
 }
 
 func lastPathSegment(name string) string {

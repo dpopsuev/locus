@@ -1,10 +1,11 @@
-package protocol
+package clinic
 
 import (
 	"strings"
 	"testing"
 
 	"github.com/dpopsuev/locus/internal/arch"
+	"github.com/dpopsuev/locus/internal/port"
 )
 
 func TestComputeSymbolQuality_Abbreviation(t *testing.T) {
@@ -24,8 +25,8 @@ func TestComputeSymbolQuality_Abbreviation(t *testing.T) {
 	if issue.Symbol != "Cfg" {
 		t.Errorf("expected symbol Cfg, got %s", issue.Symbol)
 	}
-	if issue.Severity != SeverityWarning {
-		t.Errorf("expected severity %s, got %s", SeverityWarning, issue.Severity)
+	if issue.Severity != port.SeverityWarning {
+		t.Errorf("expected severity %s, got %s", port.SeverityWarning, issue.Severity)
 	}
 	if !strings.Contains(issue.Suggestion, "Config") {
 		t.Errorf("suggestion should mention Config, got %q", issue.Suggestion)
@@ -127,8 +128,8 @@ func TestComputeSymbolQuality_FanInWeighting(t *testing.T) {
 		t.Fatal("expected at least 1 issue")
 	}
 	issue := report.Issues[0]
-	if issue.Severity != SeverityError {
-		t.Errorf("expected severity %s for high fan-in, got %s", SeverityError, issue.Severity)
+	if issue.Severity != port.SeverityError {
+		t.Errorf("expected severity %s for high fan-in, got %s", port.SeverityError, issue.Severity)
 	}
 	if issue.FanIn != 5 {
 		t.Errorf("expected fan_in 5, got %d", issue.FanIn)
@@ -146,8 +147,8 @@ func TestComputeSymbolQuality_VerblessExport(t *testing.T) {
 	for _, issue := range report.Issues {
 		if issue.Issue == "verbless_export" && issue.Symbol == "Frobnicate" {
 			found = true
-			if issue.Severity != SeverityInfo {
-				t.Errorf("expected severity %s, got %s", SeverityInfo, issue.Severity)
+			if issue.Severity != port.SeverityInfo {
+				t.Errorf("expected severity %s, got %s", port.SeverityInfo, issue.Severity)
 			}
 		}
 	}
@@ -187,11 +188,11 @@ func TestComputeSymbolQuality_SortOrder(t *testing.T) {
 		t.Fatalf("expected at least 2 issues, got %d", len(report.Issues))
 	}
 	// First issue should be error severity (escalated due to fan-in).
-	if report.Issues[0].Severity != SeverityError {
+	if report.Issues[0].Severity != port.SeverityError {
 		t.Errorf("first issue should be error, got %s", report.Issues[0].Severity)
 	}
 	// Second issue should be warning.
-	if report.Issues[1].Severity != SeverityWarning {
+	if report.Issues[1].Severity != port.SeverityWarning {
 		t.Errorf("second issue should be warning, got %s", report.Issues[1].Severity)
 	}
 }

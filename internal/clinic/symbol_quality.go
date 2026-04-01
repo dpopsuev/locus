@@ -1,4 +1,4 @@
-package protocol
+package clinic
 
 import (
 	"fmt"
@@ -7,6 +7,7 @@ import (
 	"unicode"
 
 	"github.com/dpopsuev/locus/internal/arch"
+	"github.com/dpopsuev/locus/internal/port"
 )
 
 // Fan-in threshold above which severity is escalated from warning to error.
@@ -219,9 +220,9 @@ func checkAbbreviation(sym, pkg string, svcFanIn int) []SymbolIssue {
 			if stdlibIdioms[sym] {
 				continue
 			}
-			severity := SeverityWarning
+			severity := port.SeverityWarning
 			if svcFanIn >= fanInEscalationThreshold {
-				severity = SeverityError
+				severity = port.SeverityError
 			}
 			return []SymbolIssue{{
 				Symbol:     sym,
@@ -242,9 +243,9 @@ func checkGenericName(sym, pkg string, svcFanIn int) []SymbolIssue {
 		if sym == suffix || strings.HasSuffix(sym, suffix) {
 			remaining := strings.TrimSuffix(sym, suffix)
 			if len(remaining) < minDomainPrefixLen {
-				severity := SeverityWarning
+				severity := port.SeverityWarning
 				if svcFanIn >= fanInEscalationThreshold {
-					severity = SeverityError
+					severity = port.SeverityError
 				}
 				return []SymbolIssue{{
 					Symbol:     sym,
@@ -307,9 +308,9 @@ func checkVerblessExport(sym, pkg string, svcFanIn int) []SymbolIssue {
 		}
 	}
 
-	severity := SeverityInfo
+	severity := port.SeverityInfo
 	if svcFanIn >= fanInEscalationThreshold {
-		severity = SeverityWarning
+		severity = port.SeverityWarning
 	}
 
 	return []SymbolIssue{{
@@ -325,11 +326,11 @@ func checkVerblessExport(sym, pkg string, svcFanIn int) []SymbolIssue {
 // symbolSeverityOrder returns a numeric rank for sorting: error(0) < warning(1) < info(2).
 func symbolSeverityOrder(s string) int {
 	switch s {
-	case SeverityError:
+	case port.SeverityError:
 		return 0
-	case SeverityWarning:
+	case port.SeverityWarning:
 		return 1
-	case SeverityInfo:
+	case port.SeverityInfo:
 		return 2
 	default:
 		return 3

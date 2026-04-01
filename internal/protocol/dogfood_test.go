@@ -7,6 +7,7 @@ import (
 
 	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/arch"
+	"github.com/dpopsuev/locus/internal/clinic"
 	"github.com/dpopsuev/locus/internal/port"
 )
 
@@ -63,14 +64,14 @@ func TestDogfood_RoleAwareScanReducesFalsePositives(t *testing.T) {
 	}
 	impls, _ := fa.Implements(root)
 
-	hexaClass := ComputeHexaClassification(services, edges, classes)
+	hexaClass := clinic.ComputeHexaClassification(services, edges, classes)
 
 	// --- WITHOUT roles ---
-	solidWithout := ComputeSOLIDScan(services, edges, classes, impls, hexaClass, root, nil, nil)
+	solidWithout := clinic.ComputeSOLIDScan(services, edges, classes, impls, hexaClass, root, nil, nil)
 
 	// --- WITH roles ---
-	roles := ResolveRoles(hexaClass, nil)
-	solidWith := ComputeSOLIDScan(services, edges, classes, impls, hexaClass, root, roles, nil)
+	roles := clinic.ResolveRoles(hexaClass, nil)
+	solidWith := clinic.ComputeSOLIDScan(services, edges, classes, impls, hexaClass, root, roles, nil)
 
 	t.Logf("SOLID violations without roles: %d (score: %.0f)", len(solidWithout.Violations), solidWithout.Score)
 	t.Logf("SOLID violations with    roles: %d (score: %.0f)", len(solidWith.Violations), solidWith.Score)
@@ -92,10 +93,10 @@ func TestDogfood_RoleAwareScanReducesFalsePositives(t *testing.T) {
 }
 
 // countSRPFor counts SRP violations whose Component starts with prefix.
-func countSRPFor(violations []SOLIDViolation, prefix string) int {
+func countSRPFor(violations []clinic.SOLIDViolation, prefix string) int {
 	n := 0
 	for _, v := range violations {
-		if v.Principle == PrincipleSRP && len(v.Component) >= len(prefix) && v.Component[:len(prefix)] == prefix {
+		if v.Principle == clinic.PrincipleSRP && len(v.Component) >= len(prefix) && v.Component[:len(prefix)] == prefix {
 			n++
 		}
 	}
@@ -121,7 +122,7 @@ func TestDogfood_AcceptedSuppressionWorks(t *testing.T) {
 	impls, _ := fa.Implements(root)
 
 	// First scan: no accepted violations.
-	baseline := ComputePatternScan(services, edges, cycles, classes, impls, nil, nil)
+	baseline := clinic.ComputePatternScan(services, edges, cycles, classes, impls, nil, nil)
 	t.Logf("baseline pattern scan: %d detections (%d patterns, %d smells)",
 		len(baseline.Detections), baseline.PatternsFound, baseline.SmellsFound)
 
@@ -138,7 +139,7 @@ func TestDogfood_AcceptedSuppressionWorks(t *testing.T) {
 	}}
 
 	// Second scan: with the accepted violation.
-	suppressed := ComputePatternScan(services, edges, cycles, classes, impls, nil, accepted)
+	suppressed := clinic.ComputePatternScan(services, edges, cycles, classes, impls, nil, accepted)
 
 	// The suppressed detection should no longer appear.
 	for _, d := range suppressed.Detections {

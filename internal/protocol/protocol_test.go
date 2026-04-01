@@ -595,3 +595,220 @@ func shas(commits []CommitMeta) []string {
 	}
 	return out
 }
+
+// --- Enhanced Drift integration tests (moved from constraint/boundary_test.go) ---
+
+func TestGetDrift_NoBoundariesNoBudgets(t *testing.T) {
+	s := testStore(filepath.Join(t.TempDir(), "cache"), t.TempDir())
+	p := New(s, nil)
+
+	report := &arch.ContextReport{
+		Architecture: arch.ArchModel{
+			Services: []arch.ArchService{
+				{Name: "pkg_a", LOC: 100},
+				{Name: "pkg_b", LOC: 200},
+			},
+			Edges: []arch.ArchEdge{
+				{From: "pkg_a", To: "pkg_b"},
+			},
+		},
+	}
+	_ = s.PutReport(context.Background(), "/repo", "sha1", report)
+	_ = s.PutDesiredState(context.Background(), "/repo", &port.DesiredState{
+		Layers: []string{"pkg_b", "pkg_a"}, // b is lower, a is higher, edge goes down = clean
+	})
+
+	drift, err := p.GetDrift(context.Background(), "/repo", "/repo@sha1")
+	if err != nil {
+		t.Fatalf("GetDrift: %v", err)
+	}
+	if !drift.HasDesiredState {
+		t.Error("expected has_desired_state=true")
+	}
+	if !drift.Clean {
+		t.Errorf("expected clean, got summary=%s", drift.Summary)
+	}
+	if drift.Score != 100.0 {
+		t.Errorf("expected score=100, got %.1f", drift.Score)
+	}
+}
+
+func TestGetDrift_WithBoundaryViolations(t *testing.T) {
+	s := testStore(filepath.Join(t.TempDir(), "cache"), t.TempDir())
+	p := New(s, nil)
+
+	report := &arch.ContextReport{
+		Architecture: arch.ArchModel{
+			Services: []arch.ArchService{
+				{Name: "internal/core", LOC: 500},
+				{Name: "internal/api", LOC: 300},
+			},
+			Edges: []arch.ArchEdge{
+				{From: "internal/core", To: "internal/api"},
+			},
+		},
+	}
+	_ = s.PutReport(context.Background(), "/repo", "sha1", report)
+	_ = s.PutDesiredState(context.Background(), "/repo", &port.DesiredState{
+		Layers: []string{"internal/core", "internal/api"},
+		Boundaries: []port.BoundaryRule{
+			{FromPattern: "internal/core", ToPattern: "internal/api", Allow: false},
+		},
+	})
+
+	drift, err := p.GetDrift(context.Background(), "/repo", "/repo@sha1")
+	if err != nil {
+		t.Fatalf("GetDrift: %v", err)
+	}
+	if drift.Clean {
+		t.Error("expected not clean")
+	}
+	if len(drift.BoundaryViolations) != 1 {
+		t.Fatalf("expected 1 boundary violation, got %d", len(drift.BoundaryViolations))
+	}
+	if drift.BoundaryBreaches != 1 {
+		t.Errorf("boundary_breaches = %d, want 1", drift.BoundaryBreaches)
+	}
+	if drift.Score >= 100 {
+		t.Errorf("score should be < 100 with violations, got %.1f", drift.Score)
+	}
+}
+
+func TestGetDrift_WithBudgetViolations(t *testing.T) {
+	s := testStore(filepath.Join(t.TempDir(), "cache"), t.TempDir())
+	p := New(s, nil)
+
+	report := &arch.ContextReport{
+		Architecture: arch.ArchModel{
+			Services: []arch.ArchService{
+				{Name: "pkg/core", LOC: 1000, Churn: 20},
+				{Name: "pkg/util", LOC: 200},
+			},
+			Edges: []arch.ArchEdge{
+				{From: "pkg/util", To: "pkg/core"},
+				{From: "pkg/core", To: "pkg/util"},
+			},
+		},
+	}
+	_ = s.PutReport(context.Background(), "/repo", "sha1", report)
+	_ = s.PutDesiredState(context.Background(), "/repo", &port.DesiredState{
+		Layers: []string{"pkg/util", "pkg/core"},
+		Constraints: []port.HealthConstraint{
+			{Component: "pkg/core", MaxChurn: 5},
+		},
+	})
+
+	drift, err := p.GetDrift(context.Background(), "/repo", "/repo@sha1")
+	if err != nil {
+		t.Fatalf("GetDrift: %v", err)
+	}
+	if drift.Clean {
+		t.Error("expected not clean")
+	}
+	if len(drift.BudgetViolations) != 1 {
+		t.Fatalf("expected 1 budget violation, got %d", len(drift.BudgetViolations))
+	}
+	if drift.ConstraintBreaches != 1 {
+		t.Errorf("constraint_breaches = %d, want 1", drift.ConstraintBreaches)
+	}
+}
+
+func TestGetDrift_CombinedViolations(t *testing.T) {
+	s := testStore(filepath.Join(t.TempDir(), "cache"), t.TempDir())
+	p := New(s, nil)
+
+	report := &arch.ContextReport{
+		Architecture: arch.ArchModel{
+			Services: []arch.ArchService{
+				{Name: "api", LOC: 100, Churn: 30},
+				{Name: "core", LOC: 500},
+				{Name: "db", LOC: 200},
+			},
+			Edges: []arch.ArchEdge{
+				{From: "api", To: "core"},
+				{From: "core", To: "api"}, // layer violation (core is lower, importing higher)
+				{From: "api", To: "db"},   // boundary violation
+			},
+		},
+	}
+	_ = s.PutReport(context.Background(), "/repo", "sha1", report)
+	_ = s.PutDesiredState(context.Background(), "/repo", &port.DesiredState{
+		Layers: []string{"db", "core", "api"}, // db=low, core=mid, api=high
+		Boundaries: []port.BoundaryRule{
+			{FromPattern: "api", ToPattern: "db", Allow: false}, // deny api -> db
+		},
+		Constraints: []port.HealthConstraint{
+			{Component: "api", MaxChurn: 10}, // actual=30, budget=10
+		},
+	})
+
+	drift, err := p.GetDrift(context.Background(), "/repo", "/repo@sha1")
+	if err != nil {
+		t.Fatalf("GetDrift: %v", err)
+	}
+	if drift.Clean {
+		t.Error("expected not clean")
+	}
+	// Should have layer, boundary, and budget violations.
+	if len(drift.LayerViolations) == 0 {
+		t.Error("expected layer violations")
+	}
+	if len(drift.BoundaryViolations) != 1 {
+		t.Errorf("expected 1 boundary violation, got %d", len(drift.BoundaryViolations))
+	}
+	if len(drift.BudgetViolations) != 1 {
+		t.Errorf("expected 1 budget violation, got %d", len(drift.BudgetViolations))
+	}
+	if drift.Score >= 100 {
+		t.Errorf("score should be < 100, got %.1f", drift.Score)
+	}
+	if drift.Score < 0 {
+		t.Errorf("score should be >= 0, got %.1f", drift.Score)
+	}
+	t.Logf("Combined drift: %s", drift.Summary)
+}
+
+func TestGetDrift_NoDesiredState(t *testing.T) {
+	s := testStore(filepath.Join(t.TempDir(), "cache"), t.TempDir())
+	p := New(s, nil)
+
+	drift, err := p.GetDrift(context.Background(), "/repo")
+	if err != nil {
+		t.Fatalf("GetDrift: %v", err)
+	}
+	if drift.HasDesiredState {
+		t.Error("expected has_desired_state=false")
+	}
+}
+
+func TestGetDrift_ScoreCalculation(t *testing.T) {
+	s := testStore(filepath.Join(t.TempDir(), "cache"), t.TempDir())
+	p := New(s, nil)
+
+	report := &arch.ContextReport{
+		Architecture: arch.ArchModel{
+			Services: []arch.ArchService{
+				{Name: "a", LOC: 100},
+				{Name: "b", LOC: 200},
+			},
+			Edges: []arch.ArchEdge{
+				{From: "a", To: "b"},
+				{From: "b", To: "a"},
+			},
+		},
+	}
+	_ = s.PutReport(context.Background(), "/repo", "sha1", report)
+	_ = s.PutDesiredState(context.Background(), "/repo", &port.DesiredState{
+		Layers: []string{"a", "b"}, // a=low, b=high; a->b is OK, b->a is violation
+	})
+
+	drift, err := p.GetDrift(context.Background(), "/repo", "/repo@sha1")
+	if err != nil {
+		t.Fatalf("GetDrift: %v", err)
+	}
+	// 2 edges checked for layer purity, 1 violation => score = (2-1)/2*100 = 50
+	if drift.Score < 0 || drift.Score > 100 {
+		t.Errorf("score out of range: %.1f", drift.Score)
+	}
+	t.Logf("Score: %.1f%%, summary: %s", drift.Score, drift.Summary)
+}

@@ -1,4 +1,4 @@
-package protocol
+package clinic
 
 import (
 	"fmt"
@@ -700,13 +700,13 @@ func evaluateFeatureEnvy(svc arch.ArchService, edges []arch.ArchEdge) *PatternDe
 // severityForDetection maps pattern kind and confidence to a severity level.
 func severityForDetection(kind PatternKind, confidence float64) string {
 	if kind == PatternKindPattern {
-		return SeverityInfo
+		return port.SeverityInfo
 	}
 	// Smells: high confidence → error, otherwise warning.
 	if confidence > 0.8 {
-		return SeverityError
+		return port.SeverityError
 	}
-	return SeverityWarning
+	return port.SeverityWarning
 }
 
 // detectMissingPattern is a post-processing step that flags high-churn components

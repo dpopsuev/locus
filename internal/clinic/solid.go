@@ -1,4 +1,4 @@
-package protocol
+package clinic
 
 import (
 	"fmt"
@@ -164,11 +164,11 @@ func ComputeSRPViolations(services []arch.ArchService, edges []arch.ArchEdge, ro
 func srpSeverityByFanIn(fanIn int) string {
 	switch {
 	case fanIn >= srpFanInHigh:
-		return SeverityCritical
+		return port.SeverityCritical
 	case fanIn >= srpFanInMedium:
-		return SeverityError
+		return port.SeverityError
 	default:
-		return SeverityWarning
+		return port.SeverityWarning
 	}
 }
 
@@ -240,9 +240,9 @@ func ComputeISPViolations(classes []analysis.ClassInfo, impls []analysis.ImplEdg
 		var baseSeverity string
 		switch {
 		case methodCount > ispMethodsError:
-			baseSeverity = SeverityError
+			baseSeverity = port.SeverityError
 		case methodCount > ispMethodsWarning:
-			baseSeverity = SeverityWarning
+			baseSeverity = port.SeverityWarning
 		default:
 			continue
 		}
@@ -272,16 +272,16 @@ func ComputeISPViolations(classes []analysis.ClassInfo, impls []analysis.ImplEdg
 func ispSeverityByImplCount(baseSeverity string, implCount int) string {
 	switch {
 	case implCount >= ispImplCountHigh:
-		return SeverityCritical
+		return port.SeverityCritical
 	case implCount >= ispImplCountMedium:
-		if baseSeverity == SeverityWarning {
-			return SeverityError
+		if baseSeverity == port.SeverityWarning {
+			return port.SeverityError
 		}
-		return SeverityError
+		return port.SeverityError
 	default:
 		// 0-2 implementors: keep base but cap at warning when few.
-		if implCount > 0 && baseSeverity == SeverityError {
-			return SeverityWarning
+		if implCount > 0 && baseSeverity == port.SeverityError {
+			return port.SeverityWarning
 		}
 		return baseSeverity
 	}
@@ -353,9 +353,9 @@ func findTypeSwitchViolations(path string) []SOLIDViolation {
 		funcName := enclosingFuncName(f, fset, n)
 		relPath := path
 
-		severity := SeverityWarning
+		severity := port.SeverityWarning
 		if cases > ocpCasesError {
-			severity = SeverityError
+			severity = port.SeverityError
 		}
 
 		violations = append(violations, SOLIDViolation{
@@ -454,7 +454,7 @@ func ComputeDIPViolations(
 				Principle:  PrincipleDIP,
 				Component:  e.From,
 				Detail:     fmt.Sprintf("%s (%s) depends on %s (%s)", e.From, fromRole, e.To, toRole),
-				Severity:   SeverityError,
+				Severity:   port.SeverityError,
 				Suggestion: "Introduce an interface in the domain layer",
 			})
 		case fromRole == HexaRoleApp && toRole == HexaRoleAdapter:
@@ -462,7 +462,7 @@ func ComputeDIPViolations(
 				Principle:  PrincipleDIP,
 				Component:  e.From,
 				Detail:     fmt.Sprintf("%s (%s) depends on %s (%s)", e.From, fromRole, e.To, toRole),
-				Severity:   SeverityWarning,
+				Severity:   port.SeverityWarning,
 				Suggestion: "Introduce an interface in the domain layer",
 			})
 		}
@@ -528,13 +528,13 @@ func ComputeSOLIDScan(
 // severityRank returns a sort rank for severity (lower = more severe = first).
 func severityRank(severity string) int {
 	switch severity {
-	case SeverityCritical:
+	case port.SeverityCritical:
 		return 0
-	case SeverityError:
+	case port.SeverityError:
 		return 1
-	case SeverityWarning:
+	case port.SeverityWarning:
 		return 2
-	case SeverityInfo:
+	case port.SeverityInfo:
 		return 3
 	default:
 		return 4

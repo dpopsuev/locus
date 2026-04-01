@@ -1,18 +1,10 @@
-package protocol
+package constraint
 
 import (
 	"fmt"
 
 	"github.com/dpopsuev/locus/internal/arch"
 	"github.com/dpopsuev/locus/internal/port"
-)
-
-// Severity level constants used across protocol analysis.
-const (
-	SeverityInfo     = "info"
-	SeverityWarning  = "warning"
-	SeverityError    = "error"
-	SeverityCritical = "critical"
 )
 
 // BudgetViolation records a single metric exceeding its budget.
@@ -91,9 +83,9 @@ func ComputeBudgetViolations(
 
 		for _, ch := range checks {
 			if ch.actual > ch.budget {
-				severity := SeverityWarning
+				severity := port.SeverityWarning
 				if ch.actual > ch.budget*2 {
-					severity = SeverityError
+					severity = port.SeverityError
 				}
 				violations = append(violations, BudgetViolation{
 					Component: c.Component,

@@ -1,4 +1,4 @@
-package protocol
+package clinic
 
 import (
 	"fmt"
@@ -6,6 +6,7 @@ import (
 
 	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/arch"
+	"github.com/dpopsuev/locus/internal/port"
 )
 
 func TestComputePatternScan_GodComponent(t *testing.T) {
@@ -228,7 +229,7 @@ func TestComputePatternScan_Strategy(t *testing.T) {
 			if d.Kind != PatternKindPattern {
 				t.Errorf("expected pattern kind, got %s", d.Kind)
 			}
-			if d.Severity != SeverityInfo {
+			if d.Severity != port.SeverityInfo {
 				t.Errorf("expected info severity for pattern, got %s", d.Severity)
 			}
 		}
@@ -260,7 +261,7 @@ func TestComputePatternScan_SeverityEscalation(t *testing.T) {
 
 	for _, d := range report.Detections {
 		if d.PatternID == "god_component" && d.Component == "pkg/mega" {
-			if d.Severity != SeverityError {
+			if d.Severity != port.SeverityError {
 				t.Errorf("expected error severity for high-confidence god_component, got %s (confidence=%f)",
 					d.Severity, d.Confidence)
 			}
@@ -497,7 +498,7 @@ func TestStateMachineCandidate(t *testing.T) {
 			if d.Kind != PatternKindPattern {
 				t.Errorf("expected pattern kind, got %s", d.Kind)
 			}
-			if d.Severity != SeverityInfo {
+			if d.Severity != port.SeverityInfo {
 				t.Errorf("expected info severity for pattern, got %s", d.Severity)
 			}
 			if len(d.Evidence) == 0 {
