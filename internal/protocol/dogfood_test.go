@@ -7,7 +7,7 @@ import (
 
 	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/arch"
-	"github.com/dpopsuev/locus/internal/store"
+	"github.com/dpopsuev/locus/internal/port"
 )
 
 // locusRoot returns the absolute path to the Locus repository root,
@@ -131,7 +131,7 @@ func TestDogfood_AcceptedSuppressionWorks(t *testing.T) {
 
 	// Pick the first detection and create an accepted violation for it.
 	target := baseline.Detections[0]
-	accepted := []store.AcceptedViolation{{
+	accepted := []port.AcceptedViolation{{
 		Component: target.Component,
 		Principle: target.PatternID,
 		Reason:    "dogfood test suppression",

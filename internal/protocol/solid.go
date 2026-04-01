@@ -12,7 +12,7 @@ import (
 
 	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/arch"
-	"github.com/dpopsuev/locus/internal/store"
+	"github.com/dpopsuev/locus/internal/port"
 )
 
 // SOLIDPrinciple identifies one of the four SOLID principles detected.
@@ -74,7 +74,7 @@ type SOLIDReport struct {
 }
 
 // IsAccepted checks if a violation is in the accepted list.
-func IsAccepted(accepted []store.AcceptedViolation, component, principle string) bool {
+func IsAccepted(accepted []port.AcceptedViolation, component, principle string) bool {
 	for _, a := range accepted {
 		if a.Component == component && a.Principle == principle {
 			return true
@@ -90,7 +90,7 @@ func IsAccepted(accepted []store.AcceptedViolation, component, principle string)
 //   - fan-in 0-2 → warning  (low blast radius, safe to refactor)
 //   - fan-in 3-7 → error    (medium blast radius)
 //   - fan-in 8+  → critical (high blast radius, many dependents break)
-func ComputeSRPViolations(services []arch.ArchService, edges []arch.ArchEdge, roles map[string]HexaRole, accepted []store.AcceptedViolation) []SOLIDViolation {
+func ComputeSRPViolations(services []arch.ArchService, edges []arch.ArchEdge, roles map[string]HexaRole, accepted []port.AcceptedViolation) []SOLIDViolation {
 	// Build fan-out: count of outbound edges per service.
 	fanOut := make(map[string]int, len(services))
 	fanOutTargets := make(map[string]map[string]bool, len(services))
@@ -214,7 +214,7 @@ const (
 //   - 1-2 implementors → warning
 //   - 3-5 implementors → error
 //   - 6+  implementors → critical
-func ComputeISPViolations(classes []analysis.ClassInfo, impls []analysis.ImplEdge, accepted []store.AcceptedViolation) []SOLIDViolation {
+func ComputeISPViolations(classes []analysis.ClassInfo, impls []analysis.ImplEdge, accepted []port.AcceptedViolation) []SOLIDViolation {
 	// Build implementor count per interface.
 	implCount := make(map[string]int)
 	for _, edge := range impls {
@@ -289,7 +289,7 @@ func ispSeverityByImplCount(baseSeverity string, implCount int) string {
 
 // ComputeOCPViolations detects Open/Closed Principle violations by finding
 // type switch statements in Go source files under root.
-func ComputeOCPViolations(root string, accepted []store.AcceptedViolation) []SOLIDViolation {
+func ComputeOCPViolations(root string, accepted []port.AcceptedViolation) []SOLIDViolation {
 	if root == "" {
 		return nil
 	}
@@ -422,7 +422,7 @@ func ComputeDIPViolations(
 	services []arch.ArchService,
 	edges []arch.ArchEdge,
 	hexaClassification *HexaClassificationReport,
-	accepted []store.AcceptedViolation,
+	accepted []port.AcceptedViolation,
 ) []SOLIDViolation {
 	if hexaClassification == nil {
 		return nil
@@ -481,7 +481,7 @@ func ComputeSOLIDScan(
 	hexaClassification *HexaClassificationReport,
 	root string,
 	roles map[string]HexaRole,
-	accepted []store.AcceptedViolation,
+	accepted []port.AcceptedViolation,
 ) *SOLIDReport {
 	var allViolations []SOLIDViolation
 	allViolations = append(allViolations, ComputeSRPViolations(services, edges, roles, accepted)...)

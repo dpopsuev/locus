@@ -10,6 +10,7 @@ import (
 
 	"github.com/dpopsuev/locus/internal/arch"
 	"github.com/dpopsuev/locus/internal/cache"
+	"github.com/dpopsuev/locus/internal/port"
 	"github.com/dpopsuev/locus/internal/store"
 )
 
@@ -496,7 +497,7 @@ func TestAcceptViolation(t *testing.T) {
 	path := "/test/project"
 
 	// Accept a violation when no desired state exists yet.
-	err := p.AcceptViolation(ctx, path, store.AcceptedViolation{
+	err := p.AcceptViolation(ctx, path, port.AcceptedViolation{
 		Component: "pkg_a",
 		Principle: "SRP",
 		Reason:    "composition root, expected",
@@ -527,7 +528,7 @@ func TestAcceptViolation(t *testing.T) {
 	}
 
 	// Accept a second violation — should append, not replace.
-	err = p.AcceptViolation(ctx, path, store.AcceptedViolation{
+	err = p.AcceptViolation(ctx, path, port.AcceptedViolation{
 		Component: "pkg_b",
 		Principle: "god_component",
 	})
@@ -557,7 +558,7 @@ func TestAcceptViolation_PreservesExistingState(t *testing.T) {
 	path := "/test/project"
 
 	// Set up initial desired state with layers.
-	err := p.SetDesiredState(ctx, path, &store.DesiredState{
+	err := p.SetDesiredState(ctx, path, &port.DesiredState{
 		Layers: []string{"domain", "service", "handler"},
 	})
 	if err != nil {
@@ -565,7 +566,7 @@ func TestAcceptViolation_PreservesExistingState(t *testing.T) {
 	}
 
 	// Accept a violation.
-	err = p.AcceptViolation(ctx, path, store.AcceptedViolation{
+	err = p.AcceptViolation(ctx, path, port.AcceptedViolation{
 		Component: "handler/api",
 		Principle: "DIP",
 		Reason:    "adapter layer",

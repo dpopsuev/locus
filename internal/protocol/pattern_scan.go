@@ -7,7 +7,7 @@ import (
 
 	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/arch"
-	"github.com/dpopsuev/locus/internal/store"
+	"github.com/dpopsuev/locus/internal/port"
 )
 
 // PatternKind distinguishes design patterns from code smells.
@@ -716,7 +716,7 @@ func severityForDetection(kind PatternKind, confidence float64) string {
 func detectMissingPattern(
 	services []arch.ArchService,
 	detections []PatternDetection,
-	accepted []store.AcceptedViolation,
+	accepted []port.AcceptedViolation,
 ) []PatternDetection {
 	entry := catalogByID["missing_pattern"]
 	if entry == nil {
@@ -774,7 +774,7 @@ func ComputePatternScan(
 	classes []analysis.ClassInfo,
 	impls []analysis.ImplEdge,
 	roles map[string]HexaRole,
-	accepted []store.AcceptedViolation,
+	accepted []port.AcceptedViolation,
 ) *PatternScanReport {
 	var detections []PatternDetection
 

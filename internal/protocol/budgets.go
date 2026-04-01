@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/dpopsuev/locus/internal/arch"
-	"github.com/dpopsuev/locus/internal/store"
+	"github.com/dpopsuev/locus/internal/port"
 )
 
 // Severity level constants used across protocol analysis.
@@ -37,7 +37,7 @@ type BudgetReport struct {
 func ComputeBudgetViolations(
 	services []arch.ArchService,
 	edges []arch.ArchEdge,
-	constraints []store.HealthConstraint,
+	constraints []port.HealthConstraint,
 ) *BudgetReport {
 	// Build service lookup by name.
 	svcMap := make(map[string]*arch.ArchService, len(services))

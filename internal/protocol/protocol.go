@@ -17,8 +17,8 @@ import (
 	"github.com/dpopsuev/locus/internal/arch"
 	"github.com/dpopsuev/locus/internal/cursor"
 	"github.com/dpopsuev/locus/internal/history"
+	"github.com/dpopsuev/locus/internal/port"
 	"github.com/dpopsuev/locus/internal/remote"
-	"github.com/dpopsuev/locus/internal/store"
 )
 
 // Error messages used across protocol methods.
@@ -44,13 +44,13 @@ var (
 // Defined here to invert the dependency direction: protocol depends on its own
 // interface, not on the concrete store package's composite interface.
 type ProtocolStore interface {
-	store.ReportStore
-	store.HistoryStore
-	store.GitResolver
-	store.DesiredStateStore
-	PutComponentMeta(ctx context.Context, project, sha string, meta []store.ComponentMeta) error
-	SearchComponents(ctx context.Context, project, sha, query string) ([]store.ComponentMeta, error)
-	ListProjects(ctx context.Context) ([]store.ProjectInfo, error)
+	port.ReportStore
+	port.HistoryStore
+	port.GitResolver
+	port.DesiredStateStore
+	PutComponentMeta(ctx context.Context, project, sha string, meta []port.ComponentMeta) error
+	SearchComponents(ctx context.Context, project, sha, query string) ([]port.ComponentMeta, error)
+	ListProjects(ctx context.Context) ([]port.ProjectInfo, error)
 }
 
 // HealthCheckable is implemented by stores that expose filesystem paths for health checks.
@@ -366,26 +366,26 @@ func inferLayerOrder(report *arch.ContextReport) []string {
 
 // --- Desired state ---
 
-func (p *Protocol) SetDesiredState(ctx context.Context, path string, ds *store.DesiredState) error {
+func (p *Protocol) SetDesiredState(ctx context.Context, path string, ds *port.DesiredState) error {
 	path = p.resolvePath(path)
 	return p.db.PutDesiredState(ctx, path, ds)
 }
 
-func (p *Protocol) GetDesiredState(ctx context.Context, path string) (*store.DesiredState, error) {
+func (p *Protocol) GetDesiredState(ctx context.Context, path string) (*port.DesiredState, error) {
 	path = p.resolvePath(path)
 	return p.db.GetDesiredState(ctx, path)
 }
 
 // AcceptViolation appends an accepted violation to the project's desired state
 // and persists it. If no desired state exists yet, one is created.
-func (p *Protocol) AcceptViolation(ctx context.Context, path string, av store.AcceptedViolation) error {
+func (p *Protocol) AcceptViolation(ctx context.Context, path string, av port.AcceptedViolation) error {
 	path = p.resolvePath(path)
 	ds, err := p.db.GetDesiredState(ctx, path)
 	if err != nil {
 		return err
 	}
 	if ds == nil {
-		ds = &store.DesiredState{}
+		ds = &port.DesiredState{}
 	}
 	ds.Accepted = append(ds.Accepted, av)
 	return p.db.PutDesiredState(ctx, path, ds)
@@ -479,7 +479,7 @@ func (p *Protocol) GetDrift(ctx context.Context, path string, cacheKey ...string
 
 // countBudgetChecks counts the number of budget checks that will be performed
 // for a given set of services and constraints (used for score calculation).
-func countBudgetChecks(services []arch.ArchService, constraints []store.HealthConstraint) int {
+func countBudgetChecks(services []arch.ArchService, constraints []port.HealthConstraint) int {
 	svcMap := make(map[string]bool, len(services))
 	for i := range services {
 		svcMap[services[i].Name] = true
@@ -502,21 +502,21 @@ func countBudgetChecks(services []arch.ArchService, constraints []store.HealthCo
 	return count
 }
 
-func (p *Protocol) SuggestArchitecture(ctx context.Context, path string, cacheKey ...string) (*store.DesiredState, error) {
+func (p *Protocol) SuggestArchitecture(ctx context.Context, path string, cacheKey ...string) (*port.DesiredState, error) {
 	path = p.resolvePath(path)
 	report, err := p.getOrScan(path, cacheKey...)
 	if err != nil {
 		return nil, err
 	}
 	layers := inferLayerOrder(report)
-	return &store.DesiredState{Layers: layers}, nil
+	return &port.DesiredState{Layers: layers}, nil
 }
 
 // StatusResult holds workspace status information.
 type StatusResult struct {
-	Version    string              `json:"version"`
-	Workspaces []string            `json:"workspaces"`
-	Projects   []store.ProjectInfo `json:"projects,omitempty"`
+	Version    string             `json:"version"`
+	Workspaces []string           `json:"workspaces"`
+	Projects   []port.ProjectInfo `json:"projects,omitempty"`
 }
 
 func (p *Protocol) Status(ctx context.Context) (*StatusResult, error) {
@@ -543,14 +543,14 @@ func (p *Protocol) CheckDriftOnScan(ctx context.Context, path string, report *ar
 }
 
 // generateComponentMeta creates metadata for all components in a scan report.
-func generateComponentMeta(report *arch.ContextReport) []store.ComponentMeta {
+func generateComponentMeta(report *arch.ContextReport) []port.ComponentMeta {
 	depths := arch.ComputeImportDepth(report.Architecture.Edges)
 	fanIn := make(map[string]int)
 	for _, e := range report.Architecture.Edges {
 		fanIn[e.To]++
 	}
 
-	meta := make([]store.ComponentMeta, 0, len(report.Architecture.Services))
+	meta := make([]port.ComponentMeta, 0, len(report.Architecture.Services))
 	for i := range report.Architecture.Services {
 		s := &report.Architecture.Services[i]
 		role := inferRole(s.Name)
@@ -559,7 +559,7 @@ func generateComponentMeta(report *arch.ContextReport) []store.ComponentMeta {
 		if fanIn[s.Name] >= arch.MinFanInHotSpot && s.Churn >= arch.MinChurnHotSpot {
 			health = "sick"
 		}
-		meta = append(meta, store.ComponentMeta{
+		meta = append(meta, port.ComponentMeta{
 			Name:        s.Name,
 			Role:        role,
 			Keywords:    keywords,
@@ -611,7 +611,7 @@ func extractKeywords(s arch.ArchService) []string {
 }
 
 // SearchComponents queries component metadata by keywords.
-func (p *Protocol) SearchComponents(ctx context.Context, path, query string, cacheKey ...string) ([]store.ComponentMeta, error) {
+func (p *Protocol) SearchComponents(ctx context.Context, path, query string, cacheKey ...string) ([]port.ComponentMeta, error) {
 	path = p.resolvePath(path)
 	sha := p.db.ResolveHEAD(path)
 	return p.db.SearchComponents(ctx, path, sha, query)
@@ -1371,7 +1371,7 @@ func (p *Protocol) GetHistory(ctx context.Context, path string, last int) ([]his
 	if err != nil {
 		return nil, err
 	}
-	// Convert store.HistoryEntry to history.EntrySummary for backward compat.
+	// Convert port.HistoryEntry to history.EntrySummary for backward compat.
 	summaries := make([]history.EntrySummary, len(entries))
 	for i, e := range entries {
 		summaries[i] = history.EntrySummary{
@@ -1599,9 +1599,9 @@ func (p *Protocol) GetCachedReport(cacheKey string) (*arch.ContextReport, error)
 
 // resolveRolesAndAccepted extracts roles and accepted violations from
 // hexa classification and desired state. Either may be nil.
-func resolveRolesAndAccepted(hexaClass *HexaClassificationReport, desired *store.DesiredState) (map[string]HexaRole, []store.AcceptedViolation) {
+func resolveRolesAndAccepted(hexaClass *HexaClassificationReport, desired *port.DesiredState) (map[string]HexaRole, []port.AcceptedViolation) {
 	var roles map[string]HexaRole
-	var accepted []store.AcceptedViolation
+	var accepted []port.AcceptedViolation
 
 	if hexaClass != nil {
 		var overrides map[string]string

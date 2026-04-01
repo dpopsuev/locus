@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/dpopsuev/locus/internal/arch"
-	"github.com/dpopsuev/locus/internal/store"
+	"github.com/dpopsuev/locus/internal/port"
 )
 
 func TestComputeBudgetViolations_NoConstraints(t *testing.T) {
@@ -25,7 +25,7 @@ func TestComputeBudgetViolations_AllPassing(t *testing.T) {
 	edges := []arch.ArchEdge{
 		{From: "pkg/util", To: "pkg/core"},
 	}
-	constraints := []store.HealthConstraint{
+	constraints := []port.HealthConstraint{
 		{Component: "pkg/core", MaxFanIn: 5, MaxChurn: 10, MaxNesting: 5},
 	}
 
@@ -52,7 +52,7 @@ func TestComputeBudgetViolations_Warning(t *testing.T) {
 		{From: "b", To: "pkg/core"},
 		{From: "c", To: "pkg/core"},
 	}
-	constraints := []store.HealthConstraint{
+	constraints := []port.HealthConstraint{
 		{Component: "pkg/core", MaxFanIn: 2, MaxChurn: 5},
 	}
 
@@ -82,7 +82,7 @@ func TestComputeBudgetViolations_Error(t *testing.T) {
 	// budget=2, actual=5 => 5 > 2*2=4 => error
 	// budget=10, actual=25 => 25 > 10*2=20 => error
 	// budget=5, actual=12 => 12 > 5*2=10 => error
-	constraints := []store.HealthConstraint{
+	constraints := []port.HealthConstraint{
 		{Component: "pkg/core", MaxFanIn: 2, MaxChurn: 10, MaxNesting: 5},
 	}
 
@@ -111,7 +111,7 @@ func TestComputeBudgetViolations_MixedSeverity(t *testing.T) {
 	// fan_in=3, budget=2 => warning (3 <= 2*2=4)
 	// churn=7, budget=5 => warning (7 <= 5*2=10)
 	// nesting=6, budget=2 => error (6 > 2*2=4)
-	constraints := []store.HealthConstraint{
+	constraints := []port.HealthConstraint{
 		{Component: "svc", MaxFanIn: 2, MaxChurn: 5, MaxNesting: 2},
 	}
 
@@ -141,7 +141,7 @@ func TestComputeBudgetViolations_UnknownComponent(t *testing.T) {
 	services := []arch.ArchService{
 		{Name: "pkg/core"},
 	}
-	constraints := []store.HealthConstraint{
+	constraints := []port.HealthConstraint{
 		{Component: "nonexistent", MaxFanIn: 1},
 	}
 
@@ -159,7 +159,7 @@ func TestComputeBudgetViolations_Summary(t *testing.T) {
 	services := []arch.ArchService{
 		{Name: "a", Churn: 10},
 	}
-	constraints := []store.HealthConstraint{
+	constraints := []port.HealthConstraint{
 		{Component: "a", MaxChurn: 5},
 	}
 

@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/dpopsuev/locus/internal/arch"
-	"github.com/dpopsuev/locus/internal/store"
+	"github.com/dpopsuev/locus/internal/port"
 )
 
 func TestCheckBoundaryRules_NoRules(t *testing.T) {
@@ -18,7 +18,7 @@ func TestCheckBoundaryRules_NoRules(t *testing.T) {
 }
 
 func TestCheckBoundaryRules_NoEdges(t *testing.T) {
-	rules := []store.BoundaryRule{{FromPattern: "*", ToPattern: "*", Allow: false}}
+	rules := []port.BoundaryRule{{FromPattern: "*", ToPattern: "*", Allow: false}}
 	got := CheckBoundaryRules(nil, rules)
 	if len(got) != 0 {
 		t.Fatalf("expected 0 violations, got %d", len(got))
@@ -27,7 +27,7 @@ func TestCheckBoundaryRules_NoEdges(t *testing.T) {
 
 func TestCheckBoundaryRules_AllowedEdge(t *testing.T) {
 	edges := []arch.ArchEdge{{From: "internal/api", To: "internal/core"}}
-	rules := []store.BoundaryRule{
+	rules := []port.BoundaryRule{
 		{FromPattern: "internal/api", ToPattern: "internal/core", Allow: true},
 	}
 	got := CheckBoundaryRules(edges, rules)
@@ -38,7 +38,7 @@ func TestCheckBoundaryRules_AllowedEdge(t *testing.T) {
 
 func TestCheckBoundaryRules_DisallowedEdge(t *testing.T) {
 	edges := []arch.ArchEdge{{From: "internal/core", To: "internal/api"}}
-	rules := []store.BoundaryRule{
+	rules := []port.BoundaryRule{
 		{FromPattern: "internal/core", ToPattern: "internal/api", Allow: false},
 	}
 	got := CheckBoundaryRules(edges, rules)
@@ -63,7 +63,7 @@ func TestCheckBoundaryRules_GlobPattern(t *testing.T) {
 		{From: "cmd/server", To: "internal/db"},
 	}
 	// Deny anything matching internal/* from accessing internal/db.
-	rules := []store.BoundaryRule{
+	rules := []port.BoundaryRule{
 		{FromPattern: "internal/*", ToPattern: "internal/db", Allow: false},
 	}
 	got := CheckBoundaryRules(edges, rules)
@@ -78,7 +78,7 @@ func TestCheckBoundaryRules_SubstringMatch(t *testing.T) {
 		{From: "pkg/handler/auth", To: "pkg/database/postgres"},
 	}
 	// Deny handler from accessing database (substring).
-	rules := []store.BoundaryRule{
+	rules := []port.BoundaryRule{
 		{FromPattern: "handler", ToPattern: "database", Allow: false},
 	}
 	got := CheckBoundaryRules(edges, rules)
@@ -93,7 +93,7 @@ func TestCheckBoundaryRules_WildcardFrom(t *testing.T) {
 		{From: "other", To: "internal/secret"},
 	}
 	// Deny all access to internal/secret.
-	rules := []store.BoundaryRule{
+	rules := []port.BoundaryRule{
 		{FromPattern: "*", ToPattern: "internal/secret", Allow: false},
 	}
 	got := CheckBoundaryRules(edges, rules)
@@ -107,7 +107,7 @@ func TestCheckBoundaryRules_MultipleRules(t *testing.T) {
 		{From: "internal/api", To: "internal/core"},
 		{From: "internal/core", To: "internal/api"},
 	}
-	rules := []store.BoundaryRule{
+	rules := []port.BoundaryRule{
 		{FromPattern: "internal/api", ToPattern: "internal/core", Allow: true},  // allowed
 		{FromPattern: "internal/core", ToPattern: "internal/api", Allow: false}, // denied
 	}
@@ -160,7 +160,7 @@ func TestGetDrift_NoBoundariesNoBudgets(t *testing.T) {
 		},
 	}
 	_ = s.PutReport(context.Background(), "/repo", "sha1", report)
-	_ = s.PutDesiredState(context.Background(), "/repo", &store.DesiredState{
+	_ = s.PutDesiredState(context.Background(), "/repo", &port.DesiredState{
 		Layers: []string{"pkg_b", "pkg_a"}, // b is lower, a is higher, edge goes down = clean
 	})
 
@@ -195,9 +195,9 @@ func TestGetDrift_WithBoundaryViolations(t *testing.T) {
 		},
 	}
 	_ = s.PutReport(context.Background(), "/repo", "sha1", report)
-	_ = s.PutDesiredState(context.Background(), "/repo", &store.DesiredState{
+	_ = s.PutDesiredState(context.Background(), "/repo", &port.DesiredState{
 		Layers: []string{"internal/core", "internal/api"},
-		Boundaries: []store.BoundaryRule{
+		Boundaries: []port.BoundaryRule{
 			{FromPattern: "internal/core", ToPattern: "internal/api", Allow: false},
 		},
 	})
@@ -237,9 +237,9 @@ func TestGetDrift_WithBudgetViolations(t *testing.T) {
 		},
 	}
 	_ = s.PutReport(context.Background(), "/repo", "sha1", report)
-	_ = s.PutDesiredState(context.Background(), "/repo", &store.DesiredState{
+	_ = s.PutDesiredState(context.Background(), "/repo", &port.DesiredState{
 		Layers: []string{"pkg/util", "pkg/core"},
-		Constraints: []store.HealthConstraint{
+		Constraints: []port.HealthConstraint{
 			{Component: "pkg/core", MaxChurn: 5},
 		},
 	})
@@ -278,12 +278,12 @@ func TestGetDrift_CombinedViolations(t *testing.T) {
 		},
 	}
 	_ = s.PutReport(context.Background(), "/repo", "sha1", report)
-	_ = s.PutDesiredState(context.Background(), "/repo", &store.DesiredState{
+	_ = s.PutDesiredState(context.Background(), "/repo", &port.DesiredState{
 		Layers: []string{"db", "core", "api"}, // db=low, core=mid, api=high
-		Boundaries: []store.BoundaryRule{
+		Boundaries: []port.BoundaryRule{
 			{FromPattern: "api", ToPattern: "db", Allow: false}, // deny api -> db
 		},
-		Constraints: []store.HealthConstraint{
+		Constraints: []port.HealthConstraint{
 			{Component: "api", MaxChurn: 10}, // actual=30, budget=10
 		},
 	})
@@ -344,7 +344,7 @@ func TestGetDrift_ScoreCalculation(t *testing.T) {
 		},
 	}
 	_ = s.PutReport(context.Background(), "/repo", "sha1", report)
-	_ = s.PutDesiredState(context.Background(), "/repo", &store.DesiredState{
+	_ = s.PutDesiredState(context.Background(), "/repo", &port.DesiredState{
 		Layers: []string{"a", "b"}, // a=low, b=high; a->b is OK, b->a is violation
 	})
 

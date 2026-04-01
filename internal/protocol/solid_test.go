@@ -5,7 +5,7 @@ import (
 
 	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/arch"
-	"github.com/dpopsuev/locus/internal/store"
+	"github.com/dpopsuev/locus/internal/port"
 )
 
 func TestComputeSRPViolations_HighFanOut(t *testing.T) {
@@ -586,7 +586,7 @@ func TestSRPWithDomainRole_Stricter(t *testing.T) {
 // --- TSK-177: Accepted violation tests ---
 
 func TestIsAccepted(t *testing.T) {
-	accepted := []store.AcceptedViolation{
+	accepted := []port.AcceptedViolation{
 		{Component: "app/main", Principle: "SRP", Reason: "composition root"},
 		{Component: "internal/hub", Principle: "god_component", Reason: "known monolith"},
 	}
@@ -625,7 +625,7 @@ func TestSRPWithAccepted(t *testing.T) {
 	}
 
 	// With accepted: should suppress.
-	accepted := []store.AcceptedViolation{
+	accepted := []port.AcceptedViolation{
 		{Component: "app/big", Principle: "SRP", Reason: "composition root"},
 	}
 	violations = ComputeSRPViolations(services, edges, nil, accepted)

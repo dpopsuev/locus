@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/dpopsuev/locus/internal/arch"
-	"github.com/dpopsuev/locus/internal/store"
+	"github.com/dpopsuev/locus/internal/port"
 )
 
 // BoundaryViolation records a single edge that violates a boundary rule.
@@ -19,7 +19,7 @@ type BoundaryViolation struct {
 // CheckBoundaryRules checks edges against boundary rules and returns violations.
 // A violation occurs when an edge matches a rule's from/to patterns and the rule
 // disallows the dependency (Allow == false).
-func CheckBoundaryRules(edges []arch.ArchEdge, rules []store.BoundaryRule) []BoundaryViolation {
+func CheckBoundaryRules(edges []arch.ArchEdge, rules []port.BoundaryRule) []BoundaryViolation {
 	if len(rules) == 0 || len(edges) == 0 {
 		return nil
 	}
