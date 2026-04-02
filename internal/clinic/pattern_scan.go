@@ -40,13 +40,15 @@ type CatalogEntry struct {
 
 // PatternDetection records a single detected pattern or smell in a component.
 type PatternDetection struct {
-	PatternID   string      `json:"pattern_id"`
-	PatternName string      `json:"pattern_name"`
-	Kind        PatternKind `json:"kind"`
-	Component   string      `json:"component"`
-	Confidence  float64     `json:"confidence"`
-	Evidence    []string    `json:"evidence"`
-	Severity    string      `json:"severity"`
+	PatternID       string           `json:"pattern_id"`
+	PatternName     string           `json:"pattern_name"`
+	Kind            PatternKind      `json:"kind"`
+	Component       string           `json:"component"`
+	Confidence      float64          `json:"confidence"`
+	Evidence        []string         `json:"evidence"`
+	Severity        string           `json:"severity"`
+	MoveTargets     []MoveTarget     `json:"move_targets,omitempty"`
+	SplitSuggestion *SplitSuggestion `json:"split_suggestion,omitempty"`
 }
 
 // PatternScanReport is the result of scanning an architecture for patterns and smells.
@@ -854,9 +856,9 @@ func detectMissingPattern(
 
 	// Build a set of components that already have a positive pattern detected.
 	hasPattern := make(map[string]bool)
-	for _, d := range detections {
-		if d.Kind == PatternKindPattern {
-			hasPattern[d.Component] = true
+	for i := range detections {
+		if detections[i].Kind == PatternKindPattern {
+			hasPattern[detections[i].Component] = true
 		}
 	}
 
@@ -940,8 +942,8 @@ func ComputePatternScan(
 
 	patternsFound := 0
 	smellsFound := 0
-	for _, d := range detections {
-		if d.Kind == PatternKindPattern {
+	for i := range detections {
+		if detections[i].Kind == PatternKindPattern {
 			patternsFound++
 		} else {
 			smellsFound++

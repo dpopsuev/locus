@@ -1582,7 +1582,15 @@ func (p *Protocol) GetPatternScan(ctx context.Context, path string, cacheKey ...
 	hexaClass := clinic.ComputeHexaClassification(report.Architecture.Services, report.Architecture.Edges, classes)
 	desired, _ := p.db.GetDesiredState(ctx, path)
 	roles, accepted := resolveRolesAndAccepted(hexaClass, desired)
-	return clinic.ComputePatternScan(report.Architecture.Services, report.Architecture.Edges, report.Cycles, classes, impls, roles, accepted), nil
+	patternReport := clinic.ComputePatternScan(report.Architecture.Services, report.Architecture.Edges, report.Cycles, classes, impls, roles, accepted)
+
+	// Enrich with call graph if available (Feature Envy move targets, God Component split suggestions).
+	da := analysis.NewDeepFallback(path)
+	if cg, cgErr := da.CallGraph(path, analysis.CallGraphOpts{Depth: analysis.DefaultCallGraphDepth}); cgErr == nil && cg != nil {
+		clinic.EnrichWithCallGraph(patternReport, cg.Edges)
+	}
+
+	return patternReport, nil
 }
 
 func (p *Protocol) GetPatternCatalog(filter string) *clinic.PatternCatalogReport {

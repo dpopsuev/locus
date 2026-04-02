@@ -198,8 +198,8 @@ func checkPresets(t *testing.T, m *Manifest, root, intent string) {
 }
 
 func hasDetection(detections []clinic.PatternDetection, id string) bool {
-	for _, d := range detections {
-		if d.PatternID == id {
+	for i := range detections {
+		if detections[i].PatternID == id {
 			return true
 		}
 	}
