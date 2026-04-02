@@ -361,6 +361,46 @@ func TestGetPatternCatalog_FilterCaseInsensitive(t *testing.T) {
 	}
 }
 
+func TestGetPatternCatalog_SingleEntryHasSteps(t *testing.T) {
+	report := GetPatternCatalog("god_component")
+
+	if len(report.Entries) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(report.Entries))
+	}
+	entry := report.Entries[0]
+	if len(entry.Steps) == 0 {
+		t.Error("expected Steps to be populated for single exact-match entry")
+	}
+	if len(entry.Examples) == 0 {
+		t.Error("expected Examples to be populated for single exact-match entry")
+	}
+}
+
+func TestGetPatternCatalog_MultiEntryStripsVerbose(t *testing.T) {
+	report := GetPatternCatalog("smell")
+
+	for _, e := range report.Entries {
+		if len(e.Steps) != 0 {
+			t.Errorf("expected Steps to be nil for multi-entry result, got %d steps on %s", len(e.Steps), e.ID)
+		}
+		if len(e.Examples) != 0 {
+			t.Errorf("expected Examples to be nil for multi-entry result, got %d examples on %s", len(e.Examples), e.ID)
+		}
+	}
+}
+
+func TestGetPatternCatalog_AllSmellsHaveSteps(t *testing.T) {
+	// Verify every smell in the catalog has remediation steps defined.
+	for _, e := range patternCatalog {
+		if e.Kind != PatternKindSmell {
+			continue
+		}
+		if len(e.Steps) == 0 {
+			t.Errorf("smell %q missing Steps", e.ID)
+		}
+	}
+}
+
 func TestCoverageGap(t *testing.T) {
 	// Component with fan-in > 3 but no edges from test packages → coverage_gap.
 	services := []arch.ArchService{

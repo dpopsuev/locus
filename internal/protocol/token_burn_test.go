@@ -105,6 +105,28 @@ func TestTokenBurn_Preset(t *testing.T) {
 	}
 }
 
+func TestTokenBurn_PatternCatalog(t *testing.T) {
+	p, _ := setupBurnTest(t)
+
+	// Full catalog (Steps/Examples stripped).
+	full := p.GetPatternCatalog("")
+	fullStr := fmt.Sprintf("%v", full)
+	tokens := tokenCount(fullStr)
+	t.Logf("Pattern catalog (all): %d tokens (%d chars)", tokens, len(fullStr))
+	if tokens > 2000 {
+		t.Errorf("full catalog too large: %d tokens (target <2000)", tokens)
+	}
+
+	// Single entry by ID (Steps/Examples included).
+	single := p.GetPatternCatalog("god_component")
+	singleStr := fmt.Sprintf("%v", single)
+	singleTokens := tokenCount(singleStr)
+	t.Logf("Pattern catalog (god_component): %d tokens (%d chars)", singleTokens, len(singleStr))
+	if singleTokens > 800 {
+		t.Errorf("single entry too large: %d tokens (target <800)", singleTokens)
+	}
+}
+
 func TestTokenBurn_DensityTable(t *testing.T) {
 	p, path := setupBurnTest(t)
 
