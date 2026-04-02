@@ -892,7 +892,7 @@ func (p *Protocol) renderPresetNormative(ctx context.Context, b *strings.Builder
 		fmt.Fprintf(b, "- [%s] %s → %s (depth %d→%d)\n", v.Severity, v.From, v.To, v.FromDepth, v.ToDepth)
 	}
 
-	tbReport := constraint.ComputeTrustBoundaries(report.Architecture.Services, report.Architecture.Edges)
+	tbReport := constraint.ComputeTrustBoundaries(report.Architecture.Services, report.Architecture.Edges, desiredRolesForTrust(ctx, p, path))
 	fmt.Fprintf(b, "\n## Trust Boundaries\n%s\n", tbReport.Summary)
 
 	if desired, _ := p.db.GetDesiredState(ctx, path); desired != nil && len(desired.Constraints) > 0 {
@@ -942,7 +942,7 @@ func (p *Protocol) renderPresetFullClinic(ctx context.Context, b *strings.Builde
 	idReport := constraint.ComputeImportDirection(report.Architecture.Edges, report.ImportDepth)
 	fmt.Fprintf(b, "- Import direction: %s\n", idReport.Summary)
 
-	tbReport := constraint.ComputeTrustBoundaries(report.Architecture.Services, report.Architecture.Edges)
+	tbReport := constraint.ComputeTrustBoundaries(report.Architecture.Services, report.Architecture.Edges, desiredRolesForTrust(ctx, p, path))
 	fmt.Fprintf(b, "- Trust zones: %s\n", tbReport.Summary)
 
 	spots := report.HotSpots
@@ -1507,7 +1507,7 @@ func (p *Protocol) GetTrustBoundaries(ctx context.Context, path string, cacheKey
 	if err != nil {
 		return nil, err
 	}
-	return constraint.ComputeTrustBoundaries(report.Architecture.Services, report.Architecture.Edges), nil
+	return constraint.ComputeTrustBoundaries(report.Architecture.Services, report.Architecture.Edges, desiredRolesForTrust(ctx, p, path)), nil
 }
 
 // --- Code Health Clinic methods ---
@@ -2023,4 +2023,14 @@ func changedFilesSince(repoPath, since string) ([]string, error) {
 		}
 	}
 	return files, nil
+}
+
+// desiredRolesForTrust returns the desired-state roles map for trust boundary detection.
+// Returns nil if no desired state is configured (falls back to heuristics).
+func desiredRolesForTrust(ctx context.Context, p *Protocol, path string) map[string]string {
+	desired, err := p.db.GetDesiredState(ctx, path)
+	if err != nil || desired == nil {
+		return nil
+	}
+	return desired.Roles
 }

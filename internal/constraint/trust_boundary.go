@@ -8,6 +8,16 @@ import (
 	"github.com/dpopsuev/locus/internal/arch"
 )
 
+// Trust zone names.
+const (
+	zoneEntrypoint = "entrypoint"
+	zoneBoundary   = "boundary"
+	zoneDomain     = "domain"
+	zoneData       = "data"
+	zoneInfra      = "infra"
+	zonePort       = "port"
+)
+
 // TrustZoneInfo describes which trust zone a component belongs to and why.
 type TrustZoneInfo struct {
 	Component string `json:"component"`
@@ -24,7 +34,9 @@ type TrustBoundaryReport struct {
 
 // ComputeTrustBoundaries infers trust zones from package name patterns and edge targets,
 // then counts boundary crossings between different zones.
-func ComputeTrustBoundaries(services []arch.ArchService, edges []arch.ArchEdge) *TrustBoundaryReport {
+// If desiredRoles is non-nil, components with explicit role assignments are classified
+// by their desired role instead of name heuristics (BUG-25 + BUG-27).
+func ComputeTrustBoundaries(services []arch.ArchService, edges []arch.ArchEdge, desiredRoles map[string]string) *TrustBoundaryReport {
 	// Build a set of edge targets per component for boundary detection.
 	edgeTargets := make(map[string]map[string]bool)
 	for _, e := range edges {
@@ -39,7 +51,7 @@ func ComputeTrustBoundaries(services []arch.ArchService, edges []arch.ArchEdge) 
 	zones := make([]TrustZoneInfo, 0, len(services))
 	for i := range services {
 		svc := &services[i]
-		zone, reason := inferTrustZone(svc.Name, edgeTargets[svc.Name])
+		zone, reason := inferTrustZone(svc.Name, edgeTargets[svc.Name], desiredRoles)
 		zoneMap[svc.Name] = zone
 		zones = append(zones, TrustZoneInfo{
 			Component: svc.Name,
@@ -81,25 +93,55 @@ func ComputeTrustBoundaries(services []arch.ArchService, edges []arch.ArchEdge) 
 	}
 }
 
-// inferTrustZone classifies a component name into a trust zone.
-func inferTrustZone(name string, targets map[string]bool) (zone, reason string) {
+// inferTrustZone classifies a component into a trust zone.
+// If desiredRoles contains an explicit role for this component, use it.
+// Otherwise fall back to name heuristics.
+func inferTrustZone(name string, targets map[string]bool, desiredRoles map[string]string) (zone, reason string) {
+	// BUG-25 + BUG-27: check desired_state roles first.
+	if desiredRoles != nil {
+		if role, ok := desiredRoles[name]; ok {
+			return roleToZone(role), "desired_state role: " + role
+		}
+	}
+
 	lower := strings.ToLower(name)
 
 	switch {
 	case strings.Contains(lower, "cmd") || strings.HasPrefix(lower, "cmd/"):
-		return "entrypoint", "cmd package"
-
-	case strings.Contains(lower, "internal"):
-		return "internal", "internal package path"
+		return zoneEntrypoint, "cmd package"
 
 	case containsAny(lower, "store", "repo", "db", "database", "persist", "cache"):
-		return "data", "data/storage package"
+		return zoneData, "data/storage package"
+
+	case containsAny(lower, "mcp", "grpc", "http", "api", "handler", "server", "client"):
+		return zoneBoundary, "name contains boundary keyword"
+
+	case containsAny(lower, "config", "infra", "deploy", "migration"):
+		return zoneInfra, "name contains infrastructure keyword"
 
 	case hasBoundaryTarget(targets):
-		return "boundary", "imports network/RPC packages"
+		return zoneBoundary, "imports network/RPC packages"
 
 	default:
-		return "domain", "general domain logic"
+		return zoneDomain, "general domain logic"
+	}
+}
+
+// roleToZone maps a hexagonal role to a trust zone.
+func roleToZone(role string) string {
+	switch strings.ToLower(role) {
+	case "entrypoint", "entry":
+		return zoneEntrypoint
+	case "adapter", "boundary":
+		return zoneBoundary
+	case "infra", "infrastructure":
+		return zoneInfra
+	case "port":
+		return zonePort
+	case "data", "store", "repo":
+		return zoneData
+	default:
+		return zoneDomain
 	}
 }
 
