@@ -2,6 +2,8 @@ package survey
 
 import (
 	"bufio"
+	"context"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -11,6 +13,18 @@ import (
 	"github.com/BurntSushi/toml"
 
 	"github.com/dpopsuev/locus/internal/model"
+)
+
+// Slog attribute keys.
+const (
+	logKeyPath    = "path"
+	logKeyMember  = "member"
+	logKeyDirs    = "dirs"
+	logKeyName    = "name"
+	logKeyDir     = "dir"
+	logKeyCrates  = "crates"
+	logKeyMembers = "members"
+	logKeyError   = "error"
 )
 
 // RustScanner extracts structural metadata from Rust projects by parsing
@@ -43,8 +57,12 @@ func (s *RustScanner) Scan(root string) (*model.Project, error) {
 		return nil, err
 	}
 
+	cargoPath := filepath.Join(absRoot, "Cargo.toml")
+	slog.LogAttrs(context.Background(), slog.LevelDebug, "rust scanner: reading manifest", slog.String(logKeyPath, cargoPath))
+
 	var manifest cargoManifest
-	if _, err := toml.DecodeFile(filepath.Join(absRoot, "Cargo.toml"), &manifest); err != nil {
+	if _, err := toml.DecodeFile(cargoPath, &manifest); err != nil {
+		slog.LogAttrs(context.Background(), slog.LevelDebug, "rust scanner: failed to read Cargo.toml", slog.String(logKeyPath, cargoPath), slog.Any(logKeyError, err))
 		return nil, err
 	}
 
@@ -55,8 +73,10 @@ func (s *RustScanner) Scan(root string) (*model.Project, error) {
 	}
 
 	if manifest.Workspace != nil {
+		slog.LogAttrs(context.Background(), slog.LevelDebug, "rust scanner: workspace detected", slog.Any(logKeyMembers, manifest.Workspace.Members))
 		return s.scanWorkspace(absRoot, manifest, proj)
 	}
+	slog.LogAttrs(context.Background(), slog.LevelDebug, "rust scanner: single crate mode", slog.String(logKeyName, proj.Path))
 	return s.scanSingleCrate(absRoot, manifest, proj)
 }
 
@@ -69,17 +89,29 @@ func (s *RustScanner) scanWorkspace(root string, manifest cargoManifest, proj *m
 	crates := make([]crateInfo, 0, len(manifest.Workspace.Members))
 
 	for _, member := range manifest.Workspace.Members {
-		memberDir := filepath.Join(root, member)
-		var cm cargoManifest
-		if _, err := toml.DecodeFile(filepath.Join(memberDir, "Cargo.toml"), &cm); err != nil {
+		// Resolve globs (e.g., "crates/*") to actual directories.
+		memberDirs, err := resolveWorkspaceMember(root, member)
+		if err != nil {
+			slog.LogAttrs(context.Background(), slog.LevelDebug, "rust scanner: failed to resolve member", slog.String(logKeyMember, member), slog.Any(logKeyError, err))
 			continue
 		}
-		if cm.Package == nil {
-			continue
+		slog.LogAttrs(context.Background(), slog.LevelDebug, "rust scanner: member resolved", slog.String(logKeyMember, member), slog.Int(logKeyDirs, len(memberDirs)))
+		for _, memberDir := range memberDirs {
+			var cm cargoManifest
+			if _, err := toml.DecodeFile(filepath.Join(memberDir, "Cargo.toml"), &cm); err != nil {
+				slog.LogAttrs(context.Background(), slog.LevelDebug, "rust scanner: failed to read member Cargo.toml", slog.String(logKeyDir, memberDir), slog.Any(logKeyError, err))
+				continue
+			}
+			if cm.Package == nil {
+				slog.LogAttrs(context.Background(), slog.LevelDebug, "rust scanner: member has no [package] section", slog.String(logKeyDir, memberDir))
+				continue
+			}
+			slog.LogAttrs(context.Background(), slog.LevelDebug, "rust scanner: discovered crate", slog.String(logKeyName, cm.Package.Name), slog.String(logKeyDir, memberDir))
+			crateNames[cm.Package.Name] = true
+			crates = append(crates, crateInfo{name: cm.Package.Name, dir: memberDir})
 		}
-		crateNames[cm.Package.Name] = true
-		crates = append(crates, crateInfo{name: cm.Package.Name, dir: memberDir})
 	}
+	slog.LogAttrs(context.Background(), slog.LevelDebug, "rust scanner: workspace scan complete", slog.Int(logKeyCrates, len(crates)))
 
 	for _, c := range crates {
 		var cm cargoManifest
@@ -166,6 +198,31 @@ func (s *RustScanner) extractRustSymbols(crateDir string, ns *model.Namespace) {
 		}
 		return nil
 	})
+}
+
+// resolveWorkspaceMember expands a workspace member pattern to actual directories.
+// Handles both literal paths ("crate-a") and globs ("crates/*").
+func resolveWorkspaceMember(root, member string) ([]string, error) {
+	pattern := filepath.Join(root, member)
+	// If no glob characters, return as-is (literal path).
+	if !strings.ContainsAny(member, "*?[") {
+		return []string{pattern}, nil
+	}
+	// Expand glob pattern.
+	matches, err := filepath.Glob(pattern)
+	if err != nil {
+		return nil, err
+	}
+	// Filter to directories only (Cargo members must be directories).
+	dirs := make([]string, 0, len(matches))
+	for _, m := range matches {
+		info, statErr := os.Stat(m)
+		if statErr == nil && info.IsDir() {
+			dirs = append(dirs, m)
+		}
+	}
+	sort.Strings(dirs)
+	return dirs, nil
 }
 
 func parseCargoDep(v interface{}) cargoDep {

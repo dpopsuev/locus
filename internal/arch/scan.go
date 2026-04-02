@@ -2,8 +2,10 @@ package arch
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -83,6 +85,13 @@ const (
 	MaxHotSpotsMarkdown = 10
 )
 
+// Slog attribute keys.
+const (
+	logKeyPath       = "path"
+	logKeyLanguage   = "language"
+	logKeyNamespaces = "namespaces"
+)
+
 // HotSpot identifies a component with high fan-in, high churn, and/or deep nesting.
 type HotSpot struct {
 	Component string `json:"component"`
@@ -134,6 +143,12 @@ func ScanAndBuild(root string, opts ScanOpts) (*ContextReport, error) {
 	if err != nil {
 		return nil, fmt.Errorf("survey scan: %w", err)
 	}
+
+	slog.LogAttrs(context.Background(), slog.LevelDebug, "scan: project scanned",
+		slog.String(logKeyPath, proj.Path),
+		slog.Any(logKeyLanguage, proj.Language),
+		slog.Int(logKeyNamespaces, len(proj.Namespaces)),
+	)
 
 	modPath := DetectProjectPath(root)
 	if modPath == "" {

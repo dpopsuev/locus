@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -42,6 +43,7 @@ const (
 	logKeyVersion   = "version"
 	logKeyTransport = "transport"
 	logKeyAddr      = "addr"
+	logKeyLevel     = "level"
 )
 
 func newProto() *protocol.Protocol {
@@ -63,6 +65,10 @@ architecture, dependency graph, git history, churn, hot spots, symbols,
 .cursor/ rules and skills -- via CLI or MCP server.
 
 No ceremony required. No .mos directory. Just point and go.`,
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		initLogger()
+		slog.LogAttrs(context.Background(), slog.LevelDebug, "logger initialized", slog.String(logKeyLevel, os.Getenv("LOCUS_LOG_LEVEL")))
+	},
 }
 
 var versionCmd = &cobra.Command{
@@ -128,7 +134,6 @@ Tools: scan_project, get_dependencies, get_impact, get_coupling_table,
        codograph_remote, get_codograph_history, diff_branches,
        get_cycles, render_diagram, triage.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		initLogger()
 		roots := serveFlags.workspaces
 		if len(roots) == 0 {
 			cwd, _ := os.Getwd()
