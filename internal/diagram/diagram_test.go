@@ -158,6 +158,31 @@ func TestRenderTree(t *testing.T) {
 	assertContains(t, out, "root")
 	assertContains(t, out, "project")
 	assertContains(t, out, "internal")
+	// Top symbols are shown as sub-nodes.
+	assertContains(t, out, "Run")
+	assertContains(t, out, "Config")
+	assertContains(t, out, "DB")
+}
+
+func TestRenderTreeDarkTheme(t *testing.T) {
+	out, err := Render(Input{Report: testReport()}, Options{Type: "tree", Theme: "dark"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertContains(t, out, "%%{init:")
+	assertContains(t, out, "'primaryColor': '#2D3748'")
+}
+
+func TestRenderTreeTopN(t *testing.T) {
+	out, err := Render(Input{Report: testReport()}, Options{Type: "tree", TopN: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// internal/core has [Run, Config, New] — with TopN=1, only "Config" (alphabetically first).
+	assertContains(t, out, "Config")
+	if strings.Count(out, "                ") > 5 {
+		t.Error("TopN=1 should limit symbol sub-nodes")
+	}
 }
 
 func TestRenderUnknownType(t *testing.T) {
