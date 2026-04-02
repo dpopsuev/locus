@@ -14,7 +14,6 @@ type ArchService struct {
 	Name       string
 	Package    string
 	TrustZone  string
-	Exposes    []string
 	Symbols    []string
 	Churn      int
 	LOC        int     `json:"loc,omitempty"`
@@ -29,7 +28,6 @@ type ArchEdge struct {
 	From       string
 	To         string
 	Protocol   string
-	Trigger    string
 	Weight     int
 	CallSites  int
 	LOCSurface int
@@ -444,9 +442,6 @@ func RenderMermaid(m ArchModel) string {
 		fromID := mermaidID(e.From)
 		toID := mermaidID(e.To)
 		edgeLabel := e.Protocol
-		if edgeLabel == "" {
-			edgeLabel = e.Trigger
-		}
 		if e.Weight > 0 {
 			edgeLabel = fmt.Sprintf("%s(%d)", edgeLabel, e.Weight)
 		}
