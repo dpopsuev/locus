@@ -1448,6 +1448,20 @@ func (p *Protocol) GetImpact(ctx context.Context, path, component string, cacheK
 	)
 }
 
+func (p *Protocol) GetWhatIf(_ context.Context, path string, moves []impact.FileMove, cacheKey ...string) (*impact.GraphDelta, error) {
+	path = p.resolvePath(path)
+	report, err := p.getOrScan(path, cacheKey...)
+	if err != nil {
+		return nil, err
+	}
+	return impact.ComputeWhatIf(
+		report.Architecture.Services,
+		report.Architecture.Edges,
+		report.Cycles,
+		moves,
+	)
+}
+
 func (p *Protocol) GetGaps(ctx context.Context, path string) (*constraint.GapReport, error) {
 	path = p.resolvePath(path)
 	report, err := p.getOrScan(path)

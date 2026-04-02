@@ -13,6 +13,7 @@ import (
 	"github.com/dpopsuev/locus/internal/arch"
 	"github.com/dpopsuev/locus/internal/clinic"
 	"github.com/dpopsuev/locus/internal/diagram"
+	"github.com/dpopsuev/locus/internal/impact"
 	"github.com/dpopsuev/locus/internal/protocol"
 	"github.com/dpopsuev/locus/internal/store"
 	"github.com/dpopsuev/locus/internal/triage"
@@ -79,6 +80,7 @@ const (
 	ActionSOLIDScan        = "solid_scan"
 	ActionSymbolQuality    = "symbol_quality"
 	ActionVocabMap         = "vocab_map"
+	ActionWhatIf           = "what_if"
 )
 
 // Coupling view names.
@@ -257,29 +259,30 @@ type codographActionInput struct {
 }
 
 type analysisActionInput struct {
-	Action   string `json:"action" jsonschema:"required,deps | impact | coupling | cycles | violations | scan_diff | coverage | api_surface | conventions | gaps | blast_radius | import_direction | trust_boundaries | budgets | mod_dependencies | symbol_blast | diff_intelligence | interface_metrics | pattern_scan | pattern_catalog | hexa_validate | solid_scan | symbol_quality | vocab_map"`
+	Action   string `json:"action" jsonschema:"required,deps | impact | coupling | cycles | violations | scan_diff | coverage | api_surface | conventions | gaps | blast_radius | import_direction | trust_boundaries | budgets | mod_dependencies | symbol_blast | diff_intelligence | interface_metrics | pattern_scan | pattern_catalog | hexa_validate | solid_scan | symbol_quality | vocab_map | what_if"`
 	Path     string `json:"path,omitempty" jsonschema:"absolute path to local repository (defaults to workspace root)"`
 	CacheKey string `json:"cache_key,omitempty" jsonschema:"cache key from scan_remote (use instead of path for remote repos)"`
 
-	Component string   `json:"component,omitempty" jsonschema:"component path for deps/impact/coupling edges"`
-	Symbol    string   `json:"symbol,omitempty" jsonschema:"symbol name for callers reverse lookup"`
-	BeforeSHA string   `json:"before_sha,omitempty" jsonschema:"git SHA of earlier scan for scan_diff"`
-	AfterSHA  string   `json:"after_sha,omitempty" jsonschema:"git SHA of later scan for scan_diff (default: HEAD)"`
-	SortBy    string   `json:"sort_by,omitempty" jsonschema:"sort field for coupling table"`
-	TopN      int      `json:"top_n,omitempty" jsonschema:"limit results to top N entries"`
-	View      string   `json:"view,omitempty" jsonschema:"coupling view: hot_spots for risk areas, edges for edge list"`
-	ChurnDays int      `json:"churn_days,omitempty" jsonschema:"git history window in days (coupling hot_spots)"`
-	Layers    []string `json:"layers,omitempty" jsonschema:"ordered layer names for purity checking (cycles)"`
-	Threshold float64  `json:"threshold,omitempty" jsonschema:"minimum coverage threshold to flag (coverage)"`
-	Trusted   []string `json:"trusted,omitempty" jsonschema:"trusted import prefixes to exclude (api_surface)"`
-	Format    string   `json:"format,omitempty" jsonschema:"output format: json (default) or summary (concise <500 tokens)"`
-	PathB     string   `json:"path_b,omitempty" jsonschema:"second repo path for cross_repo comparison"`
-	CacheKeyB string   `json:"cache_key_b,omitempty" jsonschema:"second cache key for cross_repo comparison"`
-	Preset    string   `json:"preset,omitempty" jsonschema:"preset name: architecture_review, health_check, onboarding, pre_pr, normative, pre_refactor, full_clinic, code_health"`
-	Query     string   `json:"query,omitempty" jsonschema:"natural language architecture question"`
-	Files     []string `json:"files,omitempty" jsonschema:"changed files for blast_radius analysis"`
-	Since     string   `json:"since,omitempty" jsonschema:"git ref for blast_radius (e.g. HEAD~1, main)"`
-	Filter    string   `json:"filter,omitempty" jsonschema:"filter for pattern_catalog: pattern, smell, or name substring"`
+	Component string            `json:"component,omitempty" jsonschema:"component path for deps/impact/coupling edges"`
+	Symbol    string            `json:"symbol,omitempty" jsonschema:"symbol name for callers reverse lookup"`
+	BeforeSHA string            `json:"before_sha,omitempty" jsonschema:"git SHA of earlier scan for scan_diff"`
+	AfterSHA  string            `json:"after_sha,omitempty" jsonschema:"git SHA of later scan for scan_diff (default: HEAD)"`
+	SortBy    string            `json:"sort_by,omitempty" jsonschema:"sort field for coupling table"`
+	TopN      int               `json:"top_n,omitempty" jsonschema:"limit results to top N entries"`
+	View      string            `json:"view,omitempty" jsonschema:"coupling view: hot_spots for risk areas, edges for edge list"`
+	ChurnDays int               `json:"churn_days,omitempty" jsonschema:"git history window in days (coupling hot_spots)"`
+	Layers    []string          `json:"layers,omitempty" jsonschema:"ordered layer names for purity checking (cycles)"`
+	Threshold float64           `json:"threshold,omitempty" jsonschema:"minimum coverage threshold to flag (coverage)"`
+	Trusted   []string          `json:"trusted,omitempty" jsonschema:"trusted import prefixes to exclude (api_surface)"`
+	Format    string            `json:"format,omitempty" jsonschema:"output format: json (default) or summary (concise <500 tokens)"`
+	PathB     string            `json:"path_b,omitempty" jsonschema:"second repo path for cross_repo comparison"`
+	CacheKeyB string            `json:"cache_key_b,omitempty" jsonschema:"second cache key for cross_repo comparison"`
+	Preset    string            `json:"preset,omitempty" jsonschema:"preset name: architecture_review, health_check, onboarding, pre_pr, normative, pre_refactor, full_clinic, code_health"`
+	Query     string            `json:"query,omitempty" jsonschema:"natural language architecture question"`
+	Files     []string          `json:"files,omitempty" jsonschema:"changed files for blast_radius analysis"`
+	Since     string            `json:"since,omitempty" jsonschema:"git ref for blast_radius (e.g. HEAD~1, main)"`
+	Filter    string            `json:"filter,omitempty" jsonschema:"filter for pattern_catalog: pattern, smell, or name substring"`
+	Moves     []impact.FileMove `json:"moves,omitempty" jsonschema:"list of hypothetical component moves for what_if (from/to, empty to = deletion)"`
 }
 
 // --- dispatchers ---
@@ -383,7 +386,7 @@ func (h *handler) handleAnalysis(ctx context.Context, req *sdkmcp.CallToolReques
 		return h.dispatchAnalysisLookup(ctx, &in)
 	case ActionBlastRadius, ActionImportDirection, ActionTrustBoundaries,
 		ActionModDependencies, ActionBudgets, ActionSymbolBlast, ActionDiffIntelligence,
-		ActionInterfaceMetrics:
+		ActionInterfaceMetrics, ActionWhatIf:
 		return h.dispatchAnalysisAdvanced(ctx, &in)
 	case ActionPatternScan, ActionPatternCatalog, ActionHexaValidate,
 		ActionSOLIDScan, ActionSymbolQuality, ActionVocabMap:
@@ -516,6 +519,12 @@ func (h *handler) dispatchAnalysisAdvanced(ctx context.Context, in *analysisActi
 		return jsonResult(r)
 	case ActionInterfaceMetrics:
 		r, err := h.proto.GetInterfaceMetrics(ctx, in.Path, in.CacheKey)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
+	case ActionWhatIf:
+		r, err := h.proto.GetWhatIf(ctx, in.Path, in.Moves, in.CacheKey)
 		if err != nil {
 			return nil, nil, err
 		}
