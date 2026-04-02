@@ -658,5 +658,6 @@ func initLogger() {
 // Execute sets the version string and runs the root cobra command.
 func Execute(v string) error {
 	version = v
+	config.Version = v // BUG-30: cache busting by Locus version
 	return rootCmd.Execute()
 }

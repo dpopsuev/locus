@@ -18,14 +18,22 @@ import (
 var ErrEmptySHA = errors.New("empty SHA")
 
 // ScanCache stores and retrieves architecture scan results on the filesystem,
-// keyed by (repo path, git SHA). Multiple SHAs can coexist per repo,
-// enabling branch-aware cache hits (scan A, scan B, then re-read A).
+// keyed by (repo path, git SHA, locus version). The version component ensures
+// scanner bug fixes invalidate stale cache entries (BUG-30).
 type ScanCache struct {
-	root string // e.g. ~/.locus/cache
+	root    string // e.g. ~/.locus/cache
+	version string // locus build version for cache busting
 }
 
+// New creates a ScanCache. The version string is included in cache keys
+// so scanner fixes invalidate stale entries.
 func New(root string) *ScanCache {
-	return &ScanCache{root: root}
+	return &ScanCache{root: root, version: "dev"}
+}
+
+// NewVersioned creates a ScanCache with a specific version for cache busting.
+func NewVersioned(root, version string) *ScanCache {
+	return &ScanCache{root: root, version: version}
 }
 
 func (c *ScanCache) Root() string { return c.root }
@@ -114,7 +122,9 @@ func (c *ScanCache) Invalidate(repoPath string) error {
 }
 
 func (c *ScanCache) entryPath(repoPath, sha string) string {
-	return filepath.Join(c.root, RepoHash(repoPath), sha+".json.gz")
+	// BUG-30: include version in filename so scanner fixes bust the cache.
+	vHash := fmt.Sprintf("%x", sha256.Sum256([]byte(c.version)))[:8]
+	return filepath.Join(c.root, RepoHash(repoPath), sha+"-"+vHash+".json.gz")
 }
 
 // RepoHash returns a deterministic hash for a repository path.
