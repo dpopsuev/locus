@@ -1488,6 +1488,19 @@ func (p *Protocol) GetLeverage(_ context.Context, path, target string, cacheKey 
 	)
 }
 
+func (p *Protocol) GetRiskScores(_ context.Context, path string, cacheKey ...string) (*impact.RiskReport, error) {
+	path = p.resolvePath(path)
+	report, err := p.getOrScan(path, cacheKey...)
+	if err != nil {
+		return nil, err
+	}
+	return impact.ComputeRiskScores(
+		report.Architecture.Services,
+		report.Architecture.Edges,
+		report.Coverage,
+	), nil
+}
+
 func (p *Protocol) GetBudgets(ctx context.Context, path string, cacheKey ...string) (*constraint.BudgetReport, error) {
 	path = p.resolvePath(path)
 	report, err := p.getOrScan(path, cacheKey...)

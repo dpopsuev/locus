@@ -61,6 +61,7 @@ const (
 	ActionQuery      = "query"
 	ActionPreset     = "preset"
 	ActionScanDiff   = "scan_diff"
+	ActionRiskScores = "risk_scores"
 )
 
 // Clinic actions.
@@ -280,7 +281,7 @@ type codographActionInput struct {
 }
 
 type analysisInput struct {
-	Action    string   `json:"action" jsonschema:"required,deps | impact | coupling | cycles | violations | callers | component | search | query | preset | scan_diff"`
+	Action    string   `json:"action" jsonschema:"required,deps | impact | coupling | cycles | violations | callers | component | search | query | preset | scan_diff | risk_scores"`
 	Path      string   `json:"path,omitempty" jsonschema:"absolute path to local repository"`
 	CacheKey  string   `json:"cache_key,omitempty" jsonschema:"cache key from scan_remote"`
 	Component string   `json:"component,omitempty" jsonschema:"component path for deps/impact/coupling"`
@@ -413,6 +414,12 @@ func (h *handler) handleAnalysis(ctx context.Context, _ *sdkmcp.CallToolRequest,
 		return text(r), nil, nil
 	case ActionScanDiff:
 		r, err := h.proto.GetScanDiff(ctx, in.Path, in.BeforeSHA, in.AfterSHA)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
+	case ActionRiskScores:
+		r, err := h.proto.GetRiskScores(ctx, in.Path, in.CacheKey)
 		if err != nil {
 			return nil, nil, err
 		}
