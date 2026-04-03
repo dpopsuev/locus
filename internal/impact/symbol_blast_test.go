@@ -171,7 +171,7 @@ func TestComputeSymbolBlastRadius_RiskLevels(t *testing.T) {
 			if report.BlastRadius != tt.wantPct {
 				t.Errorf("blast radius: got %d, want %d", report.BlastRadius, tt.wantPct)
 			}
-			if report.RiskLevel != tt.wantRisk {
+			if string(report.RiskLevel) != tt.wantRisk {
 				t.Errorf("risk level: got %s, want %s", report.RiskLevel, tt.wantRisk)
 			}
 		})

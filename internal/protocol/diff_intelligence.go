@@ -7,17 +7,17 @@ import (
 	"strings"
 
 	"github.com/dpopsuev/locus/internal/analysis"
-	"github.com/dpopsuev/locus/internal/impact"
+	"github.com/dpopsuev/locus/internal/port"
 )
 
 // SemanticChange describes a symbol in a changed package and its caller impact.
 type SemanticChange struct {
-	Symbol        string `json:"symbol"`
-	Package       string `json:"package"`
-	ChangeType    string `json:"change_type"`
-	Description   string `json:"description"`
-	AffectedCount int    `json:"affected_count"`
-	Severity      string `json:"severity"`
+	Symbol        string        `json:"symbol"`
+	Package       string        `json:"package"`
+	ChangeType    string        `json:"change_type"`
+	Description   string        `json:"description"`
+	AffectedCount int           `json:"affected_count"`
+	Severity      port.Severity `json:"severity"`
 }
 
 // DiffIntelligenceReport holds semantic analysis of changed files against a call graph.
@@ -101,15 +101,15 @@ func ComputeDiffIntelligence(changedFiles []string, modulePath string, graph *an
 }
 
 // callerSeverity maps caller count to a severity level.
-func callerSeverity(count int) string {
+func callerSeverity(count int) port.Severity {
 	switch {
 	case count > 10:
-		return impact.RiskCritical
+		return port.SeverityCritical
 	case count > 3:
-		return impact.RiskHigh
+		return port.SeverityError
 	case count > 0:
-		return impact.RiskMedium
+		return port.SeverityWarning
 	default:
-		return impact.RiskLow
+		return port.SeverityInfo
 	}
 }

@@ -47,7 +47,7 @@ type PatternDetection struct {
 	Component       string           `json:"component"`
 	Confidence      float64          `json:"confidence"`
 	Evidence        []string         `json:"evidence"`
-	Severity        string           `json:"severity"`
+	Severity        port.Severity    `json:"severity"`
 	MoveTargets     []MoveTarget     `json:"move_targets,omitempty"`
 	SplitSuggestion *SplitSuggestion `json:"split_suggestion,omitempty"`
 }
@@ -830,7 +830,7 @@ func evaluateFeatureEnvy(svc arch.ArchService, edges []arch.ArchEdge) *PatternDe
 }
 
 // severityForDetection maps pattern kind and confidence to a severity level.
-func severityForDetection(kind PatternKind, confidence float64) string {
+func severityForDetection(kind PatternKind, confidence float64) port.Severity {
 	if kind == PatternKindPattern {
 		return port.SeverityInfo
 	}

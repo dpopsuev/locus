@@ -62,7 +62,7 @@ type SOLIDViolation struct {
 	Principle  SOLIDPrinciple `json:"principle"`
 	Component  string         `json:"component"`
 	Detail     string         `json:"detail"`
-	Severity   string         `json:"severity"`
+	Severity   port.Severity  `json:"severity"`
 	Suggestion string         `json:"suggestion"`
 }
 
@@ -158,7 +158,7 @@ func ComputeSRPViolations(services []arch.ArchService, edges []arch.ArchEdge, ro
 
 // srpSeverityByFanIn returns SRP severity based on fan-in (blast radius).
 // A component with many dependents is riskier to refactor.
-func srpSeverityByFanIn(fanIn int) string {
+func srpSeverityByFanIn(fanIn int) port.Severity {
 	switch {
 	case fanIn >= srpFanInHigh:
 		return port.SeverityCritical
@@ -234,7 +234,7 @@ func ComputeISPViolations(classes []analysis.ClassInfo, impls []analysis.ImplEdg
 
 		methodCount := len(c.Methods)
 
-		var baseSeverity string
+		var baseSeverity port.Severity
 		switch {
 		case methodCount > ispMethodsError:
 			baseSeverity = port.SeverityError
@@ -266,7 +266,7 @@ func ComputeISPViolations(classes []analysis.ClassInfo, impls []analysis.ImplEdg
 
 // ispSeverityByImplCount adjusts ISP severity based on implementor count.
 // A fat interface with many implementors is harder to refactor.
-func ispSeverityByImplCount(baseSeverity string, implCount int) string {
+func ispSeverityByImplCount(baseSeverity port.Severity, implCount int) port.Severity {
 	switch {
 	case implCount >= ispImplCountHigh:
 		return port.SeverityCritical
@@ -523,7 +523,7 @@ func ComputeSOLIDScan(
 }
 
 // severityRank returns a sort rank for severity (lower = more severe = first).
-func severityRank(severity string) int {
+func severityRank(severity port.Severity) int {
 	switch severity {
 	case port.SeverityCritical:
 		return 0

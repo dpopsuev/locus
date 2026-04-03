@@ -12,9 +12,9 @@ import (
 
 // GapEntry represents knowledge gaps for a single component.
 type GapEntry struct {
-	Component string   `json:"component"`
-	Gaps      []string `json:"gaps"`     // "no tests", "no docs", "low coverage"
-	Severity  string   `json:"severity"` // info, warning, critical
+	Component string        `json:"component"`
+	Gaps      []string      `json:"gaps"`     // "no tests", "no docs", "low coverage"
+	Severity  port.Severity `json:"severity"` // info, warning, critical
 }
 
 // GapReport holds the result of gap detection.

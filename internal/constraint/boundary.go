@@ -10,10 +10,10 @@ import (
 
 // BoundaryViolation records a single edge that violates a boundary rule.
 type BoundaryViolation struct {
-	From     string `json:"from"`
-	To       string `json:"to"`
-	Rule     string `json:"rule"`
-	Severity string `json:"severity"`
+	From     string        `json:"from"`
+	To       string        `json:"to"`
+	Rule     string        `json:"rule"`
+	Severity port.Severity `json:"severity"`
 }
 
 // CheckBoundaryRules checks edges against boundary rules and returns violations.

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/dpopsuev/locus/internal/analysis"
+	"github.com/dpopsuev/locus/internal/port"
 )
 
 func TestComputeDiffIntelligence_SingleFileWithCallers(t *testing.T) {
@@ -38,8 +39,8 @@ func TestComputeDiffIntelligence_SingleFileWithCallers(t *testing.T) {
 	if sc.AffectedCount != 2 {
 		t.Errorf("affected_count = %d, want 2", sc.AffectedCount)
 	}
-	if sc.Severity != "medium" {
-		t.Errorf("severity = %s, want medium", sc.Severity)
+	if sc.Severity != port.SeverityWarning {
+		t.Errorf("severity = %s, want warning", sc.Severity)
 	}
 	if sc.ChangeType != "modified" {
 		t.Errorf("change_type = %s, want modified", sc.ChangeType)
@@ -239,17 +240,17 @@ func TestCallerSeverity(t *testing.T) {
 		count int
 		want  string
 	}{
-		{0, "low"},
-		{1, "medium"},
-		{3, "medium"},
-		{4, "high"},
-		{10, "high"},
+		{0, "info"},
+		{1, "warning"},
+		{3, "warning"},
+		{4, "error"},
+		{10, "error"},
 		{11, "critical"},
 		{100, "critical"},
 	}
 	for _, tt := range tests {
 		got := callerSeverity(tt.count)
-		if got != tt.want {
+		if string(got) != tt.want {
 			t.Errorf("callerSeverity(%d) = %s, want %s", tt.count, got, tt.want)
 		}
 	}

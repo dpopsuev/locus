@@ -12,11 +12,11 @@ import (
 // ImportDirectionViolation represents a single import direction rule violation
 // where a shallow-depth component imports a deeper one.
 type ImportDirectionViolation struct {
-	From      string `json:"from"`
-	To        string `json:"to"`
-	FromDepth int    `json:"from_depth"`
-	ToDepth   int    `json:"to_depth"`
-	Severity  string `json:"severity"`
+	From      string        `json:"from"`
+	To        string        `json:"to"`
+	FromDepth int           `json:"from_depth"`
+	ToDepth   int           `json:"to_depth"`
+	Severity  port.Severity `json:"severity"`
 }
 
 // ImportDirectionReport holds the results of import direction validation.

@@ -66,12 +66,12 @@ type HexaComponent struct {
 
 // HexaViolation records a dependency that breaks hexagonal architecture rules.
 type HexaViolation struct {
-	From     string   `json:"from"`
-	To       string   `json:"to"`
-	FromRole HexaRole `json:"from_role"`
-	ToRole   HexaRole `json:"to_role"`
-	Rule     string   `json:"rule"`
-	Severity string   `json:"severity"`
+	From     string        `json:"from"`
+	To       string        `json:"to"`
+	FromRole HexaRole      `json:"from_role"`
+	ToRole   HexaRole      `json:"to_role"`
+	Rule     string        `json:"rule"`
+	Severity port.Severity `json:"severity"`
 }
 
 // HexaClassificationReport contains the classification of all components.
@@ -273,7 +273,7 @@ func ComputeHexaViolations(
 	}
 }
 
-func checkViolation(from, to HexaRole) (rule, severity string) {
+func checkViolation(from, to HexaRole) (rule string, severity port.Severity) {
 	switch {
 	case from == HexaRoleDomain && to == HexaRoleAdapter:
 		return "domain must not depend on adapter", port.SeverityError

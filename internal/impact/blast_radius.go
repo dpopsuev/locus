@@ -7,14 +7,7 @@ import (
 	"strings"
 
 	"github.com/dpopsuev/locus/internal/arch"
-)
-
-// Risk level constants used across protocol analysis.
-const (
-	RiskLow      = "low"
-	RiskMedium   = "medium"
-	RiskHigh     = "high"
-	RiskCritical = "critical"
+	"github.com/dpopsuev/locus/internal/port"
 )
 
 // BlastRadiusReport holds the aggregate blast radius for a set of changed files.
@@ -23,7 +16,7 @@ type BlastRadiusReport struct {
 	ChangedComponents  []string          `json:"changed_components"`
 	AffectedComponents []string          `json:"affected_components"`
 	BlastRadius        int               `json:"blast_radius"`
-	RiskLevel          string            `json:"risk_level"`
+	RiskLevel          port.RiskLevel    `json:"risk_level"`
 	PerComponent       []ComponentImpact `json:"per_component"`
 	Summary            string            `json:"summary"`
 }
@@ -56,7 +49,7 @@ func ComputeBlastRadius(
 	if len(files) == 0 {
 		return &BlastRadiusReport{
 			ChangedFiles: files,
-			RiskLevel:    RiskLow,
+			RiskLevel:    port.RiskLow,
 			Summary:      "no changed files",
 		}, nil
 	}
@@ -125,14 +118,14 @@ func ComputeBlastRadius(
 		blastRadius = len(allAffected) * 100 / total
 	}
 
-	riskLevel := RiskLow
+	riskLevel := port.RiskLow
 	switch {
 	case blastRadius >= 50:
-		riskLevel = RiskCritical
+		riskLevel = port.RiskCritical
 	case blastRadius >= 25:
-		riskLevel = RiskHigh
+		riskLevel = port.RiskHigh
 	case blastRadius >= 10:
-		riskLevel = RiskMedium
+		riskLevel = port.RiskMedium
 	}
 
 	summary := fmt.Sprintf("%d changed file(s) in %d component(s), %d/%d affected (%d%%), risk=%s",

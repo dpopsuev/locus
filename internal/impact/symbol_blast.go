@@ -16,7 +16,7 @@ type SymbolBlastReport struct {
 	TransCallers  []port.CallerSite `json:"transitive_callers"`
 	AffectedPkgs  []string          `json:"affected_packages"`
 	BlastRadius   int               `json:"blast_radius"`
-	RiskLevel     string            `json:"risk_level"`
+	RiskLevel     port.RiskLevel    `json:"risk_level"`
 	Summary       string            `json:"summary"`
 }
 

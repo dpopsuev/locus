@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+
+	"github.com/dpopsuev/locus/internal/port"
 )
 
 // Manifest defines the ground-truth expectations for a testkit fixture.
@@ -31,9 +33,9 @@ type ExpectedPattern struct {
 
 // ExpectedSmell declares a code smell that should be detected.
 type ExpectedSmell struct {
-	ID        string `json:"id"`
-	Component string `json:"component,omitempty"`
-	Severity  string `json:"severity,omitempty"`
+	ID        string        `json:"id"`
+	Component string        `json:"component,omitempty"`
+	Severity  port.Severity `json:"severity,omitempty"`
 }
 
 // ExpectedHexa declares hexagonal architecture expectations.

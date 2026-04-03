@@ -10,11 +10,11 @@ import (
 
 // BudgetViolation records a single metric exceeding its budget.
 type BudgetViolation struct {
-	Component string  `json:"component"`
-	Metric    string  `json:"metric"`
-	Actual    float64 `json:"actual"`
-	Budget    float64 `json:"budget"`
-	Severity  string  `json:"severity"`
+	Component string        `json:"component"`
+	Metric    string        `json:"metric"`
+	Actual    float64       `json:"actual"`
+	Budget    float64       `json:"budget"`
+	Severity  port.Severity `json:"severity"`
 }
 
 // BudgetReport summarizes budget compliance across all constrained components.

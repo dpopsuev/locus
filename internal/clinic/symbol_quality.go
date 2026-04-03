@@ -21,12 +21,12 @@ const minDomainPrefixLen = 3
 
 // SymbolIssue records a single naming problem found in an exported symbol.
 type SymbolIssue struct {
-	Symbol     string `json:"symbol"`
-	Package    string `json:"package"`
-	Issue      string `json:"issue"` // "abbreviation", "generic_name", "verbless_export"
-	Severity   string `json:"severity"`
-	FanIn      int    `json:"fan_in"`
-	Suggestion string `json:"suggestion,omitempty"`
+	Symbol     string        `json:"symbol"`
+	Package    string        `json:"package"`
+	Issue      string        `json:"issue"` // "abbreviation", "generic_name", "verbless_export"
+	Severity   port.Severity `json:"severity"`
+	FanIn      int           `json:"fan_in"`
+	Suggestion string        `json:"suggestion,omitempty"`
 }
 
 // SymbolQualityReport summarizes naming quality across all exported symbols.
@@ -324,7 +324,7 @@ func checkVerblessExport(sym, pkg string, svcFanIn int) []SymbolIssue {
 }
 
 // symbolSeverityOrder returns a numeric rank for sorting: error(0) < warning(1) < info(2).
-func symbolSeverityOrder(s string) int {
+func symbolSeverityOrder(s port.Severity) int {
 	switch s {
 	case port.SeverityError:
 		return 0

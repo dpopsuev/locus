@@ -3,15 +3,16 @@ package impact
 import (
 	"github.com/dpopsuev/locus/internal/arch"
 	"github.com/dpopsuev/locus/internal/graph"
+	"github.com/dpopsuev/locus/internal/port"
 )
 
 // ImpactResult holds the blast radius and risk for a component change.
 type ImpactResult struct {
-	Component   string   `json:"component"`
-	DirectDeps  []string `json:"direct_dependents"`
-	TransDeps   []string `json:"transitive_dependents"`
-	BlastRadius int      `json:"blast_radius"` // percentage of total components affected
-	RiskLevel   string   `json:"risk_level"`   // low, medium, high, critical
+	Component   string         `json:"component"`
+	DirectDeps  []string       `json:"direct_dependents"`
+	TransDeps   []string       `json:"transitive_dependents"`
+	BlastRadius int            `json:"blast_radius"` // percentage of total components affected
+	RiskLevel   port.RiskLevel `json:"risk_level"`   // low, medium, high, critical
 }
 
 // ComputeImpact computes the transitive blast radius for a component change.
@@ -57,15 +58,15 @@ func ComputeImpact(edges []arch.ArchEdge, services []arch.ArchService, component
 }
 
 // classifyRisk maps a blast radius percentage to a risk level string.
-func classifyRisk(blastRadius int) string {
+func classifyRisk(blastRadius int) port.RiskLevel {
 	switch {
 	case blastRadius >= 50:
-		return RiskCritical
+		return port.RiskCritical
 	case blastRadius >= 25:
-		return RiskHigh
+		return port.RiskHigh
 	case blastRadius >= 10:
-		return RiskMedium
+		return port.RiskMedium
 	default:
-		return RiskLow
+		return port.RiskLow
 	}
 }

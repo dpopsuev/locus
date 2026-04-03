@@ -1,9 +1,23 @@
 package port
 
+// Severity classifies the urgency of a violation or finding.
+type Severity string
+
 // Severity levels for violations and findings.
 const (
-	SeverityInfo     = "info"
-	SeverityWarning  = "warning"
-	SeverityError    = "error"
-	SeverityCritical = "critical"
+	SeverityInfo     Severity = "info"
+	SeverityWarning  Severity = "warning"
+	SeverityError    Severity = "error"
+	SeverityCritical Severity = "critical"
+)
+
+// RiskLevel classifies the impact risk of a change.
+type RiskLevel string
+
+// Risk level constants.
+const (
+	RiskLow      RiskLevel = "low"
+	RiskMedium   RiskLevel = "medium"
+	RiskHigh     RiskLevel = "high"
+	RiskCritical RiskLevel = "critical"
 )

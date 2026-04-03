@@ -62,7 +62,7 @@ func TestComputeBudgetViolations_Warning(t *testing.T) {
 		t.Fatalf("expected 2 failing, got %d", report.Failing)
 	}
 	for _, v := range report.Violations {
-		if v.Severity != "warning" {
+		if v.Severity != port.SeverityWarning {
 			t.Errorf("expected warning severity for %s, got %s", v.Metric, v.Severity)
 		}
 	}
@@ -92,7 +92,7 @@ func TestComputeBudgetViolations_Error(t *testing.T) {
 		t.Fatalf("expected 3 failing, got %d", report.Failing)
 	}
 	for _, v := range report.Violations {
-		if v.Severity != "error" {
+		if v.Severity != port.SeverityError {
 			t.Errorf("expected error severity for %s (actual=%.0f, budget=%.0f), got %s",
 				v.Metric, v.Actual, v.Budget, v.Severity)
 		}
@@ -123,7 +123,7 @@ func TestComputeBudgetViolations_MixedSeverity(t *testing.T) {
 
 	severityOf := make(map[string]string)
 	for _, v := range report.Violations {
-		severityOf[v.Metric] = v.Severity
+		severityOf[v.Metric] = string(v.Severity)
 	}
 
 	if severityOf["fan_in"] != "warning" {
