@@ -14,6 +14,8 @@ type Edge interface {
 	Target() string
 }
 
+// --- Domain types ---
+
 // Cycle is an ordered list of node names forming a circular dependency.
 type Cycle []string
 
@@ -21,9 +23,22 @@ type Cycle []string
 // Nodes participating in cycles get depth -1.
 type DepthMap map[string]int
 
+// CountMap maps node names to integer counts (fan-in, fan-out, churn, symbols).
+type CountMap map[string]int
+
+// NodeSet is a set of node names used for membership checks, visited tracking,
+// and skip lists in graph traversals.
+type NodeSet map[string]bool
+
+// AdjMap is an adjacency matrix mapping each node to its set of neighbors.
+// Used for forward, reverse, and undirected adjacency representations.
+type AdjMap map[string]map[string]bool
+
+// --- Algorithms ---
+
 // FanIn returns the number of incoming edges per node.
-func FanIn[E Edge](edges []E) map[string]int {
-	fi := make(map[string]int, len(edges))
+func FanIn[E Edge](edges []E) CountMap {
+	fi := make(CountMap, len(edges))
 	for _, e := range edges {
 		fi[e.Target()]++
 	}
@@ -31,8 +46,8 @@ func FanIn[E Edge](edges []E) map[string]int {
 }
 
 // FanOut returns the number of outgoing edges per node.
-func FanOut[E Edge](edges []E) map[string]int {
-	fo := make(map[string]int, len(edges))
+func FanOut[E Edge](edges []E) CountMap {
+	fo := make(CountMap, len(edges))
 	for _, e := range edges {
 		fo[e.Source()]++
 	}
@@ -40,8 +55,8 @@ func FanOut[E Edge](edges []E) map[string]int {
 }
 
 // ReverseAdj builds a reverse adjacency map: for each target, list all sources.
-func ReverseAdj[E Edge](edges []E) map[string]map[string]bool {
-	reverse := make(map[string]map[string]bool)
+func ReverseAdj[E Edge](edges []E) AdjMap {
+	reverse := make(AdjMap)
 	for _, e := range edges {
 		t := e.Target()
 		if reverse[t] == nil {
@@ -55,8 +70,8 @@ func ReverseAdj[E Edge](edges []E) map[string]map[string]bool {
 // BFS performs breadth-first search from seed nodes through adjacency,
 // returning all visited nodes. Only nodes in validSet are traversed;
 // nodes in skip are excluded.
-func BFS(seed map[string]bool, adj map[string]map[string]bool, validSet, skip map[string]bool) map[string]bool {
-	visited := make(map[string]bool, len(seed))
+func BFS(seed NodeSet, adj AdjMap, validSet, skip NodeSet) NodeSet {
+	visited := make(NodeSet, len(seed))
 	queue := make([]string, 0, len(seed))
 	for d := range seed {
 		visited[d] = true
@@ -79,7 +94,7 @@ func BFS(seed map[string]bool, adj map[string]map[string]bool, validSet, skip ma
 // color marking (white/gray/black). Returns cycles sorted for determinism.
 func DetectCycles[E Edge](edges []E) []Cycle {
 	adj := buildAdj(edges)
-	nodes := nodeSet(edges)
+	nodes := collectNodes(edges)
 
 	const (
 		white = 0
@@ -134,7 +149,7 @@ func DetectCycles[E Edge](edges []E) []Cycle {
 // to each node. Nodes participating in cycles get depth -1.
 func ImportDepth[E Edge](edges []E) DepthMap {
 	adj := buildAdj(edges)
-	nodes := nodeSet(edges)
+	nodes := collectNodes(edges)
 	inDeg := make(map[string]int, len(nodes))
 	for n := range nodes {
 		inDeg[n] = 0
@@ -197,7 +212,7 @@ func buildAdj[E Edge](edges []E) map[string][]string {
 	return adj
 }
 
-func nodeSet[E Edge](edges []E) map[string]bool {
+func collectNodes[E Edge](edges []E) map[string]bool {
 	nodes := make(map[string]bool)
 	for _, e := range edges {
 		nodes[e.Source()] = true

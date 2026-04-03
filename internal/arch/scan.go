@@ -119,8 +119,8 @@ type ContextReport struct {
 	Authors           map[string][]Author    `json:"authors,omitempty"`
 	FileHotSpots      []HotFile              `json:"file_hot_spots,omitempty"`
 	Anchors           []SemanticAnchor       `json:"anchors,omitempty"`
-	FanIn             map[string]int         `json:"fan_in,omitempty"`
-	FanOut            map[string]int         `json:"fan_out,omitempty"`
+	FanIn             graph.CountMap         `json:"fan_in,omitempty"`
+	FanOut            graph.CountMap         `json:"fan_out,omitempty"`
 }
 
 // ScanAndBuild scans any repository and produces a ContextReport.

@@ -3,17 +3,17 @@ package graph
 // Cohesion computes the edge density within a group of nodes.
 // Returns (actual edges) / (possible edges), where possible = n*(n-1)/2
 // for an undirected view. Returns 1.0 for groups with fewer than 2 nodes.
-func Cohesion(group []string, adj map[string]map[string]bool) float64 {
+func Cohesion(group []string, adj AdjMap) float64 {
 	n := len(group)
 	if n < 2 {
 		return 1.0
 	}
 	possibleEdges := n * (n - 1) / 2
-	groupSet := make(map[string]bool, n)
+	groupSet := make(NodeSet, n)
 	for _, s := range group {
 		groupSet[s] = true
 	}
-	counted := make(map[string]bool)
+	counted := make(NodeSet)
 	actualEdges := 0
 	for _, s := range group {
 		for neighbor := range adj[s] {
@@ -32,9 +32,9 @@ func Cohesion(group []string, adj map[string]map[string]bool) float64 {
 }
 
 // BFSGroup performs BFS from start through undirected adjacency, returning
-// all reachable nodes as a sorted group. Marks visited nodes in the
-// provided map to avoid re-processing across multiple calls.
-func BFSGroup(start string, adj map[string]map[string]bool, visited map[string]bool) []string {
+// all reachable nodes as a group. Marks visited nodes in the provided set
+// to avoid re-processing across multiple calls.
+func BFSGroup(start string, adj AdjMap, visited NodeSet) []string {
 	queue := []string{start}
 	visited[start] = true
 	var group []string

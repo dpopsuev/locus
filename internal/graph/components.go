@@ -7,7 +7,7 @@ import "sort"
 // each sorted alphabetically. Groups are sorted by size descending.
 func ConnectedComponents[E Edge](edges []E) [][]string {
 	// Build undirected adjacency.
-	adj := make(map[string]map[string]bool)
+	adj := make(AdjMap)
 	for _, e := range edges {
 		s, t := e.Source(), e.Target()
 		if adj[s] == nil {
@@ -20,7 +20,7 @@ func ConnectedComponents[E Edge](edges []E) [][]string {
 		adj[t][s] = true
 	}
 
-	visited := make(map[string]bool)
+	visited := make(NodeSet)
 
 	// Sorted iteration for determinism.
 	nodes := make([]string, 0, len(adj))
@@ -46,7 +46,7 @@ func ConnectedComponents[E Edge](edges []E) [][]string {
 	return groups
 }
 
-func bfsCollect(start string, adj map[string]map[string]bool, visited map[string]bool) []string {
+func bfsCollect(start string, adj AdjMap, visited NodeSet) []string {
 	queue := []string{start}
 	visited[start] = true
 	var group []string

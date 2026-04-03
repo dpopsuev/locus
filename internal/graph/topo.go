@@ -12,7 +12,7 @@ var ErrCycleDetected = errors.New("cycle detected: topological sort impossible")
 // Returns ErrCycleDetected if the graph contains cycles.
 func TopologicalSort[E Edge](edges []E) ([]string, error) {
 	adj := buildAdj(edges)
-	nodes := nodeSet(edges)
+	nodes := collectNodes(edges)
 
 	inDeg := make(map[string]int, len(nodes))
 	for n := range nodes {
