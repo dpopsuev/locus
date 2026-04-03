@@ -30,11 +30,13 @@ const (
 // Sentinel errors for input validation.
 var (
 	ErrUnknownCodographAction = errors.New("unknown codograph action")
-	ErrUnknownAnalysisAction  = errors.New("unknown analysis action")
+	ErrUnknownAction          = errors.New("unknown action")
 	ErrIntentRequired         = errors.New("intent is required")
 )
 
-// Codograph action names.
+// --- Action constants ---
+
+// Codograph actions.
 const (
 	ActionScanLocal       = "scan_local"
 	ActionScanRemote      = "scan_remote"
@@ -46,42 +48,54 @@ const (
 	ActionStatus          = "status"
 )
 
-// Analysis action names.
+// Analysis actions.
 const (
-	ActionDeps             = "deps"
-	ActionImpact           = "impact"
-	ActionCoupling         = "coupling"
-	ActionCycles           = "cycles"
-	ActionViolations       = "violations"
-	ActionCoverage         = "coverage"
-	ActionAPISurface       = "api_surface"
-	ActionConventions      = "conventions"
-	ActionGaps             = "gaps"
-	ActionScanDiff         = "scan_diff"
-	ActionCallers          = "callers"
-	ActionCrossRepo        = "cross_repo"
-	ActionPreset           = "preset"
-	ActionComponent        = "component"
-	ActionQuery            = "query"
-	ActionSearch           = "search"
-	ActionDrift            = "drift"
-	ActionSuggestArch      = "suggest_architecture"
+	ActionDeps       = "deps"
+	ActionImpact     = "impact"
+	ActionCoupling   = "coupling"
+	ActionCycles     = "cycles"
+	ActionViolations = "violations"
+	ActionCallers    = "callers"
+	ActionComponent  = "component"
+	ActionSearch     = "search"
+	ActionQuery      = "query"
+	ActionPreset     = "preset"
+	ActionScanDiff   = "scan_diff"
+)
+
+// Clinic actions.
+const (
+	ActionPatternScan    = "pattern_scan"
+	ActionPatternCatalog = "pattern_catalog"
+	ActionHexaValidate   = "hexa_validate"
+	ActionSOLIDScan      = "solid_scan"
+	ActionSymbolQuality  = "symbol_quality"
+	ActionVocabMap       = "vocab_map"
+)
+
+// Constraint actions.
+const (
 	ActionBlastRadius      = "blast_radius"
 	ActionImportDirection  = "import_direction"
 	ActionTrustBoundaries  = "trust_boundaries"
 	ActionBudgets          = "budgets"
 	ActionModDependencies  = "mod_dependencies"
 	ActionSymbolBlast      = "symbol_blast"
-	ActionDiffIntelligence = "diff_intelligence"
 	ActionInterfaceMetrics = "interface_metrics"
-	ActionPatternScan      = "pattern_scan"
-	ActionPatternCatalog   = "pattern_catalog"
-	ActionHexaValidate     = "hexa_validate"
-	ActionSOLIDScan        = "solid_scan"
-	ActionSymbolQuality    = "symbol_quality"
-	ActionVocabMap         = "vocab_map"
-	ActionWhatIf           = "what_if"
 	ActionLeverage         = "leverage"
+	ActionCoverage         = "coverage"
+	ActionAPISurface       = "api_surface"
+	ActionConventions      = "conventions"
+	ActionGaps             = "gaps"
+)
+
+// Refactor actions.
+const (
+	ActionCrossRepo        = "cross_repo"
+	ActionDrift            = "drift"
+	ActionSuggestArch      = "suggest_architecture"
+	ActionWhatIf           = "what_if"
+	ActionDiffIntelligence = "diff_intelligence"
 )
 
 // Coupling view names.
@@ -98,7 +112,7 @@ const (
 	FormatBoth    = "both"
 )
 
-// Diagram type names.
+// Diagram type constants.
 const (
 	DiagramDependency = "dependency"
 	DiagramC4         = "c4"
@@ -117,7 +131,7 @@ const (
 	DiagramHexa       = "hexa"
 )
 
-// DiagramMinIntent maps diagram types to the minimum scan intent needed.
+// DiagramMinIntent maps diagram types to minimum scan intent needed.
 var DiagramMinIntent = map[string]string{
 	DiagramDependency: string(arch.IntentArchitecture),
 	DiagramC4:         string(arch.IntentArchitecture),
@@ -135,6 +149,8 @@ var DiagramMinIntent = map[string]string{
 	DiagramInterfaces: string(arch.IntentHealth),
 	DiagramHexa:       string(arch.IntentCoupling),
 }
+
+// --- Server ---
 
 func NewServer(s store.Store, workspaceRoots []string, version string) (*sdkmcp.Server, *triage.Registry) {
 	proto := protocol.New(s, workspaceRoots)
@@ -159,64 +175,72 @@ func NewServer(s store.Store, workspaceRoots []string, version string) (*sdkmcp.
 	triage.AddTool(reg, srv, triage.ToolMeta{
 		Name: "codograph",
 		Description: "Scan and compare repository architectures. " +
-			"Actions: scan_local (codebase scan, use intent for depth), scan_remote (GitHub via shallow clone), " +
-			"history (past scans, diff=true to compare), diff (compare branches), " +
-			"status (check cache + workspaces), set_desired_state (persist layer rules), get_desired_state (read rules). " +
-			"Scan returns cache_key for downstream tools. Use intent=architecture for fast structure-only scans.",
+			"Actions: scan_local, scan_remote, history, diff, status, set_desired_state, get_desired_state, accept_violation. " +
+			"Scan returns cache_key for downstream tools.",
 		Keywords:   []string{"scan", "architecture", "overview", "remote", "github", "history", "diff", "branch", "compare"},
 		Categories: []string{"architecture", "onboarding", "comparison"},
-		Rationale: map[string]string{
-			"architecture": "Full codebase overview with dependency graph and metrics",
-			"onboarding":   "Best first step for understanding an unfamiliar codebase",
-			"comparison":   "Compare branches or track architectural evolution",
-		},
-		Priority: 1,
+		Rationale:  map[string]string{"architecture": "Full codebase overview", "onboarding": "Best first step"},
+		Priority:   1,
 	}, noOut(h.handleCodograph))
 
 	triage.AddTool(reg, srv, triage.ToolMeta{
 		Name: "analysis",
-		Description: "Analyze component dependencies, impact, and coupling. " +
-			"Actions: deps (fan-in/fan-out), impact (blast radius), coupling (table, view=hot_spots/edges), " +
-			"cycles (dependency cycles), violations (layer purity), scan_diff (compare two SHAs), " +
-			"callers (reverse symbol lookup), cross_repo (compare two repos), " +
-			"drift (check against desired state), suggest_architecture (infer rules from code), " +
-			"search (find components by keyword), component (single-package drill-down), " +
-			"preset (architecture_review/health_check/onboarding/pre_pr), query (natural language). " +
-			"Also: coverage, api_surface, conventions, gaps, budgets (check health constraints). " +
-			"Pass cache_key from scan_remote to avoid re-scanning. format=summary for <500 tokens.",
-		Keywords:   []string{"depend", "import", "impact", "blast", "coupling", "fan", "upstream", "downstream", "cycle", "circular", "loop", "coverage", "convention", "gap"},
-		Categories: []string{"dependencies", "refactoring", "performance", "architecture"},
-		Rationale: map[string]string{
-			"dependencies": "Component-level dependency analysis, coupling metrics, and cycle detection",
-			"refactoring":  "Assess risk and blast radius before changes",
-			"performance":  "Identify highly coupled components and circular dependencies",
-			"architecture": "Cycles violate clean layering, conventions show patterns",
-		},
-		Priority: 2,
+		Description: "Core dependency analysis. " +
+			"Actions: deps, impact, coupling, cycles, violations, callers, component, search, query, preset, scan_diff.",
+		Keywords:   []string{"depend", "import", "impact", "blast", "coupling", "fan", "cycle", "circular"},
+		Categories: []string{"dependencies", "architecture"},
+		Rationale:  map[string]string{"dependencies": "Component-level dependency analysis and cycle detection"},
+		Priority:   2,
 	}, noOut(h.handleAnalysis))
 
 	triage.AddTool(reg, srv, triage.ToolMeta{
+		Name: "clinic",
+		Description: "Code quality and design pattern analysis. " +
+			"Actions: pattern_scan, pattern_catalog, hexa_validate, solid_scan, symbol_quality, vocab_map.",
+		Keywords:   []string{"pattern", "smell", "solid", "hexagonal", "quality", "symbol", "naming"},
+		Categories: []string{"quality", "refactoring"},
+		Rationale:  map[string]string{"quality": "SOLID, hexagonal, pattern/smell detection"},
+		Priority:   2,
+	}, noOut(h.handleClinic))
+
+	triage.AddTool(reg, srv, triage.ToolMeta{
+		Name: "constraint",
+		Description: "Architecture enforcement and health metrics. " +
+			"Actions: blast_radius, import_direction, trust_boundaries, budgets, mod_dependencies, " +
+			"symbol_blast, interface_metrics, leverage, coverage, api_surface, conventions, gaps.",
+		Keywords:   []string{"constraint", "boundary", "budget", "coverage", "leverage", "trust", "direction"},
+		Categories: []string{"enforcement", "health"},
+		Rationale:  map[string]string{"enforcement": "Architecture rules, budgets, and boundary checks"},
+		Priority:   2,
+	}, noOut(h.handleConstraint))
+
+	triage.AddTool(reg, srv, triage.ToolMeta{
+		Name: "refactor",
+		Description: "Refactoring intelligence and what-if simulation. " +
+			"Actions: cross_repo, drift, suggest_architecture, what_if, diff_intelligence.",
+		Keywords:   []string{"refactor", "what-if", "drift", "suggest", "diff", "cross-repo"},
+		Categories: []string{"refactoring", "comparison"},
+		Rationale:  map[string]string{"refactoring": "Simulate refactors, detect drift, compare repos"},
+		Priority:   2,
+	}, noOut(h.handleRefactor))
+
+	triage.AddTool(reg, srv, triage.ToolMeta{
 		Name:        "render_diagram",
-		Description: "Render a Mermaid diagram from repository structure. Types: dependency (flowchart), c4 (C4 Component), coupling (Sankey), churn (XY chart), layers (block), tree (mindmap), classes (classDiagram), sequence (sequenceDiagram), er (erDiagram). Returns valid Mermaid text. Use theme param (light/dark/natural) for themed output.",
-		Keywords:    []string{"diagram", "visual", "mermaid", "chart", "graph", "class", "sequence", "er", "entity", "hierarchy", "call"},
-		Categories:  []string{"architecture", "visualization"},
-		Rationale: map[string]string{
-			"architecture":  "Visual dependency, type hierarchy, call chain, and entity diagrams",
-			"visualization": "Generate Mermaid charts from live architecture data",
-		},
-		Priority: 1,
+		Description: "Render a Mermaid diagram. Types: dependency, c4, coupling, churn, layers, tree, classes, sequence, er, interfaces, hexa, zones.",
+		Keywords:    []string{"diagram", "visual", "mermaid", "chart", "graph", "class", "sequence", "er"},
+		Categories:  []string{"visualization"},
+		Rationale:   map[string]string{"visualization": "Generate Mermaid charts from architecture data"},
+		Priority:    1,
 	}, noOut(h.handleRenderDiagram))
 
 	h.reg = reg
 	triage.AddTool(reg, srv, triage.ToolMeta{
 		Name:        "triage",
-		Description: "Map a natural language intent to a ranked list of Locus tools. No LLM — pure keyword matching.",
+		Description: "Map a natural language intent to a ranked list of Locus tools.",
 		Keywords:    []string{"help", "what", "which", "recommend", "suggest", "guide"},
 		Categories:  []string{"meta"},
-		Rationale: map[string]string{
-			"meta": "Discover relevant tools for a given intent",
-		},
-		Priority: 1,
+		Rationale:   map[string]string{"meta": "Discover relevant tools"},
+		Priority:    1,
 	}, noOut(h.handleTriage))
 
 	return srv, reg
@@ -227,90 +251,93 @@ type handler struct {
 	reg   *triage.Registry
 }
 
-// --- consolidated input types ---
+// --- Input structs (per-tool, only relevant fields) ---
 
 type codographActionInput struct {
 	Action string `json:"action" jsonschema:"required,scan_local | scan_remote | history | diff | set_desired_state | get_desired_state | accept_violation | status"`
 
-	Path            string `json:"path,omitempty" jsonschema:"absolute path to local repository"`
-	Depth           int    `json:"depth,omitempty" jsonschema:"directory grouping depth for components"`
-	ChurnDays       int    `json:"churn_days,omitempty" jsonschema:"git history window in days for churn metrics"`
-	IncludeExternal bool   `json:"include_external,omitempty" jsonschema:"include external/vendor dependencies in scan"`
-	IncludeTests    bool   `json:"include_tests,omitempty" jsonschema:"include test files in scan"`
-	IncludeCoverage bool   `json:"include_coverage,omitempty" jsonschema:"compute test coverage metrics"`
-	Budget          int    `json:"budget,omitempty" jsonschema:"max components to include in output"`
-	Format          string `json:"format,omitempty" jsonschema:"output format: json (default) or summary"`
-	Intent          string `json:"intent,omitempty" jsonschema:"scan depth: architecture (fast, structure only), coupling (+ cycles/deps), health (default, + churn/nesting), full (+ coverage/authors)"`
-	Since           string `json:"since,omitempty" jsonschema:"git ref to diff against for incremental scan (e.g. HEAD~1)"`
-
-	URL string `json:"url,omitempty" jsonschema:"GitHub repository URL (scan_remote)"`
-	Ref string `json:"ref,omitempty" jsonschema:"git ref to scan (scan_remote)"`
-
-	Keep bool `json:"keep,omitempty" jsonschema:"keep cloned repo after scan_remote"`
-
-	Last int  `json:"last,omitempty" jsonschema:"number of history entries to return"`
-	Diff bool `json:"diff,omitempty" jsonschema:"if true, compare latest two scans (history)"`
-
-	Layers    []string `json:"layers,omitempty" jsonschema:"ordered layer names for desired state"`
-	BranchA   string   `json:"branch_a,omitempty" jsonschema:"first branch to compare (diff)"`
-	BranchB   string   `json:"branch_b,omitempty" jsonschema:"second branch to compare (diff)"`
-	Component string   `json:"component,omitempty" jsonschema:"component name for accept_violation"`
-	Principle string   `json:"principle,omitempty" jsonschema:"principle or smell ID for accept_violation (e.g. SRP, god_component)"`
-	Reason    string   `json:"reason,omitempty" jsonschema:"reason for accepting a violation"`
+	Path            string   `json:"path,omitempty" jsonschema:"absolute path to local repository"`
+	Depth           int      `json:"depth,omitempty" jsonschema:"directory grouping depth"`
+	ChurnDays       int      `json:"churn_days,omitempty" jsonschema:"git history window in days"`
+	IncludeExternal bool     `json:"include_external,omitempty" jsonschema:"include external dependencies"`
+	IncludeTests    bool     `json:"include_tests,omitempty" jsonschema:"include test files"`
+	IncludeCoverage bool     `json:"include_coverage,omitempty" jsonschema:"compute test coverage"`
+	Budget          int      `json:"budget,omitempty" jsonschema:"max components in output"`
+	Format          string   `json:"format,omitempty" jsonschema:"output format: json or summary"`
+	Intent          string   `json:"intent,omitempty" jsonschema:"scan depth: architecture, coupling, health, full"`
+	Since           string   `json:"since,omitempty" jsonschema:"git ref for incremental scan"`
+	URL             string   `json:"url,omitempty" jsonschema:"GitHub URL (scan_remote)"`
+	Ref             string   `json:"ref,omitempty" jsonschema:"git ref (scan_remote)"`
+	Keep            bool     `json:"keep,omitempty" jsonschema:"keep clone (scan_remote)"`
+	Last            int      `json:"last,omitempty" jsonschema:"history entries to return"`
+	Diff            bool     `json:"diff,omitempty" jsonschema:"compare latest two scans"`
+	Layers          []string `json:"layers,omitempty" jsonschema:"ordered layer names"`
+	BranchA         string   `json:"branch_a,omitempty" jsonschema:"first branch (diff)"`
+	BranchB         string   `json:"branch_b,omitempty" jsonschema:"second branch (diff)"`
+	Component       string   `json:"component,omitempty" jsonschema:"component for accept_violation"`
+	Principle       string   `json:"principle,omitempty" jsonschema:"principle for accept_violation"`
+	Reason          string   `json:"reason,omitempty" jsonschema:"reason for accept_violation"`
 }
 
-type analysisActionInput struct {
-	Action   string `json:"action" jsonschema:"required,deps | impact | coupling | cycles | violations | scan_diff | coverage | api_surface | conventions | gaps | blast_radius | import_direction | trust_boundaries | budgets | mod_dependencies | symbol_blast | diff_intelligence | interface_metrics | pattern_scan | pattern_catalog | hexa_validate | solid_scan | symbol_quality | vocab_map | what_if | leverage"`
-	Path     string `json:"path,omitempty" jsonschema:"absolute path to local repository (defaults to workspace root)"`
-	CacheKey string `json:"cache_key,omitempty" jsonschema:"cache key from scan_remote (use instead of path for remote repos)"`
-
-	Component string            `json:"component,omitempty" jsonschema:"component path for deps/impact/coupling edges"`
-	Symbol    string            `json:"symbol,omitempty" jsonschema:"symbol name for callers reverse lookup"`
-	BeforeSHA string            `json:"before_sha,omitempty" jsonschema:"git SHA of earlier scan for scan_diff"`
-	AfterSHA  string            `json:"after_sha,omitempty" jsonschema:"git SHA of later scan for scan_diff (default: HEAD)"`
-	SortBy    string            `json:"sort_by,omitempty" jsonschema:"sort field for coupling table"`
-	TopN      int               `json:"top_n,omitempty" jsonschema:"limit results to top N entries"`
-	View      string            `json:"view,omitempty" jsonschema:"coupling view: hot_spots for risk areas, edges for edge list"`
-	ChurnDays int               `json:"churn_days,omitempty" jsonschema:"git history window in days (coupling hot_spots)"`
-	Layers    []string          `json:"layers,omitempty" jsonschema:"ordered layer names for purity checking (cycles)"`
-	Threshold float64           `json:"threshold,omitempty" jsonschema:"minimum coverage threshold to flag (coverage)"`
-	Trusted   []string          `json:"trusted,omitempty" jsonschema:"trusted import prefixes to exclude (api_surface)"`
-	Format    string            `json:"format,omitempty" jsonschema:"output format: json (default) or summary (concise <500 tokens)"`
-	PathB     string            `json:"path_b,omitempty" jsonschema:"second repo path for cross_repo comparison"`
-	CacheKeyB string            `json:"cache_key_b,omitempty" jsonschema:"second cache key for cross_repo comparison"`
-	Preset    string            `json:"preset,omitempty" jsonschema:"preset name: architecture_review, health_check, onboarding, pre_pr, normative, pre_refactor, full_clinic, code_health"`
-	Query     string            `json:"query,omitempty" jsonschema:"natural language architecture question"`
-	Files     []string          `json:"files,omitempty" jsonschema:"changed files for blast_radius analysis"`
-	Since     string            `json:"since,omitempty" jsonschema:"git ref for blast_radius (e.g. HEAD~1, main)"`
-	Filter    string            `json:"filter,omitempty" jsonschema:"filter for pattern_catalog: pattern, smell, or name substring"`
-	Moves     []impact.FileMove `json:"moves,omitempty" jsonschema:"list of hypothetical component moves for what_if (from/to, empty to = deletion)"`
+type analysisInput struct {
+	Action    string   `json:"action" jsonschema:"required,deps | impact | coupling | cycles | violations | callers | component | search | query | preset | scan_diff"`
+	Path      string   `json:"path,omitempty" jsonschema:"absolute path to local repository"`
+	CacheKey  string   `json:"cache_key,omitempty" jsonschema:"cache key from scan_remote"`
+	Component string   `json:"component,omitempty" jsonschema:"component path for deps/impact/coupling"`
+	Symbol    string   `json:"symbol,omitempty" jsonschema:"symbol name for callers"`
+	SortBy    string   `json:"sort_by,omitempty" jsonschema:"sort field for coupling table"`
+	TopN      int      `json:"top_n,omitempty" jsonschema:"limit results to top N"`
+	View      string   `json:"view,omitempty" jsonschema:"coupling view: hot_spots, edges"`
+	ChurnDays int      `json:"churn_days,omitempty" jsonschema:"git history window (coupling hot_spots)"`
+	Layers    []string `json:"layers,omitempty" jsonschema:"ordered layer names (cycles)"`
+	Format    string   `json:"format,omitempty" jsonschema:"output format: json, summary"`
+	Preset    string   `json:"preset,omitempty" jsonschema:"preset: architecture_review, health_check, onboarding, pre_pr, full_clinic, code_health"`
+	Query     string   `json:"query,omitempty" jsonschema:"natural language question"`
+	BeforeSHA string   `json:"before_sha,omitempty" jsonschema:"earlier SHA (scan_diff)"`
+	AfterSHA  string   `json:"after_sha,omitempty" jsonschema:"later SHA (scan_diff)"`
 }
 
-// --- dispatchers ---
+type clinicInput struct {
+	Action   string `json:"action" jsonschema:"required,pattern_scan | pattern_catalog | hexa_validate | solid_scan | symbol_quality | vocab_map"`
+	Path     string `json:"path,omitempty" jsonschema:"absolute path to local repository"`
+	CacheKey string `json:"cache_key,omitempty" jsonschema:"cache key from scan_remote"`
+	Filter   string `json:"filter,omitempty" jsonschema:"filter for pattern_catalog: pattern, smell, or name"`
+}
 
-func (h *handler) handleCodograph(ctx context.Context, req *sdkmcp.CallToolRequest, in codographActionInput) (*sdkmcp.CallToolResult, any, error) { //nolint:gocritic // signature constrained by MCP SDK ToolHandlerFor generic type
+type constraintInput struct {
+	Action    string   `json:"action" jsonschema:"required,blast_radius | import_direction | trust_boundaries | budgets | mod_dependencies | symbol_blast | interface_metrics | leverage | coverage | api_surface | conventions | gaps"`
+	Path      string   `json:"path,omitempty" jsonschema:"absolute path to local repository"`
+	CacheKey  string   `json:"cache_key,omitempty" jsonschema:"cache key from scan_remote"`
+	Component string   `json:"component,omitempty" jsonschema:"component for leverage"`
+	Symbol    string   `json:"symbol,omitempty" jsonschema:"symbol for symbol_blast"`
+	Files     []string `json:"files,omitempty" jsonschema:"changed files for blast_radius"`
+	Since     string   `json:"since,omitempty" jsonschema:"git ref for blast_radius"`
+	Threshold float64  `json:"threshold,omitempty" jsonschema:"coverage threshold"`
+	Trusted   []string `json:"trusted,omitempty" jsonschema:"trusted prefixes (api_surface)"`
+}
+
+type refactorInput struct {
+	Action    string            `json:"action" jsonschema:"required,cross_repo | drift | suggest_architecture | what_if | diff_intelligence"`
+	Path      string            `json:"path,omitempty" jsonschema:"absolute path to local repository"`
+	CacheKey  string            `json:"cache_key,omitempty" jsonschema:"cache key from scan_remote"`
+	PathB     string            `json:"path_b,omitempty" jsonschema:"second repo path (cross_repo)"`
+	CacheKeyB string            `json:"cache_key_b,omitempty" jsonschema:"second cache key (cross_repo)"`
+	Moves     []impact.FileMove `json:"moves,omitempty" jsonschema:"component moves for what_if"`
+	Since     string            `json:"since,omitempty" jsonschema:"git ref for diff_intelligence"`
+}
+
+// --- Codograph handler (unchanged) ---
+
+func (h *handler) handleCodograph(ctx context.Context, req *sdkmcp.CallToolRequest, in codographActionInput) (*sdkmcp.CallToolResult, any, error) { //nolint:gocritic
 	switch in.Action {
 	case ActionScanLocal:
-		return h.handleScanProject(ctx, req, scanProjectInput{
-			Path: in.Path, Depth: in.Depth, ChurnDays: in.ChurnDays,
-			IncludeExternal: in.IncludeExternal, IncludeTests: in.IncludeTests,
-			IncludeCoverage: in.IncludeCoverage, Budget: in.Budget, Format: in.Format,
-			Intent: in.Intent, Since: in.Since,
-		})
+		return h.handleScanProject(ctx, &in)
 	case ActionScanRemote:
-		return h.handleCodographRemote(ctx, req, remoteInput{
-			URL: in.URL, Ref: in.Ref, Depth: in.Depth,
-			ChurnDays: in.ChurnDays, Budget: in.Budget, Keep: in.Keep,
-			Intent: in.Intent,
-		})
+		return h.handleCodographRemote(ctx, &in)
 	case ActionHistory:
-		return h.handleGetCodographHistory(ctx, req, historyInput{
-			Path: in.Path, Last: in.Last, Diff: in.Diff,
-		})
+		return h.handleGetCodographHistory(ctx, &in)
 	case ActionDiff:
-		return h.handleDiffBranches(ctx, req, diffBranchesInput{
-			Path: in.Path, BranchA: in.BranchA, BranchB: in.BranchB,
-		})
+		return h.handleDiffBranches(ctx, &in)
 	case ActionSetDesiredState:
 		ds := &store.DesiredState{Layers: in.Layers}
 		if err := h.proto.SetDesiredState(ctx, in.Path, ds); err != nil {
@@ -328,9 +355,7 @@ func (h *handler) handleCodograph(ctx context.Context, req *sdkmcp.CallToolReque
 		return jsonResult(ds)
 	case ActionAcceptViolation:
 		if err := h.proto.AcceptViolation(ctx, in.Path, store.AcceptedViolation{
-			Component: in.Component,
-			Principle: in.Principle,
-			Reason:    in.Reason,
+			Component: in.Component, Principle: in.Principle, Reason: in.Reason,
 		}); err != nil {
 			return nil, nil, err
 		}
@@ -342,125 +367,108 @@ func (h *handler) handleCodograph(ctx context.Context, req *sdkmcp.CallToolReque
 		}
 		return jsonResult(r)
 	default:
-		return nil, nil, fmt.Errorf("%w %q (valid: %s, %s, %s, %s, %s, %s, %s, %s)",
-			ErrUnknownCodographAction, in.Action,
-			ActionScanLocal, ActionScanRemote, ActionHistory, ActionDiff,
-			ActionSetDesiredState, ActionGetDesiredState, ActionAcceptViolation, ActionStatus)
+		return nil, nil, fmt.Errorf("%w %q", ErrUnknownCodographAction, in.Action)
 	}
 }
 
-func (h *handler) handleAnalysis(ctx context.Context, req *sdkmcp.CallToolRequest, in analysisActionInput) (*sdkmcp.CallToolResult, any, error) { //nolint:gocritic // signature constrained by MCP SDK ToolHandlerFor generic type
+// --- Analysis handler ---
+
+func (h *handler) handleAnalysis(ctx context.Context, _ *sdkmcp.CallToolRequest, in analysisInput) (*sdkmcp.CallToolResult, any, error) { //nolint:gocritic
 	switch in.Action {
 	case ActionDeps:
-		return h.handleGetDependencies(ctx, req, depsInput{
-			Path: in.Path, Component: in.Component, CacheKey: in.CacheKey,
-		})
+		r, err := h.proto.GetDependencies(ctx, in.Path, in.Component, in.CacheKey)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
 	case ActionImpact:
-		return h.handleGetImpact(ctx, req, impactInput{
-			Path: in.Path, Component: in.Component, CacheKey: in.CacheKey,
-		})
+		r, err := h.proto.GetImpact(ctx, in.Path, in.Component, in.CacheKey)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
 	case ActionCoupling:
 		topN := in.TopN
 		if in.Format == FormatSummary && topN == 0 {
 			topN = 5
 		}
-		return h.handleGetCouplingTable(ctx, req, couplingInput{
-			Path: in.Path, SortBy: in.SortBy, TopN: topN,
-			View: in.View, ChurnDays: in.ChurnDays, Component: in.Component,
-			CacheKey: in.CacheKey,
-		})
-	case ActionCycles, ActionCoverage, ActionAPISurface, ActionConventions, ActionGaps:
-		return h.dispatchCyclesVariant(ctx, req, &in)
+		return h.handleCoupling(ctx, in.Path, in.SortBy, topN, in.View, in.ChurnDays, in.Component, in.CacheKey)
+	case ActionCycles:
+		return h.handleCycles(ctx, in.Path, in.Layers, in.CacheKey, in.Format)
 	case ActionViolations:
-		return h.handleGetViolations(ctx, req, violationsInput{
-			Path: in.Path, Layers: in.Layers, CacheKey: in.CacheKey,
-			Format: in.Format,
-		})
+		return h.handleViolations(ctx, in.Path, in.Layers, in.CacheKey, in.Format)
 	case ActionCallers:
-		return h.dispatchCallers(ctx, &in)
-	case ActionScanDiff:
-		return h.handleScanDiff(ctx, req, scanDiffInput{
-			Path: in.Path, BeforeSHA: in.BeforeSHA, AfterSHA: in.AfterSHA,
-		})
-	case ActionCrossRepo, ActionPreset, ActionComponent, ActionDrift,
-		ActionSuggestArch, ActionSearch, ActionQuery:
-		return h.dispatchAnalysisLookup(ctx, &in)
-	case ActionBlastRadius, ActionImportDirection, ActionTrustBoundaries,
-		ActionModDependencies, ActionBudgets, ActionSymbolBlast, ActionDiffIntelligence,
-		ActionInterfaceMetrics, ActionWhatIf, ActionLeverage:
-		return h.dispatchAnalysisAdvanced(ctx, &in)
-	case ActionPatternScan, ActionPatternCatalog, ActionHexaValidate,
-		ActionSOLIDScan, ActionSymbolQuality, ActionVocabMap:
-		return h.dispatchAnalysisClinic(ctx, &in)
-	default:
-		return nil, nil, fmt.Errorf("%w %q", ErrUnknownAnalysisAction, in.Action)
-	}
-}
-
-func (h *handler) dispatchCyclesVariant(ctx context.Context, req *sdkmcp.CallToolRequest, in *analysisActionInput) (*sdkmcp.CallToolResult, any, error) {
-	switch in.Action {
-	case ActionCoverage:
-		return h.handleGetCycles(ctx, req, cyclesInput{
-			Path: in.Path, Analysis: ActionCoverage, Threshold: in.Threshold,
-			CacheKey: in.CacheKey,
-		})
-	case ActionAPISurface:
-		return h.handleGetCycles(ctx, req, cyclesInput{
-			Path: in.Path, Analysis: ActionAPISurface, Trusted: in.Trusted,
-			CacheKey: in.CacheKey,
-		})
-	case ActionConventions:
-		return h.handleGetCycles(ctx, req, cyclesInput{
-			Path: in.Path, Analysis: ActionConventions, CacheKey: in.CacheKey,
-		})
-	case ActionGaps:
-		return h.handleGetCycles(ctx, req, cyclesInput{
-			Path: in.Path, Analysis: ActionGaps, CacheKey: in.CacheKey,
-		})
-	default: // ActionCycles
-		return h.handleGetCycles(ctx, req, cyclesInput{
-			Path: in.Path, Layers: in.Layers, CacheKey: in.CacheKey,
-			Format: in.Format,
-		})
-	}
-}
-
-func (h *handler) dispatchCallers(ctx context.Context, in *analysisActionInput) (*sdkmcp.CallToolResult, any, error) {
-	r, err := h.proto.GetCallers(ctx, in.Path, in.Symbol, in.CacheKey)
-	if err != nil {
-		return nil, nil, err
-	}
-	return jsonResult(r)
-}
-
-func (h *handler) dispatchAnalysisLookup(ctx context.Context, in *analysisActionInput) (*sdkmcp.CallToolResult, any, error) {
-	switch in.Action {
-	case ActionCrossRepo:
-		r, err := h.proto.GetCrossRepo(ctx, in.Path, in.PathB, in.CacheKey, in.CacheKeyB)
+		r, err := h.proto.GetCallers(ctx, in.Path, in.Symbol, in.CacheKey)
 		if err != nil {
 			return nil, nil, err
 		}
 		return jsonResult(r)
+	case ActionComponent, ActionSearch, ActionQuery:
+		return h.dispatchAnalysisLookup(ctx, &in)
 	case ActionPreset:
 		r, err := h.proto.RunPreset(ctx, in.Path, in.Preset, in.CacheKey)
 		if err != nil {
 			return nil, nil, err
 		}
 		return text(r), nil, nil
+	case ActionScanDiff:
+		r, err := h.proto.GetScanDiff(ctx, in.Path, in.BeforeSHA, in.AfterSHA)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
+	default:
+		return nil, nil, fmt.Errorf("%w %q", ErrUnknownAction, in.Action)
+	}
+}
+
+// --- Clinic handler (table-driven) ---
+
+func (h *handler) handleClinic(ctx context.Context, _ *sdkmcp.CallToolRequest, in clinicInput) (*sdkmcp.CallToolResult, any, error) { //nolint:gocritic
+	switch in.Action {
+	case ActionPatternScan:
+		r, err := h.proto.GetPatternScan(ctx, in.Path, in.CacheKey)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
+	case ActionPatternCatalog:
+		return jsonResult(h.proto.GetPatternCatalog(in.Filter))
+	case ActionHexaValidate:
+		r, err := h.proto.GetHexaValidation(ctx, in.Path, in.CacheKey)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
+	case ActionSOLIDScan:
+		r, err := h.proto.GetSOLIDScan(ctx, in.Path, in.CacheKey)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
+	case ActionSymbolQuality:
+		r, err := h.proto.GetSymbolQuality(ctx, in.Path, in.CacheKey)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
+	case ActionVocabMap:
+		r, err := h.proto.GetVocabMap(ctx, in.Path, in.CacheKey)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
+	default:
+		return nil, nil, fmt.Errorf("%w %q", ErrUnknownAction, in.Action)
+	}
+}
+
+// --- Constraint handler (table-driven) ---
+
+func (h *handler) dispatchAnalysisLookup(ctx context.Context, in *analysisInput) (*sdkmcp.CallToolResult, any, error) {
+	switch in.Action {
 	case ActionComponent:
 		r, err := h.proto.GetComponentDetail(ctx, in.Path, in.Component, in.CacheKey)
-		if err != nil {
-			return nil, nil, err
-		}
-		return jsonResult(r)
-	case ActionDrift:
-		r, err := h.proto.GetDrift(ctx, in.Path, in.CacheKey)
-		if err != nil {
-			return nil, nil, err
-		}
-		return jsonResult(r)
-	case ActionSuggestArch:
-		r, err := h.proto.SuggestArchitecture(ctx, in.Path, in.CacheKey)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -480,7 +488,7 @@ func (h *handler) dispatchAnalysisLookup(ctx context.Context, in *analysisAction
 	}
 }
 
-func (h *handler) dispatchAnalysisAdvanced(ctx context.Context, in *analysisActionInput) (*sdkmcp.CallToolResult, any, error) {
+func (h *handler) handleConstraint(ctx context.Context, _ *sdkmcp.CallToolRequest, in constraintInput) (*sdkmcp.CallToolResult, any, error) { //nolint:gocritic
 	switch in.Action {
 	case ActionBlastRadius:
 		r, err := h.proto.GetBlastRadius(ctx, in.Path, in.Files, in.Since, in.CacheKey)
@@ -488,6 +496,54 @@ func (h *handler) dispatchAnalysisAdvanced(ctx context.Context, in *analysisActi
 			return nil, nil, err
 		}
 		return jsonResult(r)
+	case ActionImportDirection, ActionTrustBoundaries, ActionBudgets,
+		ActionModDependencies, ActionInterfaceMetrics:
+		return h.dispatchConstraintSimple(ctx, &in)
+	case ActionSymbolBlast:
+		r, err := h.proto.GetSymbolBlastRadius(ctx, in.Path, in.Symbol, in.CacheKey)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
+	case ActionLeverage:
+		r, err := h.proto.GetLeverage(ctx, in.Path, in.Component, in.CacheKey)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
+	case ActionCoverage:
+		r, err := h.proto.GetCoverage(ctx, in.Path, in.Threshold)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
+	case ActionAPISurface:
+		r, err := h.proto.GetAPISurface(ctx, in.Path, in.Trusted, in.CacheKey)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
+	case ActionConventions:
+		r, err := h.proto.GetConventions(ctx, in.Path)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
+	case ActionGaps:
+		r, err := h.proto.GetGaps(ctx, in.Path)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
+	default:
+		return nil, nil, fmt.Errorf("%w %q", ErrUnknownAction, in.Action)
+	}
+}
+
+// --- Refactor handler ---
+
+func (h *handler) dispatchConstraintSimple(ctx context.Context, in *constraintInput) (*sdkmcp.CallToolResult, any, error) {
+	switch in.Action {
 	case ActionImportDirection:
 		r, err := h.proto.GetImportDirection(ctx, in.Path, in.CacheKey)
 		if err != nil {
@@ -500,26 +556,43 @@ func (h *handler) dispatchAnalysisAdvanced(ctx context.Context, in *analysisActi
 			return nil, nil, err
 		}
 		return jsonResult(r)
-	case ActionModDependencies:
-		r, err := h.proto.GetModuleDependencies(ctx, in.Path, in.CacheKey)
-		if err != nil {
-			return nil, nil, err
-		}
-		return jsonResult(r)
 	case ActionBudgets:
 		r, err := h.proto.GetBudgets(ctx, in.Path, in.CacheKey)
 		if err != nil {
 			return nil, nil, err
 		}
 		return jsonResult(r)
-	case ActionSymbolBlast:
-		r, err := h.proto.GetSymbolBlastRadius(ctx, in.Path, in.Symbol, in.CacheKey)
+	case ActionModDependencies:
+		r, err := h.proto.GetModuleDependencies(ctx, in.Path, in.CacheKey)
 		if err != nil {
 			return nil, nil, err
 		}
 		return jsonResult(r)
-	case ActionInterfaceMetrics:
+	default: // ActionInterfaceMetrics
 		r, err := h.proto.GetInterfaceMetrics(ctx, in.Path, in.CacheKey)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
+	}
+}
+
+func (h *handler) handleRefactor(ctx context.Context, _ *sdkmcp.CallToolRequest, in refactorInput) (*sdkmcp.CallToolResult, any, error) { //nolint:gocritic
+	switch in.Action {
+	case ActionCrossRepo:
+		r, err := h.proto.GetCrossRepo(ctx, in.Path, in.PathB, in.CacheKey, in.CacheKeyB)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
+	case ActionDrift:
+		r, err := h.proto.GetDrift(ctx, in.Path, in.CacheKey)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
+	case ActionSuggestArch:
+		r, err := h.proto.SuggestArchitecture(ctx, in.Path, in.CacheKey)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -530,75 +603,20 @@ func (h *handler) dispatchAnalysisAdvanced(ctx context.Context, in *analysisActi
 			return nil, nil, err
 		}
 		return jsonResult(r)
-	case ActionLeverage:
-		r, err := h.proto.GetLeverage(ctx, in.Path, in.Component, in.CacheKey)
-		if err != nil {
-			return nil, nil, err
-		}
-		return jsonResult(r)
-	default: // ActionDiffIntelligence
+	case ActionDiffIntelligence:
 		r, err := h.proto.GetDiffIntelligence(ctx, in.Path, in.Since, in.CacheKey)
 		if err != nil {
 			return nil, nil, err
 		}
 		return jsonResult(r)
+	default:
+		return nil, nil, fmt.Errorf("%w %q", ErrUnknownAction, in.Action)
 	}
 }
 
-func (h *handler) dispatchAnalysisClinic(ctx context.Context, in *analysisActionInput) (*sdkmcp.CallToolResult, any, error) {
-	switch in.Action {
-	case ActionPatternScan:
-		r, err := h.proto.GetPatternScan(ctx, in.Path, in.CacheKey)
-		if err != nil {
-			return nil, nil, err
-		}
-		return jsonResult(r)
-	case ActionPatternCatalog:
-		r := h.proto.GetPatternCatalog(in.Filter)
-		return jsonResult(r)
-	case ActionHexaValidate:
-		r, err := h.proto.GetHexaValidation(ctx, in.Path, in.CacheKey)
-		if err != nil {
-			return nil, nil, err
-		}
-		return jsonResult(r)
-	case ActionSOLIDScan:
-		r, err := h.proto.GetSOLIDScan(ctx, in.Path, in.CacheKey)
-		if err != nil {
-			return nil, nil, err
-		}
-		return jsonResult(r)
-	case ActionSymbolQuality:
-		r, err := h.proto.GetSymbolQuality(ctx, in.Path, in.CacheKey)
-		if err != nil {
-			return nil, nil, err
-		}
-		return jsonResult(r)
-	default: // ActionVocabMap
-		r, err := h.proto.GetVocabMap(ctx, in.Path, in.CacheKey)
-		if err != nil {
-			return nil, nil, err
-		}
-		return jsonResult(r)
-	}
-}
+// --- Codograph sub-handlers ---
 
-// --- handlers ---
-
-type scanProjectInput struct {
-	Path            string `json:"path"`
-	Depth           int    `json:"depth,omitempty"`
-	ChurnDays       int    `json:"churn_days,omitempty"`
-	IncludeExternal bool   `json:"include_external,omitempty"`
-	IncludeTests    bool   `json:"include_tests,omitempty"`
-	IncludeCoverage bool   `json:"include_coverage,omitempty"`
-	Budget          int    `json:"budget,omitempty"`
-	Format          string `json:"format,omitempty"`
-	Intent          string `json:"intent,omitempty"`
-	Since           string `json:"since,omitempty"`
-}
-
-func (h *handler) handleScanProject(ctx context.Context, _ *sdkmcp.CallToolRequest, in scanProjectInput) (*sdkmcp.CallToolResult, any, error) {
+func (h *handler) handleScanProject(ctx context.Context, in *codographActionInput) (*sdkmcp.CallToolResult, any, error) {
 	result, err := h.proto.ScanProject(ctx, in.Path, protocol.ScanOpts{
 		Depth: in.Depth, ChurnDays: in.ChurnDays,
 		IncludeExternal: in.IncludeExternal, IncludeTests: in.IncludeTests,
@@ -612,9 +630,9 @@ func (h *handler) handleScanProject(ctx context.Context, _ *sdkmcp.CallToolReque
 	case FormatSummary:
 		return text(arch.RenderMarkdown(result.Report)), nil, nil
 	case FormatJSON:
-		data, err := arch.RenderJSON(result.Report)
-		if err != nil {
-			return nil, nil, fmt.Errorf("render JSON: %w", err)
+		data, jsonErr := arch.RenderJSON(result.Report)
+		if jsonErr != nil {
+			return nil, nil, fmt.Errorf("render JSON: %w", jsonErr)
 		}
 		return text(string(data)), nil, nil
 	default:
@@ -623,80 +641,7 @@ func (h *handler) handleScanProject(ctx context.Context, _ *sdkmcp.CallToolReque
 	}
 }
 
-type depsInput struct {
-	Path      string `json:"path"`
-	Component string `json:"component"`
-	CacheKey  string `json:"cache_key,omitempty"`
-}
-
-func (h *handler) handleGetDependencies(ctx context.Context, _ *sdkmcp.CallToolRequest, in depsInput) (*sdkmcp.CallToolResult, any, error) {
-	r, err := h.proto.GetDependencies(ctx, in.Path, in.Component, in.CacheKey)
-	if err != nil {
-		return nil, nil, err
-	}
-	return jsonResult(r)
-}
-
-type impactInput struct {
-	Path      string `json:"path"`
-	Component string `json:"component"`
-	CacheKey  string `json:"cache_key,omitempty"`
-}
-
-func (h *handler) handleGetImpact(ctx context.Context, _ *sdkmcp.CallToolRequest, in impactInput) (*sdkmcp.CallToolResult, any, error) {
-	r, err := h.proto.GetImpact(ctx, in.Path, in.Component, in.CacheKey)
-	if err != nil {
-		return nil, nil, err
-	}
-	return jsonResult(r)
-}
-
-type couplingInput struct {
-	Path      string `json:"path"`
-	SortBy    string `json:"sort_by,omitempty"`
-	TopN      int    `json:"top_n,omitempty"`
-	View      string `json:"view,omitempty"`       // coupling|hot_spots|edges (default: coupling)
-	ChurnDays int    `json:"churn_days,omitempty"` // for hot_spots view
-	Component string `json:"component,omitempty"`  // for edges view
-	CacheKey  string `json:"cache_key,omitempty"`
-}
-
-func (h *handler) handleGetCouplingTable(ctx context.Context, _ *sdkmcp.CallToolRequest, in couplingInput) (*sdkmcp.CallToolResult, any, error) {
-	path := in.Path
-	switch in.View {
-	case ViewHotSpots:
-		spots, err := h.proto.GetHotSpots(ctx, path, in.ChurnDays, in.TopN, in.CacheKey)
-		if err != nil {
-			return nil, nil, err
-		}
-		data, _ := json.MarshalIndent(spots, "", "  ")
-		return text(string(data)), nil, nil
-	case ViewEdges:
-		result, err := h.proto.GetEdgeList(ctx, path, in.Component, in.CacheKey)
-		if err != nil {
-			return nil, nil, err
-		}
-		return text(result), nil, nil
-	default:
-		result, err := h.proto.GetCouplingTable(ctx, path, in.SortBy, in.TopN, in.CacheKey)
-		if err != nil {
-			return nil, nil, err
-		}
-		return text(result), nil, nil
-	}
-}
-
-type remoteInput struct {
-	URL       string `json:"url"`
-	Ref       string `json:"ref,omitempty"`
-	Depth     int    `json:"depth,omitempty"`
-	ChurnDays int    `json:"churn_days,omitempty"`
-	Budget    int    `json:"budget,omitempty"`
-	Keep      bool   `json:"keep,omitempty"`
-	Intent    string `json:"intent,omitempty"`
-}
-
-func (h *handler) handleCodographRemote(ctx context.Context, _ *sdkmcp.CallToolRequest, in remoteInput) (*sdkmcp.CallToolResult, any, error) {
+func (h *handler) handleCodographRemote(ctx context.Context, in *codographActionInput) (*sdkmcp.CallToolResult, any, error) {
 	result, err := h.proto.CodographRemote(ctx, in.URL, protocol.RemoteOpts{
 		Ref: in.Ref, Keep: in.Keep, Depth: in.Depth,
 		ChurnDays: in.ChurnDays, Budget: in.Budget, Intent: in.Intent,
@@ -704,46 +649,30 @@ func (h *handler) handleCodographRemote(ctx context.Context, _ *sdkmcp.CallToolR
 	if err != nil {
 		return nil, nil, err
 	}
-	data, err := arch.RenderJSON(result.Report)
-	if err != nil {
-		return nil, nil, fmt.Errorf("render JSON: %w", err)
+	data, jsonErr := arch.RenderJSON(result.Report)
+	if jsonErr != nil {
+		return nil, nil, fmt.Errorf("render JSON: %w", jsonErr)
 	}
-	// Append cache_key so downstream tools can reference this scan.
 	out := fmt.Sprintf("%s\n\ncache_key: %s", string(data), result.CacheKey)
 	return text(out), nil, nil
 }
 
-type historyInput struct {
-	Path string `json:"path"`
-	Last int    `json:"last,omitempty"`
-	Diff bool   `json:"diff,omitempty"`
-}
-
-func (h *handler) handleGetCodographHistory(ctx context.Context, _ *sdkmcp.CallToolRequest, in historyInput) (*sdkmcp.CallToolResult, any, error) {
-	path := in.Path
+func (h *handler) handleGetCodographHistory(ctx context.Context, in *codographActionInput) (*sdkmcp.CallToolResult, any, error) {
 	if in.Diff {
-		result, err := h.proto.DiffCodographs(ctx, path)
+		result, err := h.proto.DiffCodographs(ctx, in.Path)
 		if err != nil {
 			return nil, nil, err
 		}
-		data, _ := json.MarshalIndent(result, "", "  ")
-		return text(string(data)), nil, nil
+		return jsonResult(result)
 	}
-	entries, err := h.proto.GetHistory(ctx, path, in.Last)
+	entries, err := h.proto.GetHistory(ctx, in.Path, in.Last)
 	if err != nil {
 		return nil, nil, fmt.Errorf("list history: %w", err)
 	}
-	data, _ := json.MarshalIndent(entries, "", "  ")
-	return text(string(data)), nil, nil
+	return jsonResult(entries)
 }
 
-type diffBranchesInput struct {
-	Path    string `json:"path"`
-	BranchA string `json:"branch_a"`
-	BranchB string `json:"branch_b"`
-}
-
-func (h *handler) handleDiffBranches(ctx context.Context, _ *sdkmcp.CallToolRequest, in diffBranchesInput) (*sdkmcp.CallToolResult, any, error) {
+func (h *handler) handleDiffBranches(ctx context.Context, in *codographActionInput) (*sdkmcp.CallToolResult, any, error) {
 	r, err := h.proto.DiffBranches(ctx, in.Path, in.BranchA, in.BranchB)
 	if err != nil {
 		return nil, nil, err
@@ -751,94 +680,48 @@ func (h *handler) handleDiffBranches(ctx context.Context, _ *sdkmcp.CallToolRequ
 	return jsonResult(r)
 }
 
-// --- CON-303: cycles ---
+// --- Analysis sub-handlers ---
 
-type cyclesInput struct {
-	Path      string   `json:"path"`
-	Layers    []string `json:"layers,omitempty"`
-	Analysis  string   `json:"analysis,omitempty"`  // cycles|coverage|api_surface|conventions|gaps|all (default: cycles)
-	Threshold float64  `json:"threshold,omitempty"` // for coverage
-	Trusted   []string `json:"trusted,omitempty"`   // for api_surface
-	CacheKey  string   `json:"cache_key,omitempty"`
-	Format    string   `json:"format,omitempty"`
-}
-
-func (h *handler) handleGetCycles(ctx context.Context, _ *sdkmcp.CallToolRequest, in cyclesInput) (*sdkmcp.CallToolResult, any, error) {
-	path := in.Path
-	switch in.Analysis {
-	case ActionCoverage:
-		report, err := h.proto.GetCoverage(ctx, path, in.Threshold)
+func (h *handler) handleCoupling(ctx context.Context, path, sortBy string, topN int, view string, churnDays int, component, cacheKey string) (*sdkmcp.CallToolResult, any, error) {
+	switch view {
+	case ViewHotSpots:
+		spots, err := h.proto.GetHotSpots(ctx, path, churnDays, topN, cacheKey)
 		if err != nil {
 			return nil, nil, err
 		}
-		data, _ := json.MarshalIndent(report, "", "  ")
-		return text(string(data)), nil, nil
-	case ActionAPISurface:
-		report, err := h.proto.GetAPISurface(ctx, path, in.Trusted, in.CacheKey)
+		return jsonResult(spots)
+	case ViewEdges:
+		result, err := h.proto.GetEdgeList(ctx, path, component, cacheKey)
 		if err != nil {
 			return nil, nil, err
 		}
-		data, _ := json.MarshalIndent(report, "", "  ")
-		return text(string(data)), nil, nil
-	case ActionConventions:
-		report, err := h.proto.GetConventions(ctx, path)
-		if err != nil {
-			return nil, nil, err
-		}
-		data, _ := json.MarshalIndent(report, "", "  ")
-		return text(string(data)), nil, nil
-	case ActionGaps:
-		report, err := h.proto.GetGaps(ctx, path)
-		if err != nil {
-			return nil, nil, err
-		}
-		data, _ := json.MarshalIndent(report, "", "  ")
-		return text(string(data)), nil, nil
+		return text(result), nil, nil
 	default:
-		report, err := h.proto.GetCycles(ctx, path, in.Layers, in.CacheKey)
+		result, err := h.proto.GetCouplingTable(ctx, path, sortBy, topN, cacheKey)
 		if err != nil {
 			return nil, nil, err
 		}
-		if in.Format == FormatSummary {
-			return text(renderCyclesSummary(report)), nil, nil
-		}
-		data, _ := json.MarshalIndent(report, "", "  ")
-		return text(string(data)), nil, nil
+		return text(result), nil, nil
 	}
 }
 
-const maxSummaryCycles = 3
-
-func renderCyclesSummary(r *protocol.CycleReport) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "%d cycle(s), %d violation(s)\n", len(r.Cycles), len(r.LayerViolations))
-	n := min(len(r.Cycles), maxSummaryCycles)
-	for i := 0; i < n; i++ {
-		fmt.Fprintf(&b, "  cycle: %s\n", strings.Join(r.Cycles[i], " → "))
-	}
-	if len(r.Cycles) > maxSummaryCycles {
-		fmt.Fprintf(&b, "  ... and %d more\n", len(r.Cycles)-maxSummaryCycles)
-	}
-	return b.String()
-}
-
-// --- violations ---
-
-type violationsInput struct {
-	Path     string   `json:"path"`
-	Layers   []string `json:"layers,omitempty"`
-	CacheKey string   `json:"cache_key,omitempty"`
-	Format   string   `json:"format,omitempty"`
-}
-
-const maxSummaryViolations = 3
-
-func (h *handler) handleGetViolations(ctx context.Context, _ *sdkmcp.CallToolRequest, in violationsInput) (*sdkmcp.CallToolResult, any, error) {
-	report, err := h.proto.GetViolations(ctx, in.Path, in.Layers, in.CacheKey)
+func (h *handler) handleCycles(ctx context.Context, path string, layers []string, cacheKey, format string) (*sdkmcp.CallToolResult, any, error) {
+	report, err := h.proto.GetCycles(ctx, path, layers, cacheKey)
 	if err != nil {
 		return nil, nil, err
 	}
-	if in.Format == FormatSummary {
+	if format == FormatSummary {
+		return text(renderCyclesSummary(report)), nil, nil
+	}
+	return jsonResult(report)
+}
+
+func (h *handler) handleViolations(ctx context.Context, path string, layers []string, cacheKey, format string) (*sdkmcp.CallToolResult, any, error) {
+	report, err := h.proto.GetViolations(ctx, path, layers, cacheKey)
+	if err != nil {
+		return nil, nil, err
+	}
+	if format == FormatSummary {
 		var b strings.Builder
 		fmt.Fprintf(&b, "%s\n", report.Summary)
 		n := min(len(report.Violations), maxSummaryViolations)
@@ -854,90 +737,42 @@ func (h *handler) handleGetViolations(ctx context.Context, _ *sdkmcp.CallToolReq
 	return jsonResult(report)
 }
 
-// --- scan diff ---
+const maxSummaryCycles = 3
+const maxSummaryViolations = 3
 
-type scanDiffInput struct {
-	Path      string `json:"path"`
-	BeforeSHA string `json:"before_sha"`
-	AfterSHA  string `json:"after_sha,omitempty"`
-}
-
-func (h *handler) handleScanDiff(ctx context.Context, _ *sdkmcp.CallToolRequest, in scanDiffInput) (*sdkmcp.CallToolResult, any, error) {
-	report, err := h.proto.GetScanDiff(ctx, in.Path, in.BeforeSHA, in.AfterSHA)
-	if err != nil {
-		return nil, nil, err
+func renderCyclesSummary(r *protocol.CycleReport) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "%d cycle(s), %d violation(s)\n", len(r.Cycles), len(r.LayerViolations))
+	n := min(len(r.Cycles), maxSummaryCycles)
+	for i := 0; i < n; i++ {
+		fmt.Fprintf(&b, "  cycle: %s\n", strings.Join(r.Cycles[i], " → "))
 	}
-	return jsonResult(report)
+	if len(r.Cycles) > maxSummaryCycles {
+		fmt.Fprintf(&b, "  ... and %d more\n", len(r.Cycles)-maxSummaryCycles)
+	}
+	return b.String()
 }
 
-// --- diagrams ---
+// --- Diagram handler ---
 
-type diagramInput struct {
-	Path         string `json:"path" jsonschema:"required,absolute path to local repository"`
-	Type         string `json:"type" jsonschema:"required,diagram type: dependency, c4, coupling, churn, layers, tree, classes, sequence, er, interfaces"`
-	Scope        string `json:"scope,omitempty" jsonschema:"limit diagram to a sub-package or directory"`
-	Depth        int    `json:"depth,omitempty" jsonschema:"directory grouping depth for components"`
-	TopN         int    `json:"top_n,omitempty" jsonschema:"limit to top N components in diagram"`
-	Entry        string `json:"entry,omitempty" jsonschema:"entry point component for sequence/callgraph diagrams"`
-	ExportedOnly bool   `json:"exported_only,omitempty" jsonschema:"only include exported symbols in class diagrams"`
-	Enrich       string `json:"enrich,omitempty" jsonschema:"comma-separated metrics on dependency node labels: loc, fan_in, churn"`
-	Theme        string `json:"theme,omitempty" jsonschema:"Mermaid theme: light, dark, or natural"`
-	Format       string `json:"format,omitempty" jsonschema:"output format: mermaid (default), facts (plain-text assertions), both"`
-	CacheKey     string `json:"cache_key,omitempty" jsonschema:"cache key from scan_remote (use instead of path for remote repos)"`
-}
-
-func (h *handler) handleRenderDiagram(ctx context.Context, _ *sdkmcp.CallToolRequest, in diagramInput) (*sdkmcp.CallToolResult, any, error) {
+func (h *handler) handleRenderDiagram(ctx context.Context, _ *sdkmcp.CallToolRequest, in diagramInput) (*sdkmcp.CallToolResult, any, error) { //nolint:gocritic
 	path := in.Path
 	if path == "" && len(h.proto.Workspaces()) > 0 {
 		path = h.proto.Workspaces()[0]
 	}
 
-	var report *arch.ContextReport
-	var err error
-	if in.CacheKey != "" {
-		report, err = h.proto.GetCachedReport(in.CacheKey)
-	} else {
-		intent := DiagramMinIntent[in.Type]
-		result, scanErr := h.proto.ScanProject(ctx, path, protocol.ScanOpts{
-			Depth:  in.Depth,
-			Intent: intent,
-		})
-		if scanErr != nil {
-			return nil, nil, scanErr
-		}
-		report = result.Report
-		err = nil
-	}
+	report, err := h.resolveDiagramReport(ctx, path, in)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	input := diagram.Input{Report: report, Root: path}
+	h.enrichDiagramInput(ctx, path, in.Type, report, &input)
 
-	if in.Type == DiagramChurn && path != "" {
-		hist, _ := h.proto.GetHistory(ctx, path, 20)
-		input.History = hist
-	}
-
-	// Tier 2/3 diagrams need analyzers — only available for local repos.
-	if path != "" {
-		switch in.Type {
-		case DiagramClasses, DiagramSequence, DiagramER, DiagramInterfaces, DiagramHexa:
-			input.Analyzer = analysis.NewFallback(path)
-		}
-		if in.Type == DiagramHexa {
-			fa := analysis.NewFallback(path)
-			classes, _ := fa.Classes(path)
-			hexaClass := clinic.ComputeHexaClassification(report.Architecture.Services, report.Architecture.Edges, classes)
-			input.HexaRoles = make(map[string]string, len(hexaClass.Components))
-			for _, c := range hexaClass.Components {
-				input.HexaRoles[c.Name] = string(c.Role)
-			}
-		}
-		switch in.Type {
-		case DiagramDataflow, DiagramCallgraph, DiagramState:
-			input.DeepAnalyzer = analysis.NewDeepFallback(path)
-		}
+	opts := diagram.Options{
+		Type: in.Type, Scope: in.Scope, Depth: in.Depth,
+		TopN: in.TopN, Entry: in.Entry, ExportedOnly: in.ExportedOnly,
+		Theme: in.Theme, Enrich: in.Enrich,
 	}
 
 	switch in.Format {
@@ -945,44 +780,87 @@ func (h *handler) handleRenderDiagram(ctx context.Context, _ *sdkmcp.CallToolReq
 		return text(diagram.RenderFacts(report)), nil, nil
 	case FormatBoth:
 		facts := diagram.RenderFacts(report)
-		mermaid, err := diagram.Render(input, diagram.Options{
-			Type: in.Type, Scope: in.Scope, Depth: in.Depth,
-			TopN: in.TopN, Entry: in.Entry, ExportedOnly: in.ExportedOnly,
-			Theme: in.Theme, Enrich: in.Enrich,
-		})
-		if err != nil {
-			return nil, nil, err
+		mermaid, renderErr := diagram.Render(input, opts)
+		if renderErr != nil {
+			return nil, nil, renderErr
 		}
 		return text(mermaid + "\n\n" + facts), nil, nil
 	default:
-		out, err := diagram.Render(input, diagram.Options{
-			Type: in.Type, Scope: in.Scope, Depth: in.Depth,
-			TopN: in.TopN, Entry: in.Entry, ExportedOnly: in.ExportedOnly,
-			Theme: in.Theme, Enrich: in.Enrich,
-		})
-		if err != nil {
-			return nil, nil, err
+		out, renderErr := diagram.Render(input, opts)
+		if renderErr != nil {
+			return nil, nil, renderErr
 		}
 		return text(out), nil, nil
 	}
 }
 
-// --- triage ---
-
-type triageInput struct {
-	Intent string `json:"intent" jsonschema:"required,natural language description of what you want to do"`
-	Path   string `json:"path,omitempty" jsonschema:"optional repository path for context"`
+func (h *handler) resolveDiagramReport(ctx context.Context, path string, in diagramInput) (*arch.ContextReport, error) {
+	if in.CacheKey != "" {
+		return h.proto.GetCachedReport(in.CacheKey)
+	}
+	intent := DiagramMinIntent[in.Type]
+	result, err := h.proto.ScanProject(ctx, path, protocol.ScanOpts{Depth: in.Depth, Intent: intent})
+	if err != nil {
+		return nil, err
+	}
+	return result.Report, nil
 }
 
-func (h *handler) handleTriage(_ context.Context, _ *sdkmcp.CallToolRequest, in triageInput) (*sdkmcp.CallToolResult, any, error) {
+func (h *handler) enrichDiagramInput(ctx context.Context, path, diagramType string, report *arch.ContextReport, input *diagram.Input) {
+	if path == "" {
+		return
+	}
+	switch diagramType {
+	case DiagramClasses, DiagramSequence, DiagramER, DiagramInterfaces, DiagramHexa:
+		input.Analyzer = analysis.NewFallback(path)
+	}
+	if diagramType == DiagramHexa {
+		fa := analysis.NewFallback(path)
+		classes, _ := fa.Classes(path)
+		hexaClass := clinic.ComputeHexaClassification(report.Architecture.Services, report.Architecture.Edges, classes)
+		input.HexaRoles = make(map[string]string, len(hexaClass.Components))
+		for _, c := range hexaClass.Components {
+			input.HexaRoles[c.Name] = string(c.Role)
+		}
+	}
+	if diagramType == DiagramChurn {
+		input.History, _ = h.proto.GetHistory(ctx, path, 20)
+	}
+	switch diagramType {
+	case DiagramDataflow, DiagramCallgraph, DiagramState:
+		input.DeepAnalyzer = analysis.NewDeepFallback(path)
+	}
+}
+
+type diagramInput struct {
+	Path         string `json:"path" jsonschema:"required,absolute path to local repository"`
+	Type         string `json:"type" jsonschema:"required,diagram type: dependency, c4, coupling, churn, layers, tree, classes, sequence, er, interfaces, hexa, zones"`
+	Scope        string `json:"scope,omitempty" jsonschema:"limit to sub-package"`
+	Depth        int    `json:"depth,omitempty" jsonschema:"grouping depth"`
+	TopN         int    `json:"top_n,omitempty" jsonschema:"limit to top N components"`
+	Entry        string `json:"entry,omitempty" jsonschema:"entry point for sequence/callgraph"`
+	ExportedOnly bool   `json:"exported_only,omitempty" jsonschema:"exported symbols only (class diagrams)"`
+	Enrich       string `json:"enrich,omitempty" jsonschema:"node label metrics: loc, fan_in, churn"`
+	Theme        string `json:"theme,omitempty" jsonschema:"theme: light, dark, natural"`
+	Format       string `json:"format,omitempty" jsonschema:"output: mermaid, facts, both"`
+	CacheKey     string `json:"cache_key,omitempty" jsonschema:"cache key from scan_remote"`
+}
+
+// --- Triage handler ---
+
+type triageInput struct {
+	Intent string `json:"intent" jsonschema:"required,what you want to do"`
+	Path   string `json:"path,omitempty" jsonschema:"optional repository path"`
+}
+
+func (h *handler) handleTriage(_ context.Context, _ *sdkmcp.CallToolRequest, in triageInput) (*sdkmcp.CallToolResult, any, error) { //nolint:gocritic
 	if in.Intent == "" {
 		return nil, nil, ErrIntentRequired
 	}
-	result := h.reg.Triage(in.Intent, in.Path)
-	return jsonResult(result)
+	return jsonResult(h.reg.Triage(in.Intent, in.Path))
 }
 
-// --- helpers ---
+// --- Helpers ---
 
 func text(s string) *sdkmcp.CallToolResult {
 	return &sdkmcp.CallToolResult{
