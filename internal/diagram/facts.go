@@ -49,6 +49,11 @@ func RenderFacts(report *arch.ContextReport) string {
 		fmt.Fprintf(&b, "violation: %s → %s (upward import)\n", v.From, v.To)
 	}
 
+	// Boundary crossing facts.
+	for _, bc := range report.BoundaryCrossings {
+		fmt.Fprintf(&b, "boundary_crossing: %s (%s) → %s (%s)\n", bc.From, bc.FromZone, bc.To, bc.ToZone)
+	}
+
 	// Summary.
 	fmt.Fprintf(&b, "\n%d components, %d edges, %d cycles, %d violations\n",
 		len(report.Architecture.Services), len(report.Architecture.Edges),
