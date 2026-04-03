@@ -43,6 +43,12 @@ type ArchEdge struct {
 	LOCSurface int
 }
 
+// Source implements graph.Edge for ArchEdge.
+func (e ArchEdge) Source() string { return e.From }
+
+// Target implements graph.Edge for ArchEdge.
+func (e ArchEdge) Target() string { return e.To }
+
 // ArchForbidden represents a forbidden dependency in an architecture artifact.
 type ArchForbidden struct {
 	Name          string
