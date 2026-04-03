@@ -59,7 +59,7 @@ func ComputeWhatIf(
 		}, nil
 	}
 
-	beforeFanIn := computeFanIn(edges)
+	beforeFanIn := arch.ComputeFanIn(edges)
 	beforeEdgeSet := edgeSet(edges)
 
 	// Clone services and edges for mutation.
@@ -83,7 +83,7 @@ func ComputeWhatIf(
 	// Remove self-loops created by merges.
 	mutEdges = removeSelfLoops(mutEdges)
 
-	afterFanIn := computeFanIn(mutEdges)
+	afterFanIn := arch.ComputeFanIn(mutEdges)
 	afterEdgeSet := edgeSet(mutEdges)
 
 	// Diff edges.
@@ -232,14 +232,6 @@ func edgeSet(edges []arch.ArchEdge) map[edgeKey]bool {
 		s[edgeKey{e.From, e.To}] = true
 	}
 	return s
-}
-
-func computeFanIn(edges []arch.ArchEdge) map[string]int {
-	fi := make(map[string]int)
-	for _, e := range edges {
-		fi[e.To]++
-	}
-	return fi
 }
 
 func diffFanIn(before, after map[string]int) []MetricDelta {

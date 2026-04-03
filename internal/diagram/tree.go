@@ -22,7 +22,7 @@ type treeCtx struct {
 
 func newTreeCtx(report *arch.ContextReport, topN int) *treeCtx {
 	tc := &treeCtx{
-		fi:         fanIn(report.Architecture.Edges),
+		fi:         arch.ComputeFanIn(report.Architecture.Edges),
 		churnMap:   make(map[string]int),
 		svcSymbols: make(map[string][]string),
 		symCount:   make(map[string]int),

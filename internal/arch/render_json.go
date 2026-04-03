@@ -47,12 +47,8 @@ type jsonEdge struct {
 
 // RenderJSON serializes a ContextReport into the mcontext JSON schema.
 func RenderJSON(report *ContextReport) ([]byte, error) {
-	fanIn := make(map[string]int)
-	fanOut := make(map[string]int)
-	for _, e := range report.Architecture.Edges {
-		fanIn[e.To]++
-		fanOut[e.From]++
-	}
+	fanIn := ComputeFanIn(report.Architecture.Edges)
+	fanOut := ComputeFanOut(report.Architecture.Edges)
 
 	components := make([]jsonComponent, 0, len(report.Architecture.Services))
 	for i := range report.Architecture.Services {

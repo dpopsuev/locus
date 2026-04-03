@@ -91,14 +91,10 @@ func IsAccepted(accepted []port.AcceptedViolation, component, principle string) 
 //   - fan-in 3-7 → error    (medium blast radius)
 //   - fan-in 8+  → critical (high blast radius, many dependents break)
 func ComputeSRPViolations(services []arch.ArchService, edges []arch.ArchEdge, roles map[string]HexaRole, accepted []port.AcceptedViolation) []SOLIDViolation {
-	// Build fan-out: count of outbound edges per service.
-	fanOut := make(map[string]int, len(services))
+	fanIn := arch.ComputeFanIn(edges)
+	fanOut := arch.ComputeFanOut(edges)
 	fanOutTargets := make(map[string]map[string]bool, len(services))
-	// Build fan-in: count of inbound edges per service (blast radius).
-	fanIn := make(map[string]int, len(services))
 	for _, e := range edges {
-		fanOut[e.From]++
-		fanIn[e.To]++
 		if fanOutTargets[e.From] == nil {
 			fanOutTargets[e.From] = make(map[string]bool)
 		}

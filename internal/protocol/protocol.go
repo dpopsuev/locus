@@ -548,10 +548,7 @@ func (p *Protocol) CheckDriftOnScan(ctx context.Context, path string, report *ar
 // generateComponentMeta creates metadata for all components in a scan report.
 func generateComponentMeta(report *arch.ContextReport) []port.ComponentMeta {
 	depths := arch.ComputeImportDepth(report.Architecture.Edges)
-	fanIn := make(map[string]int)
-	for _, e := range report.Architecture.Edges {
-		fanIn[e.To]++
-	}
+	fanIn := arch.ComputeFanIn(report.Architecture.Edges)
 
 	meta := make([]port.ComponentMeta, 0, len(report.Architecture.Services))
 	for i := range report.Architecture.Services {

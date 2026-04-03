@@ -27,11 +27,7 @@ type GapReport struct {
 func DetectGaps(report *arch.ContextReport, root string) (*GapReport, error) {
 	r := &GapReport{ComponentsScanned: len(report.Architecture.Services)}
 
-	// Compute fan-in per component
-	fanIn := make(map[string]int)
-	for _, e := range report.Architecture.Edges {
-		fanIn[e.To]++
-	}
+	fanIn := arch.ComputeFanIn(report.Architecture.Edges)
 
 	for i := range report.Architecture.Services {
 		comp := report.Architecture.Services[i].Name

@@ -4,13 +4,15 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/dpopsuev/locus/internal/arch"
 )
 
 func renderZones(in Input, _ Options) string {
 	m := in.Report.Architecture
 	rt := in.ResolvedTheme
 
-	fi := fanIn(m.Edges)
+	fi := arch.ComputeFanIn(m.Edges)
 	churnMap := make(map[string]int)
 	symbolCount := make(map[string]int)
 	for i := range m.Services {

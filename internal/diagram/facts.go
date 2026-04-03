@@ -26,10 +26,7 @@ func RenderFacts(report *arch.ContextReport) string {
 	}
 
 	// Health facts.
-	fanIn := make(map[string]int)
-	for _, e := range report.Architecture.Edges {
-		fanIn[e.To]++
-	}
+	fanIn := arch.ComputeFanIn(report.Architecture.Edges)
 	for i := range report.Architecture.Services {
 		s := &report.Architecture.Services[i]
 		h := ClassifyHealth(fanIn[s.Name], s.Churn)

@@ -37,11 +37,7 @@ func ComputeBudgetViolations(
 		svcMap[services[i].Name] = &services[i]
 	}
 
-	// Compute fan-in from edges (number of edges pointing at each component).
-	fanIn := make(map[string]int, len(services))
-	for _, e := range edges {
-		fanIn[e.To]++
-	}
+	fanIn := arch.ComputeFanIn(edges)
 
 	var violations []BudgetViolation
 	passing := 0

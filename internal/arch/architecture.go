@@ -374,10 +374,7 @@ func RenderArchMarkdown(m ArchModel) string {
 	b.WriteString("```\n\n")
 
 	if hasChurn {
-		fanIn := make(map[string]int)
-		for _, e := range m.Edges {
-			fanIn[e.To]++
-		}
+		fanIn := ComputeFanIn(m.Edges)
 		type hotSpot struct {
 			Name  string
 			FanIn int

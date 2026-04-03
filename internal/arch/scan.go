@@ -342,10 +342,7 @@ func resolvedScannerName(override, root string) string {
 }
 
 func computeHotSpots(m ArchModel) []HotSpot {
-	fanIn := make(map[string]int)
-	for _, e := range m.Edges {
-		fanIn[e.To]++
-	}
+	fanIn := ComputeFanIn(m.Edges)
 	var spots []HotSpot
 	for i := range m.Services {
 		s := &m.Services[i]

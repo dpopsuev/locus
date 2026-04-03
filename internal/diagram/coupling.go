@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-
-	"github.com/dpopsuev/locus/internal/arch"
 )
 
 func renderCoupling(in Input, opts Options) string {
@@ -64,12 +62,4 @@ func sanitizeSankey(s string) string {
 		return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
 	}
 	return s
-}
-
-func fanIn(edges []arch.ArchEdge) map[string]int {
-	m := make(map[string]int)
-	for _, e := range edges {
-		m[e.To]++
-	}
-	return m
 }

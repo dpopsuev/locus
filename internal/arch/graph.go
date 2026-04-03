@@ -17,6 +17,24 @@ type LayerViolation struct {
 	ToLayer   string `json:"to_layer"`
 }
 
+// ComputeFanIn returns the number of incoming edges per component.
+func ComputeFanIn(edges []ArchEdge) map[string]int {
+	fi := make(map[string]int, len(edges))
+	for _, e := range edges {
+		fi[e.To]++
+	}
+	return fi
+}
+
+// ComputeFanOut returns the number of outgoing edges per component.
+func ComputeFanOut(edges []ArchEdge) map[string]int {
+	fo := make(map[string]int, len(edges))
+	for _, e := range edges {
+		fo[e.From]++
+	}
+	return fo
+}
+
 // DetectCycles finds all distinct cycles in the dependency graph using DFS with
 // color marking (white/gray/black). Returns cycles sorted for determinism.
 func DetectCycles(edges []ArchEdge) []Cycle {
