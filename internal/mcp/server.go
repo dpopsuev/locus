@@ -81,6 +81,7 @@ const (
 	ActionSymbolQuality    = "symbol_quality"
 	ActionVocabMap         = "vocab_map"
 	ActionWhatIf           = "what_if"
+	ActionLeverage         = "leverage"
 )
 
 // Coupling view names.
@@ -259,7 +260,7 @@ type codographActionInput struct {
 }
 
 type analysisActionInput struct {
-	Action   string `json:"action" jsonschema:"required,deps | impact | coupling | cycles | violations | scan_diff | coverage | api_surface | conventions | gaps | blast_radius | import_direction | trust_boundaries | budgets | mod_dependencies | symbol_blast | diff_intelligence | interface_metrics | pattern_scan | pattern_catalog | hexa_validate | solid_scan | symbol_quality | vocab_map | what_if"`
+	Action   string `json:"action" jsonschema:"required,deps | impact | coupling | cycles | violations | scan_diff | coverage | api_surface | conventions | gaps | blast_radius | import_direction | trust_boundaries | budgets | mod_dependencies | symbol_blast | diff_intelligence | interface_metrics | pattern_scan | pattern_catalog | hexa_validate | solid_scan | symbol_quality | vocab_map | what_if | leverage"`
 	Path     string `json:"path,omitempty" jsonschema:"absolute path to local repository (defaults to workspace root)"`
 	CacheKey string `json:"cache_key,omitempty" jsonschema:"cache key from scan_remote (use instead of path for remote repos)"`
 
@@ -386,7 +387,7 @@ func (h *handler) handleAnalysis(ctx context.Context, req *sdkmcp.CallToolReques
 		return h.dispatchAnalysisLookup(ctx, &in)
 	case ActionBlastRadius, ActionImportDirection, ActionTrustBoundaries,
 		ActionModDependencies, ActionBudgets, ActionSymbolBlast, ActionDiffIntelligence,
-		ActionInterfaceMetrics, ActionWhatIf:
+		ActionInterfaceMetrics, ActionWhatIf, ActionLeverage:
 		return h.dispatchAnalysisAdvanced(ctx, &in)
 	case ActionPatternScan, ActionPatternCatalog, ActionHexaValidate,
 		ActionSOLIDScan, ActionSymbolQuality, ActionVocabMap:
@@ -525,6 +526,12 @@ func (h *handler) dispatchAnalysisAdvanced(ctx context.Context, in *analysisActi
 		return jsonResult(r)
 	case ActionWhatIf:
 		r, err := h.proto.GetWhatIf(ctx, in.Path, in.Moves, in.CacheKey)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
+	case ActionLeverage:
+		r, err := h.proto.GetLeverage(ctx, in.Path, in.Component, in.CacheKey)
 		if err != nil {
 			return nil, nil, err
 		}

@@ -1468,6 +1468,22 @@ func (p *Protocol) GetGaps(ctx context.Context, path string) (*constraint.GapRep
 	return constraint.DetectGaps(report, path)
 }
 
+func (p *Protocol) GetLeverage(_ context.Context, path, target string, cacheKey ...string) (*impact.LeverageReport, error) {
+	path = p.resolvePath(path)
+	if target == "" {
+		return nil, ErrComponentRequired
+	}
+	report, err := p.getOrScan(path, cacheKey...)
+	if err != nil {
+		return nil, err
+	}
+	return impact.ComputeLeverage(
+		report.Architecture.Edges,
+		report.Architecture.Services,
+		target,
+	)
+}
+
 func (p *Protocol) GetBudgets(ctx context.Context, path string, cacheKey ...string) (*constraint.BudgetReport, error) {
 	path = p.resolvePath(path)
 	report, err := p.getOrScan(path, cacheKey...)
