@@ -8,6 +8,7 @@ import (
 	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/arch"
 	"github.com/dpopsuev/locus/internal/clinic"
+	"github.com/dpopsuev/locus/internal/impact"
 	"github.com/dpopsuev/locus/internal/port"
 )
 
@@ -178,4 +179,67 @@ func TestDogfood_ZeroCycles(t *testing.T) {
 
 	t.Logf("Locus: %d components, %d edges, 0 cycles",
 		len(report.Architecture.Services), len(report.Architecture.Edges))
+}
+
+// TestDogfood_LeverageArchIsHigh verifies that internal/arch — the most
+// depended-on package — has a high leverage score. If this drops, it means
+// arch's consumers are decoupling (good) or arch lost functionality (bad).
+func TestDogfood_LeverageArchIsHigh(t *testing.T) {
+	if testing.Short() {
+		t.Skip("dogfood: skipping expensive self-scan in -short mode")
+	}
+
+	report := scanLocus(t)
+
+	lev, err := impact.ComputeLeverage(
+		report.Architecture.Edges,
+		report.Architecture.Services,
+		"internal/arch",
+	)
+	if err != nil {
+		t.Fatalf("ComputeLeverage: %v", err)
+	}
+
+	t.Logf("internal/arch leverage: score=%d, consumers=%d (enrichment=%d, binary=%d)",
+		lev.LeverageScore, lev.TotalConsumers, lev.Enrichment, lev.Binary)
+
+	if lev.TotalConsumers < 5 {
+		t.Errorf("expected internal/arch to have >= 5 consumers, got %d", lev.TotalConsumers)
+	}
+	if lev.LeverageScore < 20 {
+		t.Errorf("expected leverage score >= 20 for internal/arch, got %d", lev.LeverageScore)
+	}
+	if lev.Enrichment < lev.Binary {
+		t.Errorf("expected more enrichment than binary consumers for arch, got enrichment=%d binary=%d",
+			lev.Enrichment, lev.Binary)
+	}
+}
+
+// TestDogfood_LeverageLeafIsLow verifies that a leaf component (no consumers)
+// has a leverage score of 0.
+func TestDogfood_LeverageLeafIsLow(t *testing.T) {
+	if testing.Short() {
+		t.Skip("dogfood: skipping expensive self-scan in -short mode")
+	}
+
+	report := scanLocus(t)
+
+	// cmd/locus is an entrypoint — it should have 0 consumers (nothing imports it).
+	lev, err := impact.ComputeLeverage(
+		report.Architecture.Edges,
+		report.Architecture.Services,
+		"cmd/locus",
+	)
+	if err != nil {
+		t.Fatalf("ComputeLeverage: %v", err)
+	}
+
+	t.Logf("cmd/locus leverage: score=%d, consumers=%d", lev.LeverageScore, lev.TotalConsumers)
+
+	if lev.TotalConsumers != 0 {
+		t.Errorf("expected cmd/locus to have 0 consumers, got %d", lev.TotalConsumers)
+	}
+	if lev.LeverageScore != 0 {
+		t.Errorf("expected leverage score 0 for cmd/locus, got %d", lev.LeverageScore)
+	}
 }
