@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/dpopsuev/locus/internal/analysis"
+	"github.com/dpopsuev/locus/internal/graph"
 )
 
 // Pattern IDs used by enrichment.
@@ -186,7 +187,7 @@ func SuggestSplit(component string, symbols []string, callEdges []analysis.CallE
 			visited[sym] = true
 			continue // isolated symbol, skip
 		}
-		group := bfsGroup(sym, adj, visited)
+		group := graph.BFSGroup(sym, adj, visited)
 		if len(group) >= 2 {
 			groups = append(groups, group)
 		}
@@ -200,7 +201,7 @@ func SuggestSplit(component string, symbols []string, callEdges []analysis.CallE
 	splitGroups := make([]SplitGroup, 0, len(groups))
 	for idx, g := range groups {
 		name := suggestGroupName(g, idx)
-		cohesion := computeCohesion(g, adj)
+		cohesion := graph.Cohesion(g, adj)
 		splitGroups = append(splitGroups, SplitGroup{
 			Name:      name,
 			Symbols:   g,
@@ -218,25 +219,6 @@ func SuggestSplit(component string, symbols []string, callEdges []analysis.CallE
 		Groups:    splitGroups,
 		Summary:   fmt.Sprintf("suggest splitting into %d sub-packages", len(splitGroups)),
 	}
-}
-
-func bfsGroup(start string, adj map[string]map[string]bool, visited map[string]bool) []string {
-	queue := []string{start}
-	visited[start] = true
-	var group []string
-	for len(queue) > 0 {
-		cur := queue[0]
-		queue = queue[1:]
-		group = append(group, cur)
-		for neighbor := range adj[cur] {
-			if !visited[neighbor] {
-				visited[neighbor] = true
-				queue = append(queue, neighbor)
-			}
-		}
-	}
-	sort.Strings(group)
-	return group
 }
 
 func suggestGroupName(symbols []string, idx int) string {
@@ -257,31 +239,4 @@ func suggestGroupName(symbols []string, idx int) string {
 		return prefix
 	}
 	return fmt.Sprintf("group_%d", idx+1)
-}
-
-func computeCohesion(group []string, adj map[string]map[string]bool) float64 {
-	n := len(group)
-	if n < 2 {
-		return 1.0
-	}
-	possibleEdges := n * (n - 1) / 2
-	actualEdges := 0
-	groupSet := make(map[string]bool, n)
-	for _, s := range group {
-		groupSet[s] = true
-	}
-	counted := make(map[string]bool)
-	for _, s := range group {
-		for neighbor := range adj[s] {
-			if groupSet[neighbor] {
-				key := s + "|" + neighbor
-				rev := neighbor + "|" + s
-				if !counted[key] && !counted[rev] {
-					counted[key] = true
-					actualEdges++
-				}
-			}
-		}
-	}
-	return float64(actualEdges) / float64(possibleEdges)
 }
