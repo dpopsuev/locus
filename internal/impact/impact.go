@@ -2,6 +2,7 @@ package impact
 
 import (
 	"github.com/dpopsuev/locus/internal/arch"
+	"github.com/dpopsuev/locus/internal/graph"
 )
 
 // ImpactResult holds the blast radius and risk for a component change.
@@ -24,7 +25,7 @@ func ComputeImpact(edges []arch.ArchEdge, services []arch.ArchService, component
 		componentSet[services[i].Name] = true
 	}
 
-	reverse := arch.BuildReverseAdj(edges)
+	reverse := graph.ReverseAdj(edges)
 
 	// Direct dependents: who imports component.
 	directSet := make(map[string]bool)
@@ -39,7 +40,7 @@ func ComputeImpact(edges []arch.ArchEdge, services []arch.ArchService, component
 
 	// Transitive: BFS from direct dependents.
 	skip := map[string]bool{component: true}
-	transSet := arch.BFSFrom(directSet, reverse, componentSet, skip)
+	transSet := graph.BFS(directSet, reverse, componentSet, skip)
 	for t := range transSet {
 		result.TransDeps = append(result.TransDeps, t)
 	}

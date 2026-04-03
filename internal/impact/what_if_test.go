@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/dpopsuev/locus/internal/arch"
+	"github.com/dpopsuev/locus/internal/graph"
 )
 
 func testServices() []arch.ArchService {
@@ -119,7 +120,7 @@ func TestWhatIf_CycleBreak(t *testing.T) {
 		{From: "A", To: "B"},
 		{From: "B", To: "A"},
 	}
-	cycles := arch.DetectCycles(edges)
+	cycles := graph.DetectCycles(edges)
 	if len(cycles) == 0 {
 		t.Fatal("expected a cycle in setup")
 	}

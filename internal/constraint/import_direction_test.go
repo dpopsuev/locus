@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/dpopsuev/locus/internal/arch"
+	"github.com/dpopsuev/locus/internal/graph"
 )
 
 func TestComputeImportDirection_ExcludesEntrypoints(t *testing.T) {
@@ -14,7 +15,7 @@ func TestComputeImportDirection_ExcludesEntrypoints(t *testing.T) {
 		{From: "cmd/app", To: "internal/store"},
 		{From: "internal/protocol", To: "internal/store"},
 	}
-	depths := arch.DepthMap{
+	depths := graph.DepthMap{
 		"cmd/app":           0,
 		"internal/protocol": 2,
 		"internal/store":    3,
@@ -45,7 +46,7 @@ func TestComputeImportDirection_SkipsCycleNodes(t *testing.T) {
 	edges := []arch.ArchEdge{
 		{From: "a", To: "b"},
 	}
-	depths := arch.DepthMap{"a": -1, "b": 2}
+	depths := graph.DepthMap{"a": -1, "b": 2}
 
 	report := ComputeImportDirection(edges, depths)
 	if len(report.Violations) != 0 {
@@ -59,7 +60,7 @@ func TestComputeImportDirection_CleanArchitecture(t *testing.T) {
 		{From: "adapter/http", To: "domain/user"},
 		{From: "adapter/db", To: "domain/user"},
 	}
-	depths := arch.DepthMap{
+	depths := graph.DepthMap{
 		"adapter/http": 5,
 		"adapter/db":   5,
 		"domain/user":  2,
@@ -76,7 +77,7 @@ func TestComputeImportDirection_SeverityLevels(t *testing.T) {
 		{From: "domain", To: "adapter"},      // depth diff = 1 → warning
 		{From: "domain", To: "infra/detail"}, // depth diff = 3 → error
 	}
-	depths := arch.DepthMap{
+	depths := graph.DepthMap{
 		"domain":       2,
 		"adapter":      3,
 		"infra/detail": 5,

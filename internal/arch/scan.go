@@ -15,6 +15,7 @@ import (
 	"golang.org/x/mod/modfile"
 
 	"github.com/dpopsuev/locus/internal/analysis"
+	"github.com/dpopsuev/locus/internal/graph"
 	"github.com/dpopsuev/locus/internal/model"
 	"github.com/dpopsuev/locus/internal/survey"
 )
@@ -102,24 +103,24 @@ type HotSpot struct {
 
 // ContextReport is the full output of a ScanAndBuild invocation.
 type ContextReport struct {
-	Project           *model.Project      `json:"project"`
-	Architecture      ArchModel           `json:"architecture"`
-	ModulePath        string              `json:"module_path"`
-	Scanner           string              `json:"scanner"`
-	SuggestedDepth    int                 `json:"suggested_depth,omitempty"`
-	HotSpots          []HotSpot           `json:"hot_spots,omitempty"`
-	Cycles            []Cycle             `json:"cycles,omitempty"`
-	ImportDepth       DepthMap            `json:"import_depth,omitempty"`
-	LayerViolations   []LayerViolation    `json:"layer_violations,omitempty"`
-	Coverage          []CoverageResult    `json:"coverage,omitempty"`
-	APISurfaces       []APISurface        `json:"api_surfaces,omitempty"`
-	BoundaryCrossings []BoundaryCrossing  `json:"boundary_crossings,omitempty"`
-	RecentCommits     []PackageCommit     `json:"recent_commits,omitempty"`
-	Authors           map[string][]Author `json:"authors,omitempty"`
-	FileHotSpots      []HotFile           `json:"file_hot_spots,omitempty"`
-	Anchors           []SemanticAnchor    `json:"anchors,omitempty"`
-	FanIn             map[string]int      `json:"fan_in,omitempty"`
-	FanOut            map[string]int      `json:"fan_out,omitempty"`
+	Project           *model.Project         `json:"project"`
+	Architecture      ArchModel              `json:"architecture"`
+	ModulePath        string                 `json:"module_path"`
+	Scanner           string                 `json:"scanner"`
+	SuggestedDepth    int                    `json:"suggested_depth,omitempty"`
+	HotSpots          []HotSpot              `json:"hot_spots,omitempty"`
+	Cycles            []graph.Cycle          `json:"cycles,omitempty"`
+	ImportDepth       graph.DepthMap         `json:"import_depth,omitempty"`
+	LayerViolations   []graph.LayerViolation `json:"layer_violations,omitempty"`
+	Coverage          []CoverageResult       `json:"coverage,omitempty"`
+	APISurfaces       []APISurface           `json:"api_surfaces,omitempty"`
+	BoundaryCrossings []BoundaryCrossing     `json:"boundary_crossings,omitempty"`
+	RecentCommits     []PackageCommit        `json:"recent_commits,omitempty"`
+	Authors           map[string][]Author    `json:"authors,omitempty"`
+	FileHotSpots      []HotFile              `json:"file_hot_spots,omitempty"`
+	Anchors           []SemanticAnchor       `json:"anchors,omitempty"`
+	FanIn             map[string]int         `json:"fan_in,omitempty"`
+	FanOut            map[string]int         `json:"fan_out,omitempty"`
 }
 
 // ScanAndBuild scans any repository and produces a ContextReport.
@@ -209,16 +210,16 @@ func ScanAndBuild(root string, opts ScanOpts) (*ContextReport, error) {
 	}
 	report.HotSpots = spots
 
-	cycles := DetectCycles(archModel.Edges)
+	cycles := graph.DetectCycles(archModel.Edges)
 	if cycles == nil {
-		cycles = []Cycle{}
+		cycles = []graph.Cycle{}
 	}
 	report.Cycles = cycles
-	report.ImportDepth = ComputeImportDepth(archModel.Edges)
+	report.ImportDepth = graph.ImportDepth(archModel.Edges)
 	report.APISurfaces = ComputeAPISurface(archModel)
 	report.BoundaryCrossings = DetectBoundaryCrossings(archModel, nil)
-	report.FanIn = ComputeFanIn(archModel.Edges)
-	report.FanOut = ComputeFanOut(archModel.Edges)
+	report.FanIn = graph.FanIn(archModel.Edges)
+	report.FanOut = graph.FanOut(archModel.Edges)
 
 	if level < 2 {
 		return report, nil
@@ -346,7 +347,7 @@ func resolvedScannerName(override, root string) string {
 }
 
 func computeHotSpots(m ArchModel) []HotSpot {
-	fanIn := ComputeFanIn(m.Edges)
+	fanIn := graph.FanIn(m.Edges)
 	var spots []HotSpot
 	for i := range m.Services {
 		s := &m.Services[i]

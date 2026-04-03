@@ -12,6 +12,7 @@ import (
 
 	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/arch"
+	"github.com/dpopsuev/locus/internal/graph"
 	"github.com/dpopsuev/locus/internal/port"
 )
 
@@ -91,8 +92,8 @@ func IsAccepted(accepted []port.AcceptedViolation, component, principle string) 
 //   - fan-in 3-7 → error    (medium blast radius)
 //   - fan-in 8+  → critical (high blast radius, many dependents break)
 func ComputeSRPViolations(services []arch.ArchService, edges []arch.ArchEdge, roles map[string]HexaRole, accepted []port.AcceptedViolation) []SOLIDViolation {
-	fanIn := arch.ComputeFanIn(edges)
-	fanOut := arch.ComputeFanOut(edges)
+	fanIn := graph.FanIn(edges)
+	fanOut := graph.FanOut(edges)
 	fanOutTargets := make(map[string]map[string]bool, len(services))
 	for _, e := range edges {
 		if fanOutTargets[e.From] == nil {

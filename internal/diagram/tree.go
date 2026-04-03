@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/dpopsuev/locus/internal/arch"
+	"github.com/dpopsuev/locus/internal/graph"
 )
 
 // DefaultTopSymbols is the number of exported symbols shown per component in tree diagrams.
@@ -22,7 +23,7 @@ type treeCtx struct {
 
 func newTreeCtx(report *arch.ContextReport, topN int) *treeCtx {
 	tc := &treeCtx{
-		fi:         arch.ComputeFanIn(report.Architecture.Edges),
+		fi:         graph.FanIn(report.Architecture.Edges),
 		churnMap:   make(map[string]int),
 		svcSymbols: make(map[string][]string),
 		symCount:   make(map[string]int),

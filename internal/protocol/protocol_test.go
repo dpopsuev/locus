@@ -10,6 +10,7 @@ import (
 
 	"github.com/dpopsuev/locus/internal/arch"
 	"github.com/dpopsuev/locus/internal/cache"
+	"github.com/dpopsuev/locus/internal/graph"
 	"github.com/dpopsuev/locus/internal/port"
 	"github.com/dpopsuev/locus/internal/store"
 )
@@ -474,7 +475,7 @@ func TestAnswerQuery(t *testing.T) {
 func TestGenerateHints(t *testing.T) {
 	// Report with cycles and hot spots should produce hints.
 	report := &arch.ContextReport{
-		Cycles:   []arch.Cycle{{"a", "b", "a"}},
+		Cycles:   []graph.Cycle{{"a", "b", "a"}},
 		HotSpots: []arch.HotSpot{{Component: "pkg_a", FanIn: 5, Churn: 10}},
 	}
 	hints := GenerateHints(report)

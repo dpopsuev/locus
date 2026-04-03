@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/dpopsuev/locus/internal/arch"
+	"github.com/dpopsuev/locus/internal/graph"
 )
 
 const (
@@ -26,7 +27,7 @@ func RenderFacts(report *arch.ContextReport) string {
 	}
 
 	// Health facts.
-	fanIn := arch.ComputeFanIn(report.Architecture.Edges)
+	fanIn := graph.FanIn(report.Architecture.Edges)
 	for i := range report.Architecture.Services {
 		s := &report.Architecture.Services[i]
 		h := ClassifyHealth(fanIn[s.Name], s.Churn)

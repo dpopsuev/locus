@@ -6,6 +6,7 @@ import (
 
 	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/arch"
+	"github.com/dpopsuev/locus/internal/graph"
 	"github.com/dpopsuev/locus/internal/port"
 )
 
@@ -62,7 +63,7 @@ func TestComputePatternScan_CircularDependency(t *testing.T) {
 		{From: "pkg/a", To: "pkg/b"},
 		{From: "pkg/b", To: "pkg/a"},
 	}
-	cycles := []arch.Cycle{
+	cycles := []graph.Cycle{
 		{"pkg/a", "pkg/b"},
 	}
 

@@ -7,6 +7,7 @@ import (
 
 	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/arch"
+	"github.com/dpopsuev/locus/internal/graph"
 	"github.com/dpopsuev/locus/internal/port"
 )
 
@@ -424,7 +425,7 @@ func signalHighSymbolCount(svc arch.ArchService, threshold int) (detected bool, 
 	return false, 0, ""
 }
 
-func signalCycleParticipant(svcName string, cycles []arch.Cycle) (detected bool, confidence float64, evidence string) {
+func signalCycleParticipant(svcName string, cycles []graph.Cycle) (detected bool, confidence float64, evidence string) {
 	for _, cycle := range cycles {
 		for _, node := range cycle {
 			if node == svcName {
@@ -702,7 +703,7 @@ func evaluateSignal(
 	rule fingerprintRule,
 	svc arch.ArchService,
 	edges []arch.ArchEdge,
-	cycles []arch.Cycle,
+	cycles []graph.Cycle,
 	classes []analysis.ClassInfo,
 	impls []analysis.ImplEdge,
 ) (detected bool, confidence float64, evidence string) {
@@ -749,7 +750,7 @@ func evaluateFingerprint(
 	fp patternFingerprint,
 	svc arch.ArchService,
 	edges []arch.ArchEdge,
-	cycles []arch.Cycle,
+	cycles []graph.Cycle,
 	classes []analysis.ClassInfo,
 	impls []analysis.ImplEdge,
 	roleMultiplier float64,
@@ -901,7 +902,7 @@ func detectMissingPattern(
 func ComputePatternScan(
 	services []arch.ArchService,
 	edges []arch.ArchEdge,
-	cycles []arch.Cycle,
+	cycles []graph.Cycle,
 	classes []analysis.ClassInfo,
 	impls []analysis.ImplEdge,
 	roles map[string]HexaRole,

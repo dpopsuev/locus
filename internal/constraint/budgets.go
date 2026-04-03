@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/dpopsuev/locus/internal/arch"
+	"github.com/dpopsuev/locus/internal/graph"
 	"github.com/dpopsuev/locus/internal/port"
 )
 
@@ -37,7 +38,7 @@ func ComputeBudgetViolations(
 		svcMap[services[i].Name] = &services[i]
 	}
 
-	fanIn := arch.ComputeFanIn(edges)
+	fanIn := graph.FanIn(edges)
 
 	var violations []BudgetViolation
 	passing := 0

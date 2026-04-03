@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/dpopsuev/locus/internal/arch"
+	"github.com/dpopsuev/locus/internal/graph"
 )
 
 func renderChurn(in Input, opts Options) string {
@@ -54,7 +54,7 @@ func renderChurnTimeline(in Input, opts Options) string {
 func renderChurnBar(in Input, opts Options) string {
 	report := in.Report
 
-	fi := arch.ComputeFanIn(report.Architecture.Edges)
+	fi := graph.FanIn(report.Architecture.Edges)
 
 	type entry struct {
 		name   string

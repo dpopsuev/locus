@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/dpopsuev/locus/internal/arch"
+	"github.com/dpopsuev/locus/internal/graph"
 	"github.com/dpopsuev/locus/internal/port"
 )
 
@@ -27,7 +28,7 @@ type GapReport struct {
 func DetectGaps(report *arch.ContextReport, root string) (*GapReport, error) {
 	r := &GapReport{ComponentsScanned: len(report.Architecture.Services)}
 
-	fanIn := arch.ComputeFanIn(report.Architecture.Edges)
+	fanIn := graph.FanIn(report.Architecture.Edges)
 
 	for i := range report.Architecture.Services {
 		comp := report.Architecture.Services[i].Name

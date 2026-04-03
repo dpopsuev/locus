@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/dpopsuev/locus/internal/arch"
+	"github.com/dpopsuev/locus/internal/graph"
 )
 
 func renderLayers(in Input, _ Options) string {
@@ -14,7 +14,7 @@ func renderLayers(in Input, _ Options) string {
 
 	depths := report.ImportDepth
 	if depths == nil {
-		depths = arch.ComputeImportDepth(report.Architecture.Edges)
+		depths = graph.ImportDepth(report.Architecture.Edges)
 	}
 
 	type layer struct {

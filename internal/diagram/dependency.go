@@ -5,13 +5,14 @@ import (
 	"strings"
 
 	"github.com/dpopsuev/locus/internal/arch"
+	"github.com/dpopsuev/locus/internal/graph"
 )
 
 func renderDependency(in Input, opts Options) string {
 	m := in.Report.Architecture
 	rt := in.ResolvedTheme
 
-	fi := arch.ComputeFanIn(m.Edges)
+	fi := graph.FanIn(m.Edges)
 	churnMap := make(map[string]int)
 	for i := range m.Services {
 		churnMap[m.Services[i].Name] = m.Services[i].Churn

@@ -5,6 +5,7 @@ import (
 	"sort"
 
 	"github.com/dpopsuev/locus/internal/arch"
+	"github.com/dpopsuev/locus/internal/graph"
 	"github.com/dpopsuev/locus/internal/port"
 )
 
@@ -27,9 +28,9 @@ type ImportDirectionReport struct {
 // ComputeImportDirection checks that imports flow from high depth to low depth.
 // A violation occurs when a component at a shallow depth imports one at a greater depth,
 // meaning a high-level component depends on a low-level detail.
-func ComputeImportDirection(edges []arch.ArchEdge, depths arch.DepthMap) *ImportDirectionReport {
+func ComputeImportDirection(edges []arch.ArchEdge, depths graph.DepthMap) *ImportDirectionReport {
 	if depths == nil {
-		depths = arch.ComputeImportDepth(edges)
+		depths = graph.ImportDepth(edges)
 	}
 
 	var violations []ImportDirectionViolation

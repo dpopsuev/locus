@@ -3,6 +3,8 @@ package arch
 import (
 	"encoding/json"
 	"sort"
+
+	"github.com/dpopsuev/locus/internal/graph"
 )
 
 // jsonReport is the top-level JSON output structure for mcontext.
@@ -47,8 +49,8 @@ type jsonEdge struct {
 
 // RenderJSON serializes a ContextReport into the mcontext JSON schema.
 func RenderJSON(report *ContextReport) ([]byte, error) {
-	fanIn := ComputeFanIn(report.Architecture.Edges)
-	fanOut := ComputeFanOut(report.Architecture.Edges)
+	fanIn := graph.FanIn(report.Architecture.Edges)
+	fanOut := graph.FanOut(report.Architecture.Edges)
 
 	components := make([]jsonComponent, 0, len(report.Architecture.Services))
 	for i := range report.Architecture.Services {

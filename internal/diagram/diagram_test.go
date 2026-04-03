@@ -7,6 +7,7 @@ import (
 
 	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/arch"
+	"github.com/dpopsuev/locus/internal/graph"
 	"github.com/dpopsuev/locus/internal/history"
 )
 
@@ -36,14 +37,14 @@ func testReport() *arch.ContextReport {
 		HotSpots: []arch.HotSpot{
 			{Component: "internal/core", FanIn: 2, Churn: 20},
 		},
-		ImportDepth: arch.DepthMap{
+		ImportDepth: graph.DepthMap{
 			"cmd/app":        0,
 			"internal/api":   1,
 			"internal/core":  2,
 			"internal/store": 3,
 			"pkg/util":       3,
 		},
-		LayerViolations: []arch.LayerViolation{
+		LayerViolations: []graph.LayerViolation{
 			{From: "internal/store", To: "internal/api", FromLayer: "3", ToLayer: "1"},
 		},
 	}

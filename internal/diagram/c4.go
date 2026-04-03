@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dpopsuev/locus/internal/arch"
+	"github.com/dpopsuev/locus/internal/graph"
 )
 
 func renderC4(in Input, opts Options) string {
@@ -19,7 +19,7 @@ func renderC4(in Input, opts Options) string {
 		depth = 1
 	}
 
-	fi := arch.ComputeFanIn(report.Architecture.Edges)
+	fi := graph.FanIn(report.Architecture.Edges)
 	churnMap := make(map[string]int)
 	for i := range report.Architecture.Services {
 		churnMap[report.Architecture.Services[i].Name] = report.Architecture.Services[i].Churn

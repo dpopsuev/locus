@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/dpopsuev/locus/internal/graph"
 	"github.com/dpopsuev/locus/internal/model"
 )
 
@@ -390,7 +391,7 @@ func RenderArchMarkdown(m ArchModel) string {
 	b.WriteString("```\n\n")
 
 	if hasChurn {
-		fanIn := ComputeFanIn(m.Edges)
+		fanIn := graph.FanIn(m.Edges)
 		type hotSpot struct {
 			Name  string
 			FanIn int

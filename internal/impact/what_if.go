@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/dpopsuev/locus/internal/arch"
+	"github.com/dpopsuev/locus/internal/graph"
 )
 
 // FileMove describes a hypothetical component move or deletion.
@@ -35,8 +36,8 @@ type GraphDelta struct {
 	ComponentsAfter  int           `json:"components_after"`
 	EdgesBefore      int           `json:"edges_before"`
 	EdgesAfter       int           `json:"edges_after"`
-	NewCycles        []arch.Cycle  `json:"new_cycles,omitempty"`
-	RemovedCycles    []arch.Cycle  `json:"removed_cycles,omitempty"`
+	NewCycles        []graph.Cycle `json:"new_cycles,omitempty"`
+	RemovedCycles    []graph.Cycle `json:"removed_cycles,omitempty"`
 	FanInDelta       []MetricDelta `json:"fan_in_delta,omitempty"`
 	Summary          string        `json:"summary"`
 }
@@ -46,7 +47,7 @@ type GraphDelta struct {
 func ComputeWhatIf(
 	services []arch.ArchService,
 	edges []arch.ArchEdge,
-	cycles []arch.Cycle,
+	cycles []graph.Cycle,
 	moves []FileMove,
 ) (*GraphDelta, error) {
 	if len(moves) == 0 {
@@ -59,7 +60,7 @@ func ComputeWhatIf(
 		}, nil
 	}
 
-	beforeFanIn := arch.ComputeFanIn(edges)
+	beforeFanIn := graph.FanIn(edges)
 	beforeEdgeSet := edgeSet(edges)
 
 	// Clone services and edges for mutation.
@@ -83,7 +84,7 @@ func ComputeWhatIf(
 	// Remove self-loops created by merges.
 	mutEdges = removeSelfLoops(mutEdges)
 
-	afterFanIn := arch.ComputeFanIn(mutEdges)
+	afterFanIn := graph.FanIn(mutEdges)
 	afterEdgeSet := edgeSet(mutEdges)
 
 	// Diff edges.
@@ -102,7 +103,7 @@ func ComputeWhatIf(
 	sortEdgeDiffs(added)
 
 	// Diff cycles.
-	afterCycles := arch.DetectCycles(mutEdges)
+	afterCycles := graph.DetectCycles(mutEdges)
 	newCycles, removedCycles := diffCycles(cycles, afterCycles)
 
 	// Diff fan-in.
@@ -256,7 +257,7 @@ func diffFanIn(before, after map[string]int) []MetricDelta {
 	return deltas
 }
 
-func diffCycles(before, after []arch.Cycle) (newCycles, removedCycles []arch.Cycle) {
+func diffCycles(before, after []graph.Cycle) (newCycles, removedCycles []graph.Cycle) {
 	beforeSet := cycleSet(before)
 	afterSet := cycleSet(after)
 
@@ -273,8 +274,8 @@ func diffCycles(before, after []arch.Cycle) (newCycles, removedCycles []arch.Cyc
 	return newCycles, removedCycles
 }
 
-func cycleSet(cycles []arch.Cycle) map[string]arch.Cycle {
-	s := make(map[string]arch.Cycle, len(cycles))
+func cycleSet(cycles []graph.Cycle) map[string]graph.Cycle {
+	s := make(map[string]graph.Cycle, len(cycles))
 	for _, c := range cycles {
 		sorted := make([]string, len(c))
 		copy(sorted, c)

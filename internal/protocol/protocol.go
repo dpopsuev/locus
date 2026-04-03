@@ -18,6 +18,7 @@ import (
 	"github.com/dpopsuev/locus/internal/clinic"
 	"github.com/dpopsuev/locus/internal/constraint"
 	"github.com/dpopsuev/locus/internal/cursor"
+	"github.com/dpopsuev/locus/internal/graph"
 	"github.com/dpopsuev/locus/internal/history"
 	"github.com/dpopsuev/locus/internal/impact"
 	"github.com/dpopsuev/locus/internal/port"
@@ -276,9 +277,9 @@ func (p *Protocol) GetEdgeList(ctx context.Context, path, component string, cach
 
 // CycleReport holds cycle detection results extracted from a cached scan.
 type CycleReport struct {
-	Cycles          []arch.Cycle          `json:"cycles"`
-	ImportDepth     arch.DepthMap         `json:"import_depth"`
-	LayerViolations []arch.LayerViolation `json:"layer_violations,omitempty"`
+	Cycles          []graph.Cycle          `json:"cycles"`
+	ImportDepth     graph.DepthMap         `json:"import_depth"`
+	LayerViolations []graph.LayerViolation `json:"layer_violations,omitempty"`
 }
 
 func (p *Protocol) GetCycles(ctx context.Context, path string, layers []string, cacheKey ...string) (*CycleReport, error) {
@@ -292,7 +293,7 @@ func (p *Protocol) GetCycles(ctx context.Context, path string, layers []string, 
 		ImportDepth: report.ImportDepth,
 	}
 	if len(layers) > 0 {
-		r.LayerViolations = arch.CheckLayerPurity(report.Architecture.Edges, layers)
+		r.LayerViolations = graph.CheckLayerPurity(report.Architecture.Edges, layers)
 	} else {
 		r.LayerViolations = report.LayerViolations
 	}
@@ -301,10 +302,10 @@ func (p *Protocol) GetCycles(ctx context.Context, path string, layers []string, 
 
 // ViolationReport holds architecture violation detection results.
 type ViolationReport struct {
-	Layers     []string              `json:"layers"`
-	Violations []arch.LayerViolation `json:"violations"`
-	Cycles     []arch.Cycle          `json:"cycles,omitempty"`
-	Summary    string                `json:"summary"`
+	Layers     []string               `json:"layers"`
+	Violations []graph.LayerViolation `json:"violations"`
+	Cycles     []graph.Cycle          `json:"cycles,omitempty"`
+	Summary    string                 `json:"summary"`
 }
 
 func (p *Protocol) GetViolations(ctx context.Context, path string, layers []string, cacheKey ...string) (*ViolationReport, error) {
@@ -319,7 +320,7 @@ func (p *Protocol) GetViolations(ctx context.Context, path string, layers []stri
 		layers = inferLayerOrder(report)
 	}
 
-	violations := arch.CheckLayerPurity(report.Architecture.Edges, layers)
+	violations := graph.CheckLayerPurity(report.Architecture.Edges, layers)
 
 	summary := fmt.Sprintf("%d layer(s), %d violation(s), %d cycle(s)",
 		len(layers), len(violations), len(report.Cycles))
@@ -340,7 +341,7 @@ func (p *Protocol) GetViolations(ctx context.Context, path string, layers []stri
 func inferLayerOrder(report *arch.ContextReport) []string {
 	depths := report.ImportDepth
 	if depths == nil {
-		depths = arch.ComputeImportDepth(report.Architecture.Edges)
+		depths = graph.ImportDepth(report.Architecture.Edges)
 	}
 
 	// Group components by depth.
@@ -397,7 +398,7 @@ func (p *Protocol) AcceptViolation(ctx context.Context, path string, av port.Acc
 // DriftReport holds architecture drift analysis results.
 type DriftReport struct {
 	HasDesiredState    bool                           `json:"has_desired_state"`
-	LayerViolations    []arch.LayerViolation          `json:"layer_violations,omitempty"`
+	LayerViolations    []graph.LayerViolation         `json:"layer_violations,omitempty"`
 	BoundaryViolations []constraint.BoundaryViolation `json:"boundary_violations,omitempty"`
 	BudgetViolations   []constraint.BudgetViolation   `json:"budget_violations,omitempty"`
 	BoundaryBreaches   int                            `json:"boundary_breaches"`
@@ -422,7 +423,7 @@ func (p *Protocol) GetDrift(ctx context.Context, path string, cacheKey ...string
 	}
 
 	// 1. Layer purity (existing).
-	layerViolations := arch.CheckLayerPurity(report.Architecture.Edges, ds.Layers)
+	layerViolations := graph.CheckLayerPurity(report.Architecture.Edges, ds.Layers)
 
 	// 2. Boundary rules (new).
 	boundaryViolations := constraint.CheckBoundaryRules(report.Architecture.Edges, ds.Boundaries)
@@ -538,7 +539,7 @@ func (p *Protocol) CheckDriftOnScan(ctx context.Context, path string, report *ar
 	if err != nil || ds == nil || len(ds.Layers) == 0 {
 		return ""
 	}
-	violations := arch.CheckLayerPurity(report.Architecture.Edges, ds.Layers)
+	violations := graph.CheckLayerPurity(report.Architecture.Edges, ds.Layers)
 	if len(violations) == 0 {
 		return "Architecture: clean"
 	}
@@ -547,8 +548,8 @@ func (p *Protocol) CheckDriftOnScan(ctx context.Context, path string, report *ar
 
 // generateComponentMeta creates metadata for all components in a scan report.
 func generateComponentMeta(report *arch.ContextReport) []port.ComponentMeta {
-	depths := arch.ComputeImportDepth(report.Architecture.Edges)
-	fanIn := arch.ComputeFanIn(report.Architecture.Edges)
+	depths := graph.ImportDepth(report.Architecture.Edges)
+	fanIn := graph.FanIn(report.Architecture.Edges)
 
 	meta := make([]port.ComponentMeta, 0, len(report.Architecture.Services))
 	for i := range report.Architecture.Services {
@@ -762,7 +763,7 @@ func (p *Protocol) GetCrossRepo(ctx context.Context, pathA, pathB, cacheKeyA, ca
 	allEdges := make([]arch.ArchEdge, 0, len(reportA.Architecture.Edges)+len(reportB.Architecture.Edges))
 	allEdges = append(allEdges, reportA.Architecture.Edges...)
 	allEdges = append(allEdges, reportB.Architecture.Edges...)
-	mergedCycles := arch.DetectCycles(allEdges)
+	mergedCycles := graph.DetectCycles(allEdges)
 	existingCycles := len(reportA.Cycles) + len(reportB.Cycles)
 	newCycles := max(len(mergedCycles)-existingCycles, 0)
 

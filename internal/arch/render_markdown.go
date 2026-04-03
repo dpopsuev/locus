@@ -4,12 +4,14 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/dpopsuev/locus/internal/graph"
 )
 
 // RenderMarkdown produces a human-readable markdown summary of a ContextReport.
 // Designed for direct agent consumption without any post-processing.
 func RenderMarkdown(report *ContextReport) string {
-	fanIn := ComputeFanIn(report.Architecture.Edges)
+	fanIn := graph.FanIn(report.Architecture.Edges)
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "# %s\n\n", report.ModulePath)
@@ -47,8 +49,8 @@ func RenderMarkdown(report *ContextReport) string {
 // churn, nesting, and symbol count. sortBy is "fan_in", "fan_out", "churn", or "nesting".
 // topN=0 means all.
 func RenderCouplingTable(report *ContextReport, sortBy string, topN int) string {
-	fanIn := ComputeFanIn(report.Architecture.Edges)
-	fanOut := ComputeFanOut(report.Architecture.Edges)
+	fanIn := graph.FanIn(report.Architecture.Edges)
+	fanOut := graph.FanOut(report.Architecture.Edges)
 
 	type row struct {
 		Name       string
