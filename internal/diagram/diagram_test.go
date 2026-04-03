@@ -165,6 +165,16 @@ func TestRenderTree(t *testing.T) {
 	assertContains(t, out, "DB")
 }
 
+func TestRenderZones(t *testing.T) {
+	out, err := Render(Input{Report: testReport()}, Options{Type: "zones"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertMermaidType(t, out, "graph TD")
+	assertContains(t, out, "subgraph")
+	assertContains(t, out, "-->")
+}
+
 func TestRenderTreeDarkTheme(t *testing.T) {
 	out, err := Render(Input{Report: testReport()}, Options{Type: "tree", Theme: "dark"})
 	if err != nil {
