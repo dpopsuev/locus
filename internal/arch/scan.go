@@ -118,6 +118,8 @@ type ContextReport struct {
 	Authors           map[string][]Author `json:"authors,omitempty"`
 	FileHotSpots      []HotFile           `json:"file_hot_spots,omitempty"`
 	Anchors           []SemanticAnchor    `json:"anchors,omitempty"`
+	FanIn             map[string]int      `json:"fan_in,omitempty"`
+	FanOut            map[string]int      `json:"fan_out,omitempty"`
 }
 
 // ScanAndBuild scans any repository and produces a ContextReport.
@@ -215,6 +217,8 @@ func ScanAndBuild(root string, opts ScanOpts) (*ContextReport, error) {
 	report.ImportDepth = ComputeImportDepth(archModel.Edges)
 	report.APISurfaces = ComputeAPISurface(archModel)
 	report.BoundaryCrossings = DetectBoundaryCrossings(archModel, nil)
+	report.FanIn = ComputeFanIn(archModel.Edges)
+	report.FanOut = ComputeFanOut(archModel.Edges)
 
 	if level < 2 {
 		return report, nil
