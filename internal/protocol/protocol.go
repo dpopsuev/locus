@@ -602,7 +602,7 @@ func extractKeywords(s arch.ArchService) []string {
 	// First 10 exported symbol names.
 	n := min(len(s.Symbols), 10)
 	for _, sym := range s.Symbols[:n] {
-		lower := strings.ToLower(sym)
+		lower := strings.ToLower(sym.Name)
 		if !seen[lower] {
 			seen[lower] = true
 			keywords = append(keywords, lower)
@@ -1056,9 +1056,12 @@ func (p *Protocol) GetComponentDetail(ctx context.Context, path, name string, ca
 		}
 	}
 
-	syms := svc.Symbols
-	if len(syms) > 20 {
-		syms = syms[:20]
+	symNames := make([]string, 0, min(len(svc.Symbols), 20))
+	for _, s := range svc.Symbols {
+		if len(symNames) >= 20 {
+			break
+		}
+		symNames = append(symNames, s.Name)
 	}
 
 	fi := 0
@@ -1073,7 +1076,7 @@ func (p *Protocol) GetComponentDetail(ctx context.Context, path, name string, ca
 	}
 
 	return &ComponentDetail{
-		Name: name, LOC: svc.LOC, Symbols: syms,
+		Name: name, LOC: svc.LOC, Symbols: symNames,
 		Imports: imports, Importers: importers,
 		Churn: svc.Churn, Health: health,
 	}, nil

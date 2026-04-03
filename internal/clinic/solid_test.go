@@ -5,12 +5,13 @@ import (
 
 	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/arch"
+	"github.com/dpopsuev/locus/internal/model"
 	"github.com/dpopsuev/locus/internal/port"
 )
 
 func TestComputeSRPViolations_HighFanOut(t *testing.T) {
 	services := []arch.ArchService{
-		{Name: "internal/bigpkg", LOC: 1200, Symbols: make([]string, 5)},
+		{Name: "internal/bigpkg", LOC: 1200, Symbols: make([]model.Symbol, 5)},
 	}
 	// Create 10 outbound edges to trigger LOC>1000 && fan-out>8.
 	// Fan-in=0 (no edges TO bigpkg) → warning severity (low blast radius).
@@ -38,7 +39,7 @@ func TestComputeSRPViolations_HighFanOut(t *testing.T) {
 
 func TestComputeSRPViolations_Warning(t *testing.T) {
 	services := []arch.ArchService{
-		{Name: "internal/midpkg", LOC: 600, Symbols: make([]string, 5)},
+		{Name: "internal/midpkg", LOC: 600, Symbols: make([]model.Symbol, 5)},
 	}
 	edges := make([]arch.ArchEdge, 6)
 	for i := range edges {
@@ -60,7 +61,7 @@ func TestComputeSRPViolations_Warning(t *testing.T) {
 
 func TestComputeSRPViolations_Clean(t *testing.T) {
 	services := []arch.ArchService{
-		{Name: "internal/small", LOC: 100, Symbols: make([]string, 3)},
+		{Name: "internal/small", LOC: 100, Symbols: make([]model.Symbol, 3)},
 	}
 	edges := []arch.ArchEdge{
 		{From: "internal/small", To: "internal/a"},
@@ -76,7 +77,7 @@ func TestComputeSRPViolations_Clean(t *testing.T) {
 
 func TestComputeSRPViolations_DomainDiversity(t *testing.T) {
 	services := []arch.ArchService{
-		{Name: "internal/hub", LOC: 200, Symbols: make([]string, 25)},
+		{Name: "internal/hub", LOC: 200, Symbols: make([]model.Symbol, 25)},
 	}
 	// 4 distinct domains: store, arch, analysis, protocol.
 	edges := []arch.ArchEdge{
@@ -267,7 +268,7 @@ func TestComputeSOLIDScan_Score(t *testing.T) {
 	// Setup: 1 SRP violation (warning) + 1 ISP violation (error) = 2 violations.
 	// 1 service × 4 principles = 4 checks. Score = 100 - 2/4*100 = 50.
 	services := []arch.ArchService{
-		{Name: "internal/big", LOC: 600, Symbols: make([]string, 5)},
+		{Name: "internal/big", LOC: 600, Symbols: make([]model.Symbol, 5)},
 	}
 	edges := make([]arch.ArchEdge, 6)
 	for i := range edges {
@@ -304,7 +305,7 @@ func TestComputeSOLIDScan_Score(t *testing.T) {
 
 func TestComputeSOLIDScan_PerfectScore(t *testing.T) {
 	services := []arch.ArchService{
-		{Name: "internal/clean", LOC: 50, Symbols: make([]string, 3)},
+		{Name: "internal/clean", LOC: 50, Symbols: make([]model.Symbol, 3)},
 	}
 	edges := []arch.ArchEdge{
 		{From: "internal/clean", To: "internal/a"},
@@ -455,7 +456,7 @@ func TestISPSeverity_ManyImplementors(t *testing.T) {
 func TestSRPSeverity_LowFanIn(t *testing.T) {
 	// God component (LOC=1200, fan-out=10) with fan-in=1 → warning.
 	services := []arch.ArchService{
-		{Name: "internal/godpkg", LOC: 1200, Symbols: make([]string, 5)},
+		{Name: "internal/godpkg", LOC: 1200, Symbols: make([]model.Symbol, 5)},
 	}
 	edges := make([]arch.ArchEdge, 10)
 	for i := range edges {
@@ -478,7 +479,7 @@ func TestSRPSeverity_LowFanIn(t *testing.T) {
 func TestSRPSeverity_HighFanIn(t *testing.T) {
 	// God component (LOC=1200, fan-out=10) with fan-in=10 → critical.
 	services := []arch.ArchService{
-		{Name: "internal/godpkg", LOC: 1200, Symbols: make([]string, 5)},
+		{Name: "internal/godpkg", LOC: 1200, Symbols: make([]model.Symbol, 5)},
 	}
 	edges := make([]arch.ArchEdge, 10)
 	for i := range edges {
@@ -532,7 +533,7 @@ func TestSRPWithRoleMultiplier_AppLenient(t *testing.T) {
 	// Fan-out=10: warning threshold = int(5*1.5)=7, error threshold = int(8*1.5)=12.
 	// 10 > 7 → warning condition met. So: warning, NOT error.
 	services := []arch.ArchService{
-		{Name: "app/orchestrator", LOC: 1400, Symbols: make([]string, 5)},
+		{Name: "app/orchestrator", LOC: 1400, Symbols: make([]model.Symbol, 5)},
 	}
 	edges := make([]arch.ArchEdge, 10)
 	for i := range edges {
@@ -559,7 +560,7 @@ func TestSRPWithDomainRole_Stricter(t *testing.T) {
 	// Fan-out=9: error threshold = int(8*0.8)=6.
 	// LOC=900 > 800 AND fan-out=9 > 6 → should trigger a violation.
 	services := []arch.ArchService{
-		{Name: "domain/model", LOC: 900, Symbols: make([]string, 5)},
+		{Name: "domain/model", LOC: 900, Symbols: make([]model.Symbol, 5)},
 	}
 	edges := make([]arch.ArchEdge, 9)
 	for i := range edges {
@@ -611,7 +612,7 @@ func TestIsAccepted(t *testing.T) {
 func TestSRPWithAccepted(t *testing.T) {
 	// Same setup as TestComputeSRPViolations_HighFanOut — should trigger SRP violation.
 	services := []arch.ArchService{
-		{Name: "app/big", LOC: 1200, Symbols: make([]string, 5)},
+		{Name: "app/big", LOC: 1200, Symbols: make([]model.Symbol, 5)},
 	}
 	edges := make([]arch.ArchEdge, 10)
 	for i := range edges {

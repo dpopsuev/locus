@@ -171,9 +171,9 @@ func ComputeSymbolQuality(services []arch.ArchService, edges []arch.ArchEdge) *S
 		svcFanIn := fanIn[svc.Name]
 		for _, sym := range svc.Symbols {
 			totalChecked++
-			issues = append(issues, checkAbbreviation(sym, svc.Package, svcFanIn)...)
-			issues = append(issues, checkGenericName(sym, svc.Package, svcFanIn)...)
-			issues = append(issues, checkVerblessExport(sym, svc.Package, svcFanIn)...)
+			issues = append(issues, checkAbbreviation(sym.Name, svc.Package, svcFanIn)...)
+			issues = append(issues, checkGenericName(sym.Name, svc.Package, svcFanIn)...)
+			issues = append(issues, checkVerblessExport(sym.Name, svc.Package, svcFanIn)...)
 		}
 	}
 
@@ -359,7 +359,7 @@ func ComputeVocabMap(services []arch.ArchService) *VocabMapReport {
 	for i := range services {
 		svc := &services[i]
 		for _, sym := range svc.Symbols {
-			tokens := splitCamelCase(sym)
+			tokens := splitCamelCase(sym.Name)
 			for _, tok := range tokens {
 				lower := strings.ToLower(tok)
 				canonical := lower

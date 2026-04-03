@@ -11,6 +11,7 @@ import (
 	"github.com/dpopsuev/locus/internal/arch"
 	"github.com/dpopsuev/locus/internal/cache"
 	"github.com/dpopsuev/locus/internal/graph"
+	"github.com/dpopsuev/locus/internal/model"
 	"github.com/dpopsuev/locus/internal/port"
 	"github.com/dpopsuev/locus/internal/store"
 )
@@ -419,7 +420,7 @@ func TestGetComponentDetail(t *testing.T) {
 	report := &arch.ContextReport{
 		Architecture: arch.ArchModel{
 			Services: []arch.ArchService{
-				{Name: "pkg_a", LOC: 500, Churn: 3, Symbols: []string{"Foo", "Bar", "Baz"}},
+				{Name: "pkg_a", LOC: 500, Churn: 3, Symbols: model.SymbolsFromNames("Foo", "Bar", "Baz")},
 				{Name: "pkg_b", LOC: 200},
 			},
 			Edges: []arch.ArchEdge{

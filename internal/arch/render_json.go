@@ -66,7 +66,7 @@ func RenderJSON(report *ContextReport) ([]byte, error) {
 			AvgNesting: svc.AvgNesting,
 		}
 		for _, sym := range svc.Symbols {
-			c.Symbols = append(c.Symbols, jsonSymbol{Name: sym, Kind: "symbol"})
+			c.Symbols = append(c.Symbols, jsonSymbol{Name: sym.Name, Kind: sym.Kind.String()})
 		}
 		components = append(components, c)
 	}

@@ -1,12 +1,16 @@
 package arch
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/dpopsuev/locus/internal/model"
+)
 
 func TestComputeAPISurface(t *testing.T) {
 	m := ArchModel{
 		Services: []ArchService{
-			{Name: "small", Symbols: []string{"A"}},
-			{Name: "big", Symbols: []string{"X", "Y", "Z", "W"}},
+			{Name: "small", Symbols: model.SymbolsFromNames("A")},
+			{Name: "big", Symbols: model.SymbolsFromNames("X", "Y", "Z", "W")},
 			{Name: "empty"},
 		},
 	}

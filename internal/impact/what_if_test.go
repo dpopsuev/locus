@@ -5,14 +5,15 @@ import (
 
 	"github.com/dpopsuev/locus/internal/arch"
 	"github.com/dpopsuev/locus/internal/graph"
+	"github.com/dpopsuev/locus/internal/model"
 )
 
 func testServices() []arch.ArchService {
 	return []arch.ArchService{
-		{Name: "A", LOC: 100, Symbols: []string{"Fa1", "Fa2"}},
-		{Name: "B", LOC: 200, Symbols: []string{"Fb1"}},
-		{Name: "C", LOC: 150, Symbols: []string{"Fc1", "Fc2", "Fc3"}},
-		{Name: "D", LOC: 80, Symbols: []string{"Fd1"}},
+		{Name: "A", LOC: 100, Symbols: model.SymbolsFromNames("Fa1", "Fa2")},
+		{Name: "B", LOC: 200, Symbols: model.SymbolsFromNames("Fb1")},
+		{Name: "C", LOC: 150, Symbols: model.SymbolsFromNames("Fc1", "Fc2", "Fc3")},
+		{Name: "D", LOC: 80, Symbols: model.SymbolsFromNames("Fd1")},
 	}
 }
 

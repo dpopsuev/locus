@@ -7,6 +7,7 @@ import (
 	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/arch"
 	"github.com/dpopsuev/locus/internal/graph"
+	"github.com/dpopsuev/locus/internal/model"
 	"github.com/dpopsuev/locus/internal/port"
 )
 
@@ -459,7 +460,7 @@ func TestCoverageGap_WithIntegration(t *testing.T) {
 func TestFragileContract(t *testing.T) {
 	// Component with fan-in > 5 but no New* constructor → fragile_contract.
 	services := []arch.ArchService{
-		{Name: "pkg/config", Package: "example.com/pkg/config", LOC: 300, Symbols: []string{"Load", "Save", "Validate", "Parse"}},
+		{Name: "pkg/config", Package: "example.com/pkg/config", LOC: 300, Symbols: model.SymbolsFromNames("Load", "Save", "Validate", "Parse")},
 	}
 	edges := make([]arch.ArchEdge, 0, 8)
 	for i := range 8 {
@@ -491,7 +492,7 @@ func TestFragileContract(t *testing.T) {
 func TestFragileContract_WithConstructor(t *testing.T) {
 	// Component with fan-in > 5 AND a New* constructor → not fragile.
 	services := []arch.ArchService{
-		{Name: "pkg/config", Package: "example.com/pkg/config", LOC: 300, Symbols: []string{"NewConfig", "Load", "Save", "Validate"}},
+		{Name: "pkg/config", Package: "example.com/pkg/config", LOC: 300, Symbols: model.SymbolsFromNames("NewConfig", "Load", "Save", "Validate")},
 	}
 	edges := make([]arch.ArchEdge, 0, 8)
 	for i := range 8 {
@@ -658,10 +659,10 @@ func TestMissingPattern_WithPattern(t *testing.T) {
 
 // ── Helpers ──
 
-func makeSymbols(n int) []string {
-	syms := make([]string, n)
+func makeSymbols(n int) []model.Symbol {
+	syms := make([]model.Symbol, n)
 	for i := range n {
-		syms[i] = fmt.Sprintf("Symbol%d", i)
+		syms[i] = model.Symbol{Name: fmt.Sprintf("Symbol%d", i), Kind: model.SymbolFunction, Exported: true}
 	}
 	return syms
 }

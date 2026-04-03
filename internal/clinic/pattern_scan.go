@@ -458,7 +458,7 @@ func signalBidirectionalEdge(svcName string, edges []arch.ArchEdge) (detected bo
 func signalNewFunctions(svc arch.ArchService) (detected bool, confidence float64, evidence string) {
 	count := 0
 	for _, sym := range svc.Symbols {
-		if strings.HasPrefix(sym, "New") {
+		if strings.HasPrefix(sym.Name, "New") {
 			count++
 		}
 	}
@@ -523,7 +523,7 @@ func signalLowFanIn(svcName string, edges []arch.ArchEdge, threshold int) (detec
 // signalNoConstructor checks whether a service has no New* constructor among its symbols.
 func signalNoConstructor(svc arch.ArchService) (detected bool, confidence float64, evidence string) {
 	for _, sym := range svc.Symbols {
-		if strings.HasPrefix(sym, "New") {
+		if strings.HasPrefix(sym.Name, "New") {
 			return false, 0, ""
 		}
 	}

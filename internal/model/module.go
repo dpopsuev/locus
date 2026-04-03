@@ -127,7 +127,19 @@ type Symbol struct {
 	Name         string     `json:"name"`
 	Kind         SymbolKind `json:"kind"`
 	Exported     bool       `json:"exported"`
+	File         string     `json:"file,omitempty"`
+	Line         int        `json:"line,omitempty"`
 	Dependencies []string   `json:"dependencies,omitempty"`
+}
+
+// SymbolsFromNames creates exported Symbol values from a list of names.
+// Convenience for tests and backward-compatible callers.
+func SymbolsFromNames(names ...string) []Symbol {
+	syms := make([]Symbol, len(names))
+	for i, n := range names {
+		syms[i] = Symbol{Name: n, Exported: true}
+	}
+	return syms
 }
 
 // SymbolKind classifies a declared symbol. Values match the LSP specification

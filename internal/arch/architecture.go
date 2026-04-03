@@ -25,7 +25,7 @@ type ArchService struct {
 	Name       string
 	Package    string
 	TrustZone  string
-	Symbols    []string
+	Symbols    []model.Symbol
 	Churn      int
 	LOC        int     `json:"loc,omitempty"`
 	MaxNesting int     `json:"max_nesting,omitempty"`
@@ -127,7 +127,7 @@ func projectToArchPackageLevel(proj *model.Project, modPath string, m ArchModel,
 		}
 		for _, sym := range ns.Symbols {
 			if sym.Exported {
-				svc.Symbols = append(svc.Symbols, sym.Name)
+				svc.Symbols = append(svc.Symbols, *sym)
 			}
 		}
 		m.Services = append(m.Services, svc)
@@ -314,7 +314,11 @@ func RenderArchMos(m ArchModel) string {
 			fmt.Fprintf(&b, "    package = %q\n", s.Package)
 		}
 		if len(s.Symbols) > 0 {
-			fmt.Fprintf(&b, "    symbols = %q\n", strings.Join(s.Symbols, ", "))
+			names := make([]string, len(s.Symbols))
+			for i, sym := range s.Symbols {
+				names[i] = sym.Name
+			}
+			fmt.Fprintf(&b, "    symbols = %q\n", strings.Join(names, ", "))
 		}
 		if s.Churn > 0 {
 			fmt.Fprintf(&b, "    churn = %d\n", s.Churn)

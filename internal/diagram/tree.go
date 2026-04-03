@@ -8,6 +8,7 @@ import (
 
 	"github.com/dpopsuev/locus/internal/arch"
 	"github.com/dpopsuev/locus/internal/graph"
+	"github.com/dpopsuev/locus/internal/model"
 )
 
 // DefaultTopSymbols is the number of exported symbols shown per component in tree diagrams.
@@ -31,7 +32,7 @@ func newTreeCtx(report *arch.ContextReport, topN int) *treeCtx {
 	for i := range report.Architecture.Services {
 		svc := &report.Architecture.Services[i]
 		tc.churnMap[svc.Name] = svc.Churn
-		tc.svcSymbols[svc.Name] = topSorted(svc.Symbols, topN)
+		tc.svcSymbols[svc.Name] = topSymbolNames(svc.Symbols, topN)
 		tc.symCount[svc.Name] = len(svc.Symbols)
 	}
 	return tc
@@ -133,16 +134,18 @@ func writeSymbols(b *strings.Builder, syms []string, indent string) {
 	}
 }
 
-// topSorted returns the first N symbols sorted alphabetically.
-func topSorted(symbols []string, n int) []string {
+// topSymbolNames extracts and returns the first N symbol names sorted alphabetically.
+func topSymbolNames(symbols []model.Symbol, n int) []string {
 	if len(symbols) == 0 {
 		return nil
 	}
-	sorted := make([]string, len(symbols))
-	copy(sorted, symbols)
-	sort.Strings(sorted)
-	if len(sorted) > n {
-		sorted = sorted[:n]
+	names := make([]string, len(symbols))
+	for i, s := range symbols {
+		names[i] = s.Name
 	}
-	return sorted
+	sort.Strings(names)
+	if len(names) > n {
+		names = names[:n]
+	}
+	return names
 }

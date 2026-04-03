@@ -9,6 +9,7 @@ import (
 	"github.com/dpopsuev/locus/internal/arch"
 	"github.com/dpopsuev/locus/internal/graph"
 	"github.com/dpopsuev/locus/internal/history"
+	"github.com/dpopsuev/locus/internal/model"
 )
 
 func testReport() *arch.ContextReport {
@@ -19,11 +20,11 @@ func testReport() *arch.ContextReport {
 		Architecture: arch.ArchModel{
 			Title: "project",
 			Services: []arch.ArchService{
-				{Name: "cmd/app", Package: "github.com/example/project/cmd/app", Churn: 5, Symbols: []string{"main"}},
-				{Name: "internal/core", Package: "github.com/example/project/internal/core", Churn: 20, Symbols: []string{"Run", "Config", "New"}},
-				{Name: "internal/store", Package: "github.com/example/project/internal/store", Churn: 8, Symbols: []string{"DB", "Get", "Put"}},
-				{Name: "internal/api", Package: "github.com/example/project/internal/api", Churn: 12, Symbols: []string{"Handler", "Router"}},
-				{Name: "pkg/util", Package: "github.com/example/project/pkg/util", Churn: 2, Symbols: []string{"Must"}},
+				{Name: "cmd/app", Package: "github.com/example/project/cmd/app", Churn: 5, Symbols: model.SymbolsFromNames("main")},
+				{Name: "internal/core", Package: "github.com/example/project/internal/core", Churn: 20, Symbols: model.SymbolsFromNames("Run", "Config", "New")},
+				{Name: "internal/store", Package: "github.com/example/project/internal/store", Churn: 8, Symbols: model.SymbolsFromNames("DB", "Get", "Put")},
+				{Name: "internal/api", Package: "github.com/example/project/internal/api", Churn: 12, Symbols: model.SymbolsFromNames("Handler", "Router")},
+				{Name: "pkg/util", Package: "github.com/example/project/pkg/util", Churn: 2, Symbols: model.SymbolsFromNames("Must")},
 			},
 			Edges: []arch.ArchEdge{
 				{From: "cmd/app", To: "internal/core", Weight: 1, CallSites: 3, LOCSurface: 10},

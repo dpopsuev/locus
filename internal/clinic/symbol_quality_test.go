@@ -5,12 +5,13 @@ import (
 	"testing"
 
 	"github.com/dpopsuev/locus/internal/arch"
+	"github.com/dpopsuev/locus/internal/model"
 	"github.com/dpopsuev/locus/internal/port"
 )
 
 func TestComputeSymbolQuality_Abbreviation(t *testing.T) {
 	services := []arch.ArchService{
-		{Name: "svc/config", Package: "pkg/config", Symbols: []string{"Cfg"}},
+		{Name: "svc/config", Package: "pkg/config", Symbols: model.SymbolsFromNames("Cfg")},
 	}
 
 	report := ComputeSymbolQuality(services, nil)
@@ -35,7 +36,7 @@ func TestComputeSymbolQuality_Abbreviation(t *testing.T) {
 
 func TestComputeSymbolQuality_AbbreviationSuffix(t *testing.T) {
 	services := []arch.ArchService{
-		{Name: "svc/server", Package: "pkg/server", Symbols: []string{"AppSrv"}},
+		{Name: "svc/server", Package: "pkg/server", Symbols: model.SymbolsFromNames("AppSrv")},
 	}
 
 	report := ComputeSymbolQuality(services, nil)
@@ -54,7 +55,7 @@ func TestComputeSymbolQuality_AbbreviationSuffix(t *testing.T) {
 
 func TestComputeSymbolQuality_StdlibIdiomNotFlagged(t *testing.T) {
 	services := []arch.ArchService{
-		{Name: "svc/db", Package: "pkg/db", Symbols: []string{"DB", "HTTP", "URL"}},
+		{Name: "svc/db", Package: "pkg/db", Symbols: model.SymbolsFromNames("DB", "HTTP", "URL")},
 	}
 
 	report := ComputeSymbolQuality(services, nil)
@@ -68,7 +69,7 @@ func TestComputeSymbolQuality_StdlibIdiomNotFlagged(t *testing.T) {
 
 func TestComputeSymbolQuality_GenericName(t *testing.T) {
 	services := []arch.ArchService{
-		{Name: "svc/core", Package: "pkg/core", Symbols: []string{"Manager", "SessionManager"}},
+		{Name: "svc/core", Package: "pkg/core", Symbols: model.SymbolsFromNames("Manager", "SessionManager")},
 	}
 
 	report := ComputeSymbolQuality(services, nil)
@@ -92,7 +93,7 @@ func TestComputeSymbolQuality_GenericName(t *testing.T) {
 
 func TestComputeSymbolQuality_Clean(t *testing.T) {
 	services := []arch.ArchService{
-		{Name: "svc/user", Package: "pkg/user", Symbols: []string{"GetUser", "ParseConfig"}},
+		{Name: "svc/user", Package: "pkg/user", Symbols: model.SymbolsFromNames("GetUser", "ParseConfig")},
 	}
 
 	report := ComputeSymbolQuality(services, nil)
@@ -113,7 +114,7 @@ func TestComputeSymbolQuality_Clean(t *testing.T) {
 
 func TestComputeSymbolQuality_FanInWeighting(t *testing.T) {
 	services := []arch.ArchService{
-		{Name: "svc/core", Package: "pkg/core", Symbols: []string{"Cfg"}},
+		{Name: "svc/core", Package: "pkg/core", Symbols: model.SymbolsFromNames("Cfg")},
 	}
 	// Create enough edges to push fan-in to the escalation threshold.
 	edges := []arch.ArchEdge{
@@ -138,7 +139,7 @@ func TestComputeSymbolQuality_FanInWeighting(t *testing.T) {
 
 func TestComputeSymbolQuality_VerblessExport(t *testing.T) {
 	services := []arch.ArchService{
-		{Name: "svc/ops", Package: "pkg/ops", Symbols: []string{"Frobnicate"}},
+		{Name: "svc/ops", Package: "pkg/ops", Symbols: model.SymbolsFromNames("Frobnicate")},
 	}
 
 	report := ComputeSymbolQuality(services, nil)
@@ -159,9 +160,9 @@ func TestComputeSymbolQuality_VerblessExport(t *testing.T) {
 
 func TestComputeSymbolQuality_TypeSuffixNotFlagged(t *testing.T) {
 	services := []arch.ArchService{
-		{Name: "svc/http", Package: "pkg/http", Symbols: []string{
+		{Name: "svc/http", Package: "pkg/http", Symbols: model.SymbolsFromNames(
 			"UserHandler", "TokenValidator", "SessionStore",
-		}},
+		)},
 	}
 
 	report := ComputeSymbolQuality(services, nil)
@@ -175,8 +176,8 @@ func TestComputeSymbolQuality_TypeSuffixNotFlagged(t *testing.T) {
 
 func TestComputeSymbolQuality_SortOrder(t *testing.T) {
 	services := []arch.ArchService{
-		{Name: "svc/a", Package: "pkg/a", Symbols: []string{"Cfg"}},
-		{Name: "svc/b", Package: "pkg/b", Symbols: []string{"Manager"}},
+		{Name: "svc/a", Package: "pkg/a", Symbols: model.SymbolsFromNames("Cfg")},
+		{Name: "svc/b", Package: "pkg/b", Symbols: model.SymbolsFromNames("Manager")},
 	}
 	edges := []arch.ArchEdge{
 		{From: "x", To: "svc/a", Weight: 6}, // high fan-in → error
@@ -199,8 +200,8 @@ func TestComputeSymbolQuality_SortOrder(t *testing.T) {
 
 func TestComputeVocabMap_SynonymDrift(t *testing.T) {
 	services := []arch.ArchService{
-		{Name: "svc/a", Package: "pkg/a", Symbols: []string{"GetUser"}},
-		{Name: "svc/b", Package: "pkg/b", Symbols: []string{"FetchUser"}},
+		{Name: "svc/a", Package: "pkg/a", Symbols: model.SymbolsFromNames("GetUser")},
+		{Name: "svc/b", Package: "pkg/b", Symbols: model.SymbolsFromNames("FetchUser")},
 	}
 
 	report := ComputeVocabMap(services)
@@ -247,8 +248,8 @@ func TestComputeVocabMap_SynonymDrift(t *testing.T) {
 
 func TestComputeVocabMap_Consistent(t *testing.T) {
 	services := []arch.ArchService{
-		{Name: "svc/a", Package: "pkg/a", Symbols: []string{"GetUser"}},
-		{Name: "svc/b", Package: "pkg/b", Symbols: []string{"GetOrder"}},
+		{Name: "svc/a", Package: "pkg/a", Symbols: model.SymbolsFromNames("GetUser")},
+		{Name: "svc/b", Package: "pkg/b", Symbols: model.SymbolsFromNames("GetOrder")},
 	}
 
 	report := ComputeVocabMap(services)
