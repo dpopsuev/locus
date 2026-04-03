@@ -151,7 +151,7 @@ func classifyService(
 	}
 
 	// 2. Adapter: keyword match or external protocol edges
-	if containsAny(segment, adapterKeywords...) {
+	if arch.ContainsAny(segment, adapterKeywords...) {
 		return HexaRoleAdapter, "name contains adapter keyword"
 	}
 	if externalSources[svc.Name] {
@@ -159,7 +159,7 @@ func classifyService(
 	}
 
 	// 3. Infra: keyword match
-	if containsAny(segment, infraKeywords...) {
+	if arch.ContainsAny(segment, infraKeywords...) {
 		return HexaRoleInfra, "name contains infrastructure keyword"
 	}
 
@@ -175,7 +175,7 @@ func classifyService(
 	}
 
 	// 5. App: keyword match
-	if containsAny(segment, appKeywords...) {
+	if arch.ContainsAny(segment, appKeywords...) {
 		return HexaRoleApp, "name contains application keyword"
 	}
 
@@ -327,16 +327,6 @@ func buildViolationSummary(score float64, violations []HexaViolation) string {
 	}
 
 	return fmt.Sprintf("Hexagonal compliance: %.0f%% — %d error(s), %d warning(s)", score, errors, warnings)
-}
-
-// containsAny returns true if s contains any of the given substrings.
-func containsAny(s string, subs ...string) bool {
-	for _, sub := range subs {
-		if strings.Contains(s, sub) {
-			return true
-		}
-	}
-	return false
 }
 
 func lastPathSegment(name string) string {

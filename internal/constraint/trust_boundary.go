@@ -110,13 +110,13 @@ func inferTrustZone(name string, targets map[string]bool, desiredRoles map[strin
 	case strings.Contains(lower, "cmd") || strings.HasPrefix(lower, "cmd/"):
 		return zoneEntrypoint, "cmd package"
 
-	case containsAny(lower, "store", "repo", "db", "database", "persist", "cache"):
+	case arch.ContainsAny(lower, "store", "repo", "db", "database", "persist", "cache"):
 		return zoneData, "data/storage package"
 
-	case containsAny(lower, "mcp", "grpc", "http", "api", "handler", "server", "client"):
+	case arch.ContainsAny(lower, "mcp", "grpc", "http", "api", "handler", "server", "client"):
 		return zoneBoundary, "name contains boundary keyword"
 
-	case containsAny(lower, "config", "infra", "deploy", "migration"):
+	case arch.ContainsAny(lower, "config", "infra", "deploy", "migration"):
 		return zoneInfra, "name contains infrastructure keyword"
 
 	case hasBoundaryTarget(targets):
@@ -143,16 +143,6 @@ func roleToZone(role string) string {
 	default:
 		return zoneDomain
 	}
-}
-
-// containsAny returns true if s contains any of the given substrings.
-func containsAny(s string, subs ...string) bool {
-	for _, sub := range subs {
-		if strings.Contains(s, sub) {
-			return true
-		}
-	}
-	return false
 }
 
 // hasBoundaryTarget checks if any edge target suggests network/RPC usage.

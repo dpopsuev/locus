@@ -9,6 +9,16 @@ import (
 	"github.com/dpopsuev/locus/internal/model"
 )
 
+// ContainsAny returns true if s contains any of the given substrings.
+func ContainsAny(s string, subs ...string) bool {
+	for _, sub := range subs {
+		if strings.Contains(s, sub) {
+			return true
+		}
+	}
+	return false
+}
+
 // ArchService represents a service or component node in an architecture artifact.
 type ArchService struct {
 	Name       string
