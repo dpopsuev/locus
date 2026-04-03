@@ -70,7 +70,7 @@ type SOLIDViolation struct {
 type SOLIDReport struct {
 	Violations  []SOLIDViolation `json:"violations"`
 	ByPrinciple map[string]int   `json:"by_principle"`
-	Score       float64          `json:"score"`
+	Score       port.Score       `json:"score"`
 	Summary     string           `json:"summary"`
 }
 
@@ -517,7 +517,7 @@ func ComputeSOLIDScan(
 	return &SOLIDReport{
 		Violations:  allViolations,
 		ByPrinciple: byPrinciple,
-		Score:       score,
+		Score:       port.Score(score),
 		Summary:     summary,
 	}
 }

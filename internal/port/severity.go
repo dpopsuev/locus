@@ -11,6 +11,12 @@ const (
 	SeverityCritical Severity = "critical"
 )
 
+// Confidence represents a detection confidence between 0.0 and 1.0.
+type Confidence float64
+
+// Score represents a quality or compliance score between 0 and 100.
+type Score float64
+
 // RiskLevel classifies the impact risk of a change.
 type RiskLevel string
 

@@ -201,7 +201,7 @@ func TestComputeHexaViolations_MultipleRules(t *testing.T) {
 
 	// Score: (4 - 3) / 4 * 100 = 25%
 	expectedScore := 25.0
-	if report.Score != expectedScore {
+	if float64(report.Score) != expectedScore {
 		t.Errorf("expected score %.1f, got %.1f", expectedScore, report.Score)
 	}
 }

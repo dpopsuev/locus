@@ -84,7 +84,7 @@ type HexaClassificationReport struct {
 type HexaValidationReport struct {
 	Classification []HexaComponent `json:"classification"`
 	Violations     []HexaViolation `json:"violations"`
-	Score          float64         `json:"score"`
+	Score          port.Score      `json:"score"`
 	Summary        string          `json:"summary"`
 }
 
@@ -268,7 +268,7 @@ func ComputeHexaViolations(
 	return &HexaValidationReport{
 		Classification: classification.Components,
 		Violations:     violations,
-		Score:          score,
+		Score:          port.Score(score),
 		Summary:        buildViolationSummary(score, violations),
 	}
 }

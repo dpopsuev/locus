@@ -290,7 +290,7 @@ func TestComputeSOLIDScan_Score(t *testing.T) {
 	}
 
 	expectedScore := 50.0 // 100 - 2/4*100
-	if report.Score != expectedScore {
+	if float64(report.Score) != expectedScore {
 		t.Errorf("expected score %.0f, got %.0f", expectedScore, report.Score)
 	}
 

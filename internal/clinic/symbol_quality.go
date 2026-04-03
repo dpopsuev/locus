@@ -33,7 +33,7 @@ type SymbolIssue struct {
 type SymbolQualityReport struct {
 	Issues       []SymbolIssue `json:"issues"`
 	TotalChecked int           `json:"total_checked"`
-	Score        float64       `json:"score"`
+	Score        port.Score    `json:"score"`
 	Summary      string        `json:"summary"`
 }
 
@@ -195,7 +195,7 @@ func ComputeSymbolQuality(services []arch.ArchService, edges []arch.ArchEdge) *S
 	return &SymbolQualityReport{
 		Issues:       issues,
 		TotalChecked: totalChecked,
-		Score:        score,
+		Score:        port.Score(score),
 		Summary:      summary,
 	}
 }

@@ -403,7 +403,7 @@ type DriftReport struct {
 	BudgetViolations   []constraint.BudgetViolation   `json:"budget_violations,omitempty"`
 	BoundaryBreaches   int                            `json:"boundary_breaches"`
 	ConstraintBreaches int                            `json:"constraint_breaches"`
-	Score              float64                        `json:"score"`
+	Score              port.Score                     `json:"score"`
 	Clean              bool                           `json:"clean"`
 	Summary            string                         `json:"summary"`
 }
@@ -475,7 +475,7 @@ func (p *Protocol) GetDrift(ctx context.Context, path string, cacheKey ...string
 		BudgetViolations:   budgetViolations,
 		BoundaryBreaches:   len(boundaryViolations),
 		ConstraintBreaches: len(budgetViolations),
-		Score:              score,
+		Score:              port.Score(score),
 		Clean:              clean,
 		Summary:            summary,
 	}, nil

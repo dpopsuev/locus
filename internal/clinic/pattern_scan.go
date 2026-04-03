@@ -45,7 +45,7 @@ type PatternDetection struct {
 	PatternName     string           `json:"pattern_name"`
 	Kind            PatternKind      `json:"kind"`
 	Component       string           `json:"component"`
-	Confidence      float64          `json:"confidence"`
+	Confidence      port.Confidence  `json:"confidence"`
 	Evidence        []string         `json:"evidence"`
 	Severity        port.Severity    `json:"severity"`
 	MoveTargets     []MoveTarget     `json:"move_targets,omitempty"`
@@ -786,7 +786,7 @@ func evaluateFingerprint(
 		PatternName: entry.Name,
 		Kind:        entry.Kind,
 		Component:   svc.Name,
-		Confidence:  weightedSum,
+		Confidence:  port.Confidence(weightedSum),
 		Evidence:    evidence,
 		Severity:    severity,
 	}
@@ -820,7 +820,7 @@ func evaluateFeatureEnvy(svc arch.ArchService, edges []arch.ArchEdge) *PatternDe
 				PatternName: entry.Name,
 				Kind:        entry.Kind,
 				Component:   svc.Name,
-				Confidence:  ratio,
+				Confidence:  port.Confidence(ratio),
 				Evidence:    []string{fmt.Sprintf("%.0f%% of call sites target %s", ratio*100, target)},
 				Severity:    severityForDetection(entry.Kind, ratio),
 			}
@@ -884,7 +884,7 @@ func detectMissingPattern(
 			PatternName: entry.Name,
 			Kind:        entry.Kind,
 			Component:   svc.Name,
-			Confidence:  conf,
+			Confidence:  port.Confidence(conf),
 			Evidence: []string{
 				fmt.Sprintf("churn=%d (threshold %d)", svc.Churn, thresholdShotgunChurn),
 				"no positive design pattern detected",
