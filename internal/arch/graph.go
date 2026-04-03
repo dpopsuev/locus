@@ -35,6 +35,40 @@ func ComputeFanOut(edges []ArchEdge) map[string]int {
 	return fo
 }
 
+// BuildReverseAdj builds a reverse adjacency map: for each To, list all From.
+func BuildReverseAdj(edges []ArchEdge) map[string]map[string]bool {
+	reverse := make(map[string]map[string]bool)
+	for _, e := range edges {
+		if reverse[e.To] == nil {
+			reverse[e.To] = make(map[string]bool)
+		}
+		reverse[e.To][e.From] = true
+	}
+	return reverse
+}
+
+// BFSFrom performs BFS from seed nodes through adjacency, returning all visited nodes.
+// Only nodes in validSet are traversed; nodes in skip are excluded.
+func BFSFrom(seed map[string]bool, adj map[string]map[string]bool, validSet, skip map[string]bool) map[string]bool {
+	visited := make(map[string]bool, len(seed))
+	queue := make([]string, 0, len(seed))
+	for d := range seed {
+		visited[d] = true
+		queue = append(queue, d)
+	}
+	for len(queue) > 0 {
+		cur := queue[0]
+		queue = queue[1:]
+		for neighbor := range adj[cur] {
+			if validSet[neighbor] && !visited[neighbor] && !skip[neighbor] {
+				visited[neighbor] = true
+				queue = append(queue, neighbor)
+			}
+		}
+	}
+	return visited
+}
+
 // DetectCycles finds all distinct cycles in the dependency graph using DFS with
 // color marking (white/gray/black). Returns cycles sorted for determinism.
 func DetectCycles(edges []ArchEdge) []Cycle {
