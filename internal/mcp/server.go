@@ -88,6 +88,7 @@ const (
 	ActionAPISurface       = "api_surface"
 	ActionConventions      = "conventions"
 	ActionGaps             = "gaps"
+	ActionConsolidate      = "consolidate"
 )
 
 // Refactor actions.
@@ -306,7 +307,7 @@ type clinicInput struct {
 }
 
 type constraintInput struct {
-	Action    string   `json:"action" jsonschema:"required,blast_radius | import_direction | trust_boundaries | budgets | mod_dependencies | symbol_blast | interface_metrics | leverage | coverage | api_surface | conventions | gaps"`
+	Action    string   `json:"action" jsonschema:"required,blast_radius | import_direction | trust_boundaries | budgets | mod_dependencies | symbol_blast | interface_metrics | leverage | coverage | api_surface | conventions | gaps | consolidate"`
 	Path      string   `json:"path,omitempty" jsonschema:"absolute path to local repository"`
 	CacheKey  string   `json:"cache_key,omitempty" jsonschema:"cache key from scan_remote"`
 	Component string   `json:"component,omitempty" jsonschema:"component for leverage"`
@@ -538,6 +539,12 @@ func (h *handler) handleConstraint(ctx context.Context, _ *sdkmcp.CallToolReques
 		return jsonResult(r)
 	case ActionGaps:
 		r, err := h.proto.GetGaps(ctx, in.Path)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
+	case ActionConsolidate:
+		r, err := h.proto.GetConsolidation(ctx, in.Path, in.CacheKey)
 		if err != nil {
 			return nil, nil, err
 		}

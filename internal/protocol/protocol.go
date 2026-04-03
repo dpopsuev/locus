@@ -1501,6 +1501,18 @@ func (p *Protocol) GetRiskScores(_ context.Context, path string, cacheKey ...str
 	), nil
 }
 
+func (p *Protocol) GetConsolidation(_ context.Context, path string, cacheKey ...string) (*impact.ConsolidationReport, error) {
+	path = p.resolvePath(path)
+	report, err := p.getOrScan(path, cacheKey...)
+	if err != nil {
+		return nil, err
+	}
+	return impact.ComputeConsolidation(
+		report.Architecture.Services,
+		report.Architecture.Edges,
+	), nil
+}
+
 func (p *Protocol) GetBudgets(ctx context.Context, path string, cacheKey ...string) (*constraint.BudgetReport, error) {
 	path = p.resolvePath(path)
 	report, err := p.getOrScan(path, cacheKey...)
