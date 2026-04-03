@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"golang.org/x/mod/modfile"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/graph"
@@ -226,34 +227,64 @@ func ScanAndBuild(root string, opts ScanOpts) (*ContextReport, error) {
 	}
 
 	// --- L2: health (churn, nesting, git history) ---
-	applyNestingDepth(root, modPath, &archModel)
-	report.Architecture = archModel
-
-	gitDays := opts.GitDays
-	if gitDays <= 0 {
-		gitDays = opts.ChurnDays
-	}
-	if gitDays > 0 {
-		report.RecentCommits = RecentCommits(root, gitDays, modPath)
-		report.FileHotSpots = FileHotSpots(root, gitDays)
-	}
+	runL2Health(root, modPath, opts, &archModel, report)
 
 	if level < 3 {
 		return report, nil
 	}
 
 	// --- L3: full (coverage, authors, anchors) ---
-	if opts.IncludeCoverage {
-		report.Coverage, _ = RunGoCoverage(root, modPath)
-	}
-	if opts.Authors {
-		report.Authors = AuthorOwnership(root, modPath)
-	}
-	if proj.Language == model.LangGo {
-		report.Anchors = extractProjectAnchors(root, proj, modPath)
-	}
+	runL3Full(root, modPath, opts, proj, report)
 
 	return report, nil
+}
+
+// runL2Health runs nesting depth, recent commits, and file hotspots in parallel.
+func runL2Health(root, modPath string, opts ScanOpts, archModel *ArchModel, report *ContextReport) {
+	var (
+		commits  []PackageCommit
+		hotFiles []HotFile
+	)
+	g, _ := errgroup.WithContext(context.Background())
+	g.Go(func() error {
+		applyNestingDepth(root, modPath, archModel)
+		return nil
+	})
+	gitDays := opts.GitDays
+	if gitDays <= 0 {
+		gitDays = opts.ChurnDays
+	}
+	if gitDays > 0 {
+		g.Go(func() error { commits = RecentCommits(root, gitDays, modPath); return nil })
+		g.Go(func() error { hotFiles = FileHotSpots(root, gitDays); return nil })
+	}
+	_ = g.Wait()
+	report.Architecture = *archModel
+	report.RecentCommits = commits
+	report.FileHotSpots = hotFiles
+}
+
+// runL3Full runs coverage, author ownership, and anchor extraction in parallel.
+func runL3Full(root, modPath string, opts ScanOpts, proj *model.Project, report *ContextReport) {
+	var (
+		coverage []CoverageResult
+		authors  map[string][]Author
+		anchors  []SemanticAnchor
+	)
+	g, _ := errgroup.WithContext(context.Background())
+	if opts.IncludeCoverage {
+		g.Go(func() error { coverage, _ = RunGoCoverage(root, modPath); return nil })
+	}
+	if opts.Authors {
+		g.Go(func() error { authors = AuthorOwnership(root, modPath); return nil })
+	}
+	if proj.Language == model.LangGo {
+		g.Go(func() error { anchors = extractProjectAnchors(root, proj, modPath); return nil })
+	}
+	_ = g.Wait()
+	report.Coverage = coverage
+	report.Authors = authors
+	report.Anchors = anchors
 }
 
 // incrementalScan performs a full scan but is aware of what changed since a ref.
