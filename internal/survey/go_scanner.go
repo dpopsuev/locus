@@ -82,7 +82,11 @@ func (s *GoScanner) Scan(root string) (*model.Project, error) {
 			pkgs[importPath] = pkg
 		}
 
-		pkg.AddFile(model.NewFile(filepath.ToSlash(rel), pkgName))
+		fileObj := model.NewFile(filepath.ToSlash(rel), pkgName)
+		if tokFile := fset.File(f.Pos()); tokFile != nil {
+			fileObj.Lines = tokFile.LineCount()
+		}
+		pkg.AddFile(fileObj)
 
 		extractSymbols(f, pkg)
 		extractImports(f, importPath, modPath, mod.DependencyGraph)

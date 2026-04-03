@@ -84,7 +84,7 @@ func (s *TypeScriptScanner) Scan(root string) (*model.Project, error) {
 			nsMap[dir] = ns
 			seen[dir] = make(map[string]bool)
 		}
-		ns.AddFile(model.NewFile(rel, dir))
+		fileObj := model.NewFile(rel, dir)
 
 		f, fErr := os.Open(path)
 		if fErr != nil {
@@ -92,12 +92,16 @@ func (s *TypeScriptScanner) Scan(root string) (*model.Project, error) {
 		}
 		defer f.Close()
 
+		lineCount := 0
 		scanner := bufio.NewScanner(f)
 		for scanner.Scan() {
+			lineCount++
 			line := scanner.Text()
 			s.extractExports(line, ns, seen[dir])
 			s.extractImportEdge(line, dir, absRoot, externalPkgs, proj.DependencyGraph)
 		}
+		fileObj.Lines = lineCount
+		ns.AddFile(fileObj)
 		return nil
 	})
 	if err != nil {

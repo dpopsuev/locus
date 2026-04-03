@@ -188,7 +188,7 @@ func ScanAndBuild(root string, opts ScanOpts) (*ContextReport, error) {
 	}
 
 	archModel := ProjectToArchModel(proj, syncOpts)
-	applyLOC(root, proj, modPath, &archModel)
+	populateLOC(root, proj, modPath, &archModel)
 
 	report := &ContextReport{
 		Project:      proj,
@@ -483,6 +483,48 @@ func parsePackageJSONName(data []byte) string {
 		return pkg.Name
 	}
 	return ""
+}
+
+// populateLOC sets LOC on each ArchService. If the scanner already counted lines
+// during its file walk, it aggregates from the project model (zero I/O). Otherwise
+// it falls back to reading all source files from disk.
+func populateLOC(root string, proj *model.Project, modPath string, m *ArchModel) {
+	if linesPopulated(proj) {
+		applyLOCFromProject(proj, modPath, m)
+	} else {
+		applyLOC(root, proj, modPath, m)
+	}
+}
+
+// linesPopulated returns true if the scanner already counted lines during its file walk.
+func linesPopulated(proj *model.Project) bool {
+	if len(proj.Namespaces) == 0 {
+		return false
+	}
+	ns := proj.Namespaces[0]
+	for _, f := range ns.Files {
+		if f.Lines > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// applyLOCFromProject aggregates pre-computed file lines into ArchService.LOC
+// without re-reading files from disk.
+func applyLOCFromProject(proj *model.Project, modPath string, m *ArchModel) {
+	locByComponent := make(map[string]int)
+	for _, ns := range proj.Namespaces {
+		component := shortImportPath(modPath, ns.ImportPath)
+		for _, f := range ns.Files {
+			locByComponent[component] += f.Lines
+		}
+	}
+	for i := range m.Services {
+		if loc, ok := locByComponent[m.Services[i].Name]; ok {
+			m.Services[i].LOC = loc
+		}
+	}
 }
 
 // applyLOC reads source files referenced by the project model and

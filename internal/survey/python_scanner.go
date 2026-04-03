@@ -225,15 +225,17 @@ func (s *PythonScanner) extractPythonSymbols(dir string, ns *model.Namespace) {
 		}
 
 		fullPath := filepath.Join(dir, entry.Name())
-		ns.AddFile(model.NewFile(entry.Name(), ns.Name))
+		fileObj := model.NewFile(entry.Name(), ns.Name)
 
 		f, err := os.Open(fullPath)
 		if err != nil {
 			continue
 		}
 
+		lineCount := 0
 		sc := bufio.NewScanner(f)
 		for sc.Scan() {
+			lineCount++
 			line := sc.Text()
 			if m := rePyDef.FindStringSubmatch(line); m != nil {
 				addPythonSymbol(ns, seen, m[1], model.SymbolFunction)
@@ -244,6 +246,8 @@ func (s *PythonScanner) extractPythonSymbols(dir string, ns *model.Namespace) {
 			}
 		}
 		f.Close()
+		fileObj.Lines = lineCount
+		ns.AddFile(fileObj)
 	}
 }
 
