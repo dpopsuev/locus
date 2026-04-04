@@ -272,7 +272,7 @@ func runL3Full(root, modPath string, opts ScanOpts, proj *model.Project, report 
 		anchors  []SemanticAnchor
 	)
 	g, _ := errgroup.WithContext(context.Background())
-	if opts.IncludeCoverage {
+	if opts.IncludeCoverage && proj.Language == model.LangGo {
 		g.Go(func() error { coverage, _ = RunGoCoverage(root, modPath); return nil })
 	}
 	if opts.Authors {

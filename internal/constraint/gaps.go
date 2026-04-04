@@ -103,7 +103,7 @@ func hasTestFiles(dir string) bool {
 }
 
 func hasDocFiles(dir string) bool {
-	docNames := []string{"README.md", "README", "README.txt", "doc.go", "DOC.md"}
+	docNames := []string{"README.md", "README", "README.txt", "DOC.md"}
 	for _, name := range docNames {
 		p := filepath.Join(dir, name)
 		if _, err := os.Stat(p); err == nil {

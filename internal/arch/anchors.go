@@ -21,8 +21,6 @@ const (
 	AnchorCLICommand   AnchorKind = "cli_command"
 	AnchorConfigSchema AnchorKind = "config_schema"
 	AnchorTestSuite    AnchorKind = "test_suite"
-	AnchorMiddleware   AnchorKind = "middleware"
-	AnchorEventHandler AnchorKind = "event_handler"
 )
 
 // SemanticAnchor represents a structurally significant code point.
