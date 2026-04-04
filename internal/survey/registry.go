@@ -132,4 +132,32 @@ func init() {
 		},
 		SkipDirs: TSSkipDirs,
 	})
+	Register(&LanguageSupport{
+		Language: model.LangKotlin,
+		Markers:  []string{"build.gradle.kts"},
+		ScannerFactory: func(_ string) Scanner {
+			return &CtagsScanner{}
+		},
+	})
+	Register(&LanguageSupport{
+		Language: model.LangZig,
+		Markers:  []string{"build.zig"},
+		ScannerFactory: func(_ string) Scanner {
+			return &CtagsScanner{}
+		},
+	})
+	Register(&LanguageSupport{
+		Language: model.LangCSharp,
+		Markers:  []string{"global.json", "Directory.Build.props"},
+		ScannerFactory: func(_ string) Scanner {
+			return &CtagsScanner{}
+		},
+	})
+	Register(&LanguageSupport{
+		Language: model.LangSwift,
+		Markers:  []string{"Package.swift"},
+		ScannerFactory: func(_ string) Scanner {
+			return &CtagsScanner{}
+		},
+	})
 }
