@@ -870,7 +870,7 @@ func (h *handler) enrichDiagramInput(ctx context.Context, path, diagramType stri
 	}
 	switch diagramType {
 	case DiagramDataflow, DiagramCallgraph, DiagramState:
-		input.DeepAnalyzer = analysis.NewDeepFallback(path)
+		input.DeepAnalyzer = analysis.CachedDeepFallback(path)
 	}
 }
 

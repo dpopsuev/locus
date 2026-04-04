@@ -91,7 +91,7 @@ func TestIntegration_CallgraphDiagram(t *testing.T) {
 	}
 	root := integrationRoot(t)
 	report := integrationScan(t)
-	da := analysis.NewDeepFallback(root)
+	da := analysis.CachedDeepFallback(root)
 
 	input := Input{Report: report, DeepAnalyzer: da, Root: root}
 	out, err := Render(input, Options{Type: "callgraph"})

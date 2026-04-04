@@ -690,7 +690,7 @@ func (p *Protocol) GetCallees(_ context.Context, path, symbol string, cacheKey .
 	if symbol == "" {
 		return nil, ErrComponentRequired
 	}
-	da := analysis.NewDeepFallback(path)
+	da := analysis.CachedDeepFallback(path)
 	cg, err := da.CallGraph(path, analysis.CallGraphOpts{Depth: analysis.DefaultCallGraphDepth})
 	if err != nil {
 		return nil, fmt.Errorf("call graph: %w", err)
@@ -727,7 +727,7 @@ type CallPathReport struct {
 
 func (p *Protocol) GetCallPath(_ context.Context, path, from, to string, cacheKey ...string) (*CallPathReport, error) {
 	path = p.resolvePath(path)
-	da := analysis.NewDeepFallback(path)
+	da := analysis.CachedDeepFallback(path)
 	cg, err := da.CallGraph(path, analysis.CallGraphOpts{Depth: analysis.DefaultCallGraphDepth})
 	if err != nil {
 		return nil, fmt.Errorf("call graph: %w", err)
@@ -774,7 +774,7 @@ func (p *Protocol) GetSymbolBlastRadius(ctx context.Context, path, symbol string
 	if symbol == "" {
 		return nil, ErrComponentRequired
 	}
-	da := analysis.NewDeepFallback(path)
+	da := analysis.CachedDeepFallback(path)
 	cg, err := da.CallGraph(path, analysis.CallGraphOpts{Depth: analysis.DefaultCallGraphDepth})
 	if err != nil {
 		return nil, fmt.Errorf("call graph: %w", err)
@@ -802,7 +802,7 @@ func (p *Protocol) GetDiffIntelligence(ctx context.Context, path, since string, 
 		return nil, fmt.Errorf("git diff: %w", err)
 	}
 	// Build call graph for symbol-level analysis.
-	da := analysis.NewDeepFallback(path)
+	da := analysis.CachedDeepFallback(path)
 	cg, err := da.CallGraph(path, analysis.CallGraphOpts{Depth: analysis.DefaultCallGraphDepth})
 	if err != nil {
 		return nil, fmt.Errorf("call graph: %w", err)
@@ -816,7 +816,7 @@ func (p *Protocol) GetCallers(ctx context.Context, path, symbol string, cacheKey
 		return nil, ErrComponentRequired
 	}
 
-	da := analysis.NewDeepFallback(path)
+	da := analysis.CachedDeepFallback(path)
 	cg, err := da.CallGraph(path, analysis.CallGraphOpts{Depth: analysis.DefaultCallGraphDepth})
 	if err != nil {
 		return nil, fmt.Errorf("call graph: %w", err)
@@ -1754,7 +1754,7 @@ func (p *Protocol) GetPatternScan(ctx context.Context, path string, cacheKey ...
 	patternReport := clinic.ComputePatternScan(report.Architecture.Services, report.Architecture.Edges, report.Cycles, classes, impls, roles, accepted)
 
 	// Enrich with call graph if available (Feature Envy move targets, God Component split suggestions).
-	da := analysis.NewDeepFallback(path)
+	da := analysis.CachedDeepFallback(path)
 	if cg, cgErr := da.CallGraph(path, analysis.CallGraphOpts{Depth: analysis.DefaultCallGraphDepth}); cgErr == nil && cg != nil {
 		clinic.EnrichWithCallGraph(patternReport, cg.Edges)
 	}
