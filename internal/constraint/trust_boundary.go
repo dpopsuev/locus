@@ -94,37 +94,22 @@ func ComputeTrustBoundaries(services []arch.ArchService, edges []arch.ArchEdge, 
 }
 
 // inferTrustZone classifies a component into a trust zone.
-// If desiredRoles contains an explicit role for this component, use it.
-// Otherwise fall back to name heuristics.
+// Primary: uses hexa role from desiredRoles (auto-detected or manually set).
+// Fallback: structural signals (same as hexa classification — no keywords).
 func inferTrustZone(name string, targets map[string]bool, desiredRoles map[string]string) (zone, reason string) {
-	// BUG-25 + BUG-27: check desired_state roles first.
+	// Use hexa role if available (auto-classified or desired_state override).
 	if desiredRoles != nil {
 		if role, ok := desiredRoles[name]; ok {
-			return roleToZone(role), "desired_state role: " + role
+			return roleToZone(role), "hexa role: " + role
 		}
 	}
 
-	lower := strings.ToLower(name)
-
-	switch {
-	case strings.Contains(lower, "cmd") || strings.HasPrefix(lower, "cmd/"):
-		return zoneEntrypoint, "cmd package"
-
-	case arch.ContainsAny(lower, "store", "repo", "db", "database", "persist", "cache"):
-		return zoneData, "data/storage package"
-
-	case arch.ContainsAny(lower, "mcp", "grpc", "http", "api", "handler", "server", "client"):
-		return zoneBoundary, "name contains boundary keyword"
-
-	case arch.ContainsAny(lower, "config", "infra", "deploy", "migration"):
-		return zoneInfra, "name contains infrastructure keyword"
-
-	case hasBoundaryTarget(targets):
-		return zoneBoundary, "imports network/RPC packages"
-
-	default:
-		return zoneDomain, "general domain logic"
+	// Structural fallback: boundary target detection (language-agnostic).
+	if hasBoundaryTarget(targets) {
+		return zoneBoundary, "imports boundary packages"
 	}
+
+	return zoneDomain, "default classification"
 }
 
 // roleToZone maps a hexagonal role to a trust zone.
