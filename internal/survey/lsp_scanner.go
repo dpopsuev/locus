@@ -14,6 +14,29 @@ import (
 
 var errEmptyServerCmd = errors.New("lsp scanner: empty ServerCmd")
 
+// extToLanguageID maps file extensions to LSP language identifiers.
+// Language-agnostic: covers all languages Locus supports.
+var extToLanguageID = map[string]string{
+	".go":    "go",
+	".rs":    "rust",
+	".py":    "python",
+	".ts":    "typescript",
+	".tsx":   "typescriptreact",
+	".js":    "javascript",
+	".jsx":   "javascriptreact",
+	".java":  "java",
+	".kt":    "kotlin",
+	".kts":   "kotlin",
+	".c":     "c",
+	".h":     "c",
+	".cpp":   "cpp",
+	".cc":    "cpp",
+	".hpp":   "cpp",
+	".cs":    "csharp",
+	".swift": "swift",
+	".zig":   "zig",
+}
+
 // LSPScanner extracts structural metadata by communicating with an
 // external LSP server. It is language-agnostic: the same code works
 // with gopls, rust-analyzer, pyright, or any LSP-compliant server.
@@ -110,10 +133,14 @@ func (s *LSPScanner) runProtocol(client *lspClient, root string) (*model.Project
 			continue
 		}
 
+		langID := extToLanguageID[filepath.Ext(f)]
+		if langID == "" {
+			langID = "plaintext"
+		}
 		err := client.Notify("textDocument/didOpen", map[string]any{
 			"textDocument": map[string]any{
 				"uri":        fileURI,
-				"languageId": "go",
+				"languageId": langID,
 				"version":    1,
 				"text":       string(content),
 			},
@@ -134,7 +161,7 @@ func (s *LSPScanner) runProtocol(client *lspClient, root string) (*model.Project
 			var flat []lspSymbolInformation
 			if json.Unmarshal(result, &flat) == nil {
 				for _, sym := range flat {
-					addSymbolToNS(nsMap, sym.ContainerName, sym.Name, sym.Kind)
+					addSymbolToNS(nsMap, sym.ContainerName, sym.Name, sym.Kind, "", 0)
 				}
 			}
 			continue
@@ -151,7 +178,11 @@ func (s *LSPScanner) runProtocol(client *lspClient, root string) (*model.Project
 		}
 
 		for _, sym := range symbols {
-			addSymbolToNS(nsMap, nsKey, sym.Name, sym.Kind)
+			line := 0
+			if sym.Range.Start.Line > 0 {
+				line = sym.Range.Start.Line + 1 // LSP lines are 0-based
+			}
+			addSymbolToNS(nsMap, nsKey, sym.Name, sym.Kind, filepath.ToSlash(rel), line)
 		}
 	}
 
@@ -162,7 +193,7 @@ func (s *LSPScanner) runProtocol(client *lspClient, root string) (*model.Project
 	return proj, nil
 }
 
-func addSymbolToNS(nsMap map[string]*model.Namespace, nsKey, name string, kind int) {
+func addSymbolToNS(nsMap map[string]*model.Namespace, nsKey, name string, kind int, filePath string, line int) {
 	if nsKey == "" {
 		nsKey = nsRoot
 	}
@@ -175,6 +206,8 @@ func addSymbolToNS(nsMap map[string]*model.Namespace, nsKey, name string, kind i
 		Name:     name,
 		Kind:     model.SymbolKind(kind),
 		Exported: isExportedSymbol(name),
+		File:     filePath,
+		Line:     line,
 	})
 }
 
@@ -192,8 +225,7 @@ func findSourceFiles(root string) ([]string, error) {
 			return nil
 		}
 		ext := filepath.Ext(d.Name())
-		switch ext {
-		case ".go", ".rs", ".py", ".ts", ".js":
+		if _, ok := extToLanguageID[ext]; ok {
 			files = append(files, path)
 		}
 		return nil
@@ -241,5 +273,16 @@ type lspSymbolInformation struct {
 type lspDocumentSymbol struct {
 	Name     string              `json:"name"`
 	Kind     int                 `json:"kind"`
+	Range    lspRange            `json:"range"`
 	Children []lspDocumentSymbol `json:"children,omitempty"`
+}
+
+type lspRange struct {
+	Start lspPosition `json:"start"`
+	End   lspPosition `json:"end"`
+}
+
+type lspPosition struct {
+	Line      int `json:"line"`
+	Character int `json:"character"`
 }
