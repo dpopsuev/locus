@@ -7,6 +7,8 @@ import (
 
 	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/arch"
+	"github.com/dpopsuev/locus/internal/graph"
+	"github.com/dpopsuev/locus/internal/model"
 	"github.com/dpopsuev/locus/internal/port"
 )
 
@@ -35,27 +37,15 @@ var hexaRoleOrder = map[HexaRole]int{
 	HexaRoleDomain:  5,
 }
 
-// Adapter-matching keywords for service name classification.
-var adapterKeywords = []string{
-	"handler", "server", "client", "repository", "repo", "gateway",
-	"driver", "adapter", "grpc", "http", "api", "db",
-	"postgres", "mysql", "redis", "kafka", "rabbitmq", "mcp",
-}
-
-// Infra-matching keywords for service name classification.
-var infraKeywords = []string{
-	"config", "logging", "telemetry", "metrics", "middleware",
-	"store", "storage", "persist", "cache",
-}
-
-// App-matching keywords for service name classification.
-var appKeywords = []string{
-	"app", "usecase", "orchestrat", "workflow",
-}
-
-// portInterfaceRatioThreshold is the minimum ratio of interfaces to total types
-// for a package to be classified as a port.
-const portInterfaceRatioThreshold = 0.5
+// Graph-based classification thresholds. Zero keyword lists, zero import patterns.
+const (
+	// portInterfaceRatio: if >50% of exported symbols are interfaces → port.
+	portInterfaceRatio = 0.5
+	// infraFanInRatio: if component is imported by >40% of all components → infra.
+	infraFanInRatio = 0.4
+	// compositionRootFanOut: fan-out >= this AND fan-in <= 1 → composition root (entrypoint/app).
+	compositionRootFanOut = 10
+)
 
 // HexaComponent represents a classified component in a hexagonal architecture.
 type HexaComponent struct {
@@ -89,21 +79,27 @@ type HexaValidationReport struct {
 }
 
 // ComputeHexaClassification classifies each service into a hexagonal architecture role
-// using heuristics based on name, outgoing edge protocols, and type composition.
+// using structural graph signals. Zero keyword lists, zero import path patterns,
+// language-agnostic. The graph tells us adapter/port/domain without knowing WHAT
+// is imported — only WHETHER edges cross boundaries.
 func ComputeHexaClassification(
 	services []arch.ArchService,
 	edges []arch.ArchEdge,
 	classes []analysis.ClassInfo,
 ) *HexaClassificationReport {
-	// Build set of services that have outgoing external edges.
-	externalSources := make(map[string]bool)
+	// Build structural signals from the graph.
+	hasExternalEdge := make(map[string]bool)
 	for _, e := range edges {
 		if e.Protocol == "external" {
-			externalSources[e.From] = true
+			hasExternalEdge[e.From] = true
 		}
 	}
 
-	// Build per-package interface and total type counts from classes.
+	fanIn := graph.FanIn(edges)
+	fanOut := graph.FanOut(edges)
+	totalComponents := len(services)
+
+	// Build per-package interface and total type counts from class analysis.
 	ifaceCounts := make(map[string]int)
 	totalCounts := make(map[string]int)
 	for _, c := range classes {
@@ -116,7 +112,9 @@ func ComputeHexaClassification(
 	components := make([]HexaComponent, 0, len(services))
 	for i := range services {
 		svc := &services[i]
-		role, reason := classifyService(svc, externalSources, ifaceCounts, totalCounts)
+		role, reason := classifyService(svc, hasExternalEdge[svc.Name],
+			fanIn[svc.Name], fanOut[svc.Name], totalComponents,
+			ifaceCounts, totalCounts)
 		components = append(components, HexaComponent{
 			Name:   svc.Name,
 			Role:   role,
@@ -138,49 +136,79 @@ func ComputeHexaClassification(
 	}
 }
 
+// classifyService uses pure structural graph signals. Priority cascade:
+// entrypoint > port > adapter > infra > dead > domain.
+// No keyword lists. No import path patterns. Language-agnostic.
 func classifyService(
 	svc *arch.ArchService,
-	externalSources map[string]bool,
+	hasExternal bool,
+	fi, fo, totalComponents int,
 	ifaceCounts, totalCounts map[string]int,
 ) (role HexaRole, reason string) {
-	segment := lastPathSegment(svc.Name)
-
-	// 1. Entrypoint: cmd/ prefix or root "."
-	if strings.HasPrefix(svc.Name, "cmd/") || svc.Name == "." {
-		return HexaRoleEntry, "command entrypoint"
+	// 1. Entrypoint: has "main" symbol OR composition root pattern (high fan-out, low fan-in).
+	if hasMainSymbol(svc) {
+		return HexaRoleEntry, "has main symbol"
+	}
+	if fo >= compositionRootFanOut && fi <= 1 {
+		return HexaRoleEntry, fmt.Sprintf("composition root (fan-out=%d, fan-in=%d)", fo, fi)
 	}
 
-	// 2. Adapter: keyword match or external protocol edges
-	if arch.ContainsAny(segment, adapterKeywords...) {
-		return HexaRoleAdapter, "name contains adapter keyword"
+	// 2. Port: >50% of exported symbols are interfaces.
+	ifaceRatio := interfaceRatio(svc)
+	if ifaceRatio > portInterfaceRatio {
+		return HexaRolePort, fmt.Sprintf("%.0f%% interfaces", ifaceRatio*100)
 	}
-	if externalSources[svc.Name] {
-		return HexaRoleAdapter, "has outgoing external edges"
-	}
-
-	// 3. Infra: keyword match
-	if arch.ContainsAny(segment, infraKeywords...) {
-		return HexaRoleInfra, "name contains infrastructure keyword"
-	}
-
-	// 4. Port: package has > 50% interfaces
+	// Fallback: class-analysis-based interface ratio (for languages without symbol Kind).
 	pkg := svc.Package
 	if pkg == "" {
 		pkg = svc.Name
 	}
-	total := totalCounts[pkg]
-	ifaces := ifaceCounts[pkg]
-	if total > 0 && float64(ifaces)/float64(total) > portInterfaceRatioThreshold {
-		return HexaRolePort, "package is mostly interfaces"
+	if total := totalCounts[pkg]; total > 0 {
+		classRatio := float64(ifaceCounts[pkg]) / float64(total)
+		if classRatio > portInterfaceRatio {
+			return HexaRolePort, fmt.Sprintf("%.0f%% interfaces (class analysis)", classRatio*100)
+		}
 	}
 
-	// 5. App: keyword match
-	if arch.ContainsAny(segment, appKeywords...) {
-		return HexaRoleApp, "name contains application keyword"
+	// 3. Adapter: has external edges (crosses boundary).
+	if hasExternal {
+		return HexaRoleAdapter, "imports external dependencies"
 	}
 
-	// 6. Domain: default
+	// 4. Infra: imported by >40% of all components (widely used infrastructure).
+	if totalComponents > 2 && float64(fi)/float64(totalComponents) > infraFanInRatio {
+		return HexaRoleInfra, fmt.Sprintf("imported by %d/%d components (%.0f%%)", fi, totalComponents, float64(fi)/float64(totalComponents)*100)
+	}
+
+	// 5. Domain: default.
 	return HexaRoleDomain, "default classification"
+}
+
+// hasMainSymbol checks if the component exports a "main" or "Main" symbol.
+// Language-agnostic — works for Go (main), Python (__main__), Rust (main), etc.
+func hasMainSymbol(svc *arch.ArchService) bool {
+	for _, sym := range svc.Symbols {
+		lower := strings.ToLower(sym.Name)
+		if lower == "main" || lower == "__main__" {
+			return true
+		}
+	}
+	return false
+}
+
+// interfaceRatio returns the fraction of exported symbols that are interfaces.
+// Uses model.Symbol.Kind metadata (populated by TSK-257).
+func interfaceRatio(svc *arch.ArchService) float64 {
+	if len(svc.Symbols) == 0 {
+		return 0
+	}
+	count := 0
+	for _, sym := range svc.Symbols {
+		if sym.Kind == model.SymbolInterface {
+			count++
+		}
+	}
+	return float64(count) / float64(len(svc.Symbols))
 }
 
 // ResolveRoles returns the effective hexagonal role for each component.
@@ -327,11 +355,4 @@ func buildViolationSummary(score float64, violations []HexaViolation) string {
 	}
 
 	return fmt.Sprintf("Hexagonal compliance: %.0f%% — %d error(s), %d warning(s)", score, errors, warnings)
-}
-
-func lastPathSegment(name string) string {
-	if idx := strings.LastIndex(name, "/"); idx >= 0 {
-		return name[idx+1:]
-	}
-	return name
 }
