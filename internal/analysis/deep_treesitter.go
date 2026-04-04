@@ -258,9 +258,8 @@ func isStoreAccess(callee string) bool {
 // traceDataFlow builds the data flow graph by walking from the entry point.
 func traceDataFlow(funcIndex map[string]tsFuncDef, dataStores map[string]bool,
 	entry string, maxDepth int,
-) (map[string]DataFlowNode, []DataFlowEdge) {
+) (nodes map[string]DataFlowNode, edges []DataFlowEdge) {
 	nodeMap := make(map[string]DataFlowNode)
-	var edges []DataFlowEdge
 	memo := make(map[string]bool)
 
 	nodeMap[entry] = DataFlowNode{Name: entry, Kind: "entry"}

@@ -1,25 +1,37 @@
 package analysis
 
+import "github.com/dpopsuev/locus/internal/oculus"
+
+// Constants re-exported from oculus.
 const (
-	// DefaultCallGraphDepth is the max traversal depth for call graph analysis.
-	DefaultCallGraphDepth = 10
-	// DefaultDataFlowDepth is the max traversal depth for data flow tracing.
-	DefaultDataFlowDepth = 8
-	// DefaultLSPTimeout is the default timeout for LSP server operations.
-	DefaultLSPTimeout = 30 // seconds
+	DefaultCallGraphDepth = oculus.DefaultCallGraphDepth
+	DefaultDataFlowDepth  = oculus.DefaultDataFlowDepth
+	DefaultLSPTimeout     = oculus.DefaultLSPTimeout
 )
 
-// Analyzer layer identifiers for CallGraph/DataFlow results.
+// Layer identifiers re-exported from oculus.
 const (
-	LayerLSP        = "lsp"
-	LayerGoAST      = "goast"
-	LayerTreeSitter = "treesitter"
-	LayerRegex      = "regex"
-	LayerPython     = "python"
-	LayerTypeScript = "typescript"
+	LayerLSP        = oculus.LayerLSP
+	LayerGoAST      = oculus.LayerGoAST
+	LayerTreeSitter = oculus.LayerTreeSitter
+	LayerRegex      = oculus.LayerRegex
+	LayerPython     = oculus.LayerPython
+	LayerTypeScript = oculus.LayerTypeScript
 )
 
-// Common tree-sitter node type names used across analyzers.
+// Deep types re-exported from oculus.
+type CallGraphOpts = oculus.CallGraphOpts
+type CallEdge = oculus.CallEdge
+type FuncNode = oculus.FuncNode
+type CallGraph = oculus.CallGraph
+type DataFlowNode = oculus.DataFlowNode
+type DataFlowEdge = oculus.DataFlowEdge
+type TrustBoundary = oculus.TrustBoundary
+type DataFlow = oculus.DataFlow
+type StateTransition = oculus.StateTransition
+type StateMachine = oculus.StateMachine
+
+// Internal constants used by analyzers (not part of public Oculus API).
 const (
 	nodeFuncDecl      = "function_declaration"
 	nodeMethodDecl    = "method_declaration"
@@ -30,19 +42,16 @@ const (
 	nodeQualifiedType = "qualified_type"
 )
 
-// Common kind strings for ClassInfo.
 const (
 	kindStruct    = "struct"
 	kindInterface = "interface"
 )
 
-// Common directory/file names used for skip logic.
 const (
 	dirVendor   = "vendor"
 	dirTestdata = "testdata"
 )
 
-// Common file extensions.
 const (
 	extGo   = ".go"
 	extRust = ".rs"
@@ -54,20 +63,4 @@ const (
 	extJSX  = ".jsx"
 )
 
-// pkgRoot is the package name used for files at the repository root.
 const pkgRoot = "(root)"
-
-// DeepAnalyzer extracts cross-function, cross-package structural
-// information for Tier 3 diagrams (dataflow, call graph, state machine).
-//
-// Three implementations exist, mirroring TypeAnalyzer:
-//   - TreeSitterDeepAnalyzer (syntactic, D&C by package)
-//   - LSPDeepAnalyzer (semantic, single gopls connection)
-//   - RegexDeepAnalyzer (best-effort fallback)
-//
-// DeepFallbackAnalyzer chains them LSP -> TreeSitter -> Regex.
-type DeepAnalyzer interface {
-	CallGraph(root string, opts CallGraphOpts) (*CallGraph, error)
-	DataFlowTrace(root, entry string, depth int) (*DataFlow, error)
-	DetectStateMachines(root string) ([]StateMachine, error)
-}
