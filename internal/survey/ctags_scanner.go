@@ -2,6 +2,7 @@ package survey
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -83,12 +84,22 @@ func (s *CtagsScanner) Scan(root string) (*model.Project, error) {
 			Name:     entry.Name,
 			Kind:     mapCtagsKind(entry.Kind),
 			Exported: true,
+			File:     entry.Path,
+			Line:     entry.Line,
 		}
 		ns.AddSymbol(sym)
 
 		if !fileSet[entry.Path] {
 			fileSet[entry.Path] = true
-			ns.AddFile(model.NewFile(entry.Path, dir))
+			fileObj := model.NewFile(entry.Path, dir)
+			// Count lines for LOC metric.
+			if data, readErr := os.ReadFile(filepath.Join(root, entry.Path)); readErr == nil {
+				fileObj.Lines = bytes.Count(data, []byte{'\n'})
+				if len(data) > 0 && data[len(data)-1] != '\n' {
+					fileObj.Lines++
+				}
+			}
+			ns.AddFile(fileObj)
 		}
 	}
 
