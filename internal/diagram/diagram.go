@@ -76,6 +76,8 @@ func Render(in Input, opts Options) (string, error) {
 		return renderZones(in, opts), nil
 	case "hexa":
 		return renderHexa(in, opts)
+	case "dsm":
+		return renderDSM(in, opts), nil
 	default:
 		return "", fmt.Errorf("%w %q (use: %s)", ErrUnknownDiagramType, opts.Type, strings.Join(Types(), ", "))
 	}
@@ -86,6 +88,6 @@ func Types() []string {
 	return []string{
 		"dependency", "c4", "coupling", "churn", "layers", "tree",
 		"classes", "interfaces", "sequence", "er",
-		"dataflow", "callgraph", "state", "zones", "hexa",
+		"dataflow", "callgraph", "state", "zones", "hexa", "dsm",
 	}
 }

@@ -176,6 +176,16 @@ func TestRenderZones(t *testing.T) {
 	assertContains(t, out, "-->")
 }
 
+func TestRenderDSM(t *testing.T) {
+	out, err := Render(Input{Report: testReport()}, Options{Type: "dsm"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertContains(t, out, "Dependency Structure Matrix")
+	assertContains(t, out, "×") // dependency marker
+	assertContains(t, out, "■") // self marker
+}
+
 func TestRenderTreeDarkTheme(t *testing.T) {
 	out, err := Render(Input{Report: testReport()}, Options{Type: "tree", Theme: "dark"})
 	if err != nil {
@@ -206,8 +216,8 @@ func TestRenderUnknownType(t *testing.T) {
 
 func TestTypes(t *testing.T) {
 	types := Types()
-	if len(types) != 15 {
-		t.Fatalf("expected 15 types, got %d: %v", len(types), types)
+	if len(types) != 16 {
+		t.Fatalf("expected 16 types, got %d: %v", len(types), types)
 	}
 }
 
