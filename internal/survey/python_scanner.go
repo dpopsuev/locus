@@ -238,11 +238,11 @@ func (s *PythonScanner) extractPythonSymbols(dir string, ns *model.Namespace) {
 			lineCount++
 			line := sc.Text()
 			if m := rePyDef.FindStringSubmatch(line); m != nil {
-				addPythonSymbol(ns, seen, m[1], model.SymbolFunction)
+				addPythonSymbol(ns, seen, m[1], model.SymbolFunction, entry.Name(), lineCount)
 			} else if m := rePyAsyncDef.FindStringSubmatch(line); m != nil {
-				addPythonSymbol(ns, seen, m[1], model.SymbolFunction)
+				addPythonSymbol(ns, seen, m[1], model.SymbolFunction, entry.Name(), lineCount)
 			} else if m := rePyClass.FindStringSubmatch(line); m != nil {
-				addPythonSymbol(ns, seen, m[1], model.SymbolClass)
+				addPythonSymbol(ns, seen, m[1], model.SymbolClass, entry.Name(), lineCount)
 			}
 		}
 		f.Close()
@@ -251,7 +251,7 @@ func (s *PythonScanner) extractPythonSymbols(dir string, ns *model.Namespace) {
 	}
 }
 
-func addPythonSymbol(ns *model.Namespace, seen map[string]bool, name string, kind model.SymbolKind) {
+func addPythonSymbol(ns *model.Namespace, seen map[string]bool, name string, kind model.SymbolKind, filePath string, lineNum int) {
 	if seen[name] {
 		return
 	}
@@ -260,6 +260,8 @@ func addPythonSymbol(ns *model.Namespace, seen map[string]bool, name string, kin
 		Name:     name,
 		Kind:     kind,
 		Exported: !strings.HasPrefix(name, "_"),
+		File:     filePath,
+		Line:     lineNum,
 	})
 }
 

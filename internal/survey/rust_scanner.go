@@ -196,7 +196,7 @@ func (s *RustScanner) extractRustSymbols(crateDir string, ns *model.Namespace) {
 		scanner := bufio.NewScanner(f)
 		for scanner.Scan() {
 			lineCount++
-			matchSymbolPatterns(scanner.Text(), rustSymbolPatterns, ns, seen, true)
+			matchSymbolPatterns(scanner.Text(), rustSymbolPatterns, ns, seen, true, filepath.ToSlash(rel), lineCount)
 		}
 		fileObj.Lines = lineCount
 		ns.AddFile(fileObj)

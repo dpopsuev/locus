@@ -23,7 +23,7 @@ type symbolPattern struct {
 
 // matchSymbolPatterns tries each pattern against line and adds the first
 // match as a symbol to ns. Returns true if a match was found.
-func matchSymbolPatterns(line string, patterns []symbolPattern, ns *model.Namespace, seen map[string]bool, exported bool) {
+func matchSymbolPatterns(line string, patterns []symbolPattern, ns *model.Namespace, seen map[string]bool, exported bool, filePath string, lineNum int) {
 	for _, p := range patterns {
 		m := p.re.FindStringSubmatch(line)
 		if m == nil {
@@ -42,6 +42,8 @@ func matchSymbolPatterns(line string, patterns []symbolPattern, ns *model.Namesp
 			Name:     name,
 			Kind:     p.kind,
 			Exported: exp,
+			File:     filePath,
+			Line:     lineNum,
 		})
 		return
 	}

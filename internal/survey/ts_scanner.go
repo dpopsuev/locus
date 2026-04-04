@@ -97,7 +97,7 @@ func (s *TypeScriptScanner) Scan(root string) (*model.Project, error) {
 		for scanner.Scan() {
 			lineCount++
 			line := scanner.Text()
-			s.extractExports(line, ns, seen[dir])
+			s.extractExports(line, ns, seen[dir], rel, lineCount)
 			s.extractImportEdge(line, dir, absRoot, externalPkgs, proj.DependencyGraph)
 		}
 		fileObj.Lines = lineCount
@@ -138,8 +138,8 @@ var (
 	reImportSide     = regexp.MustCompile(`^\s*import\s+['"]([^'"]+)['"]`)
 )
 
-func (s *TypeScriptScanner) extractExports(line string, ns *model.Namespace, seen map[string]bool) {
-	matchSymbolPatterns(line, tsExportPatterns, ns, seen, true)
+func (s *TypeScriptScanner) extractExports(line string, ns *model.Namespace, seen map[string]bool, filePath string, lineNum int) {
+	matchSymbolPatterns(line, tsExportPatterns, ns, seen, true, filePath, lineNum)
 }
 
 func (s *TypeScriptScanner) extractImportEdge(line, fromDir, _ string, _ map[string]bool, graph *model.DependencyGraph) {

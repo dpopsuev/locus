@@ -88,7 +88,7 @@ func (s *GoScanner) Scan(root string) (*model.Project, error) {
 		}
 		pkg.AddFile(fileObj)
 
-		extractSymbols(f, pkg)
+		extractSymbols(f, fset, filepath.ToSlash(rel), pkg)
 		extractImports(f, importPath, modPath, mod.DependencyGraph)
 
 		return nil
@@ -108,7 +108,7 @@ func (s *GoScanner) Scan(root string) (*model.Project, error) {
 	return mod, nil
 }
 
-func extractSymbols(f *ast.File, pkg *model.Namespace) {
+func extractSymbols(f *ast.File, fset *token.FileSet, filePath string, pkg *model.Namespace) {
 	seen := make(map[string]bool)
 	for _, s := range pkg.Symbols {
 		seen[s.Name] = true
@@ -129,17 +129,19 @@ func extractSymbols(f *ast.File, pkg *model.Namespace) {
 				Name:     name,
 				Kind:     model.SymbolFunction,
 				Exported: ast.IsExported(name),
+				File:     filePath,
+				Line:     fset.Position(d.Pos()).Line,
 			})
 
 		case *ast.GenDecl:
-			extractGenDeclSymbols(d, pkg, seen)
+			extractGenDeclSymbols(d, fset, filePath, pkg, seen)
 		}
 	}
 }
 
 // extractGenDeclSymbols extracts type and value symbols from a GenDecl and
 // adds them to the namespace. Shared between GoScanner and PackagesScanner.
-func extractGenDeclSymbols(d *ast.GenDecl, ns *model.Namespace, seen map[string]bool) {
+func extractGenDeclSymbols(d *ast.GenDecl, fset *token.FileSet, filePath string, ns *model.Namespace, seen map[string]bool) {
 	for _, spec := range d.Specs {
 		switch s := spec.(type) {
 		case *ast.TypeSpec:
@@ -156,6 +158,8 @@ func extractGenDeclSymbols(d *ast.GenDecl, ns *model.Namespace, seen map[string]
 				Name:     name,
 				Kind:     kind,
 				Exported: ast.IsExported(name),
+				File:     filePath,
+				Line:     fset.Position(s.Pos()).Line,
 			})
 
 		case *ast.ValueSpec:
@@ -173,6 +177,8 @@ func extractGenDeclSymbols(d *ast.GenDecl, ns *model.Namespace, seen map[string]
 					Name:     name,
 					Kind:     kind,
 					Exported: ast.IsExported(name),
+					File:     filePath,
+					Line:     fset.Position(ident.Pos()).Line,
 				})
 			}
 		}

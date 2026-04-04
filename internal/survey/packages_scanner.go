@@ -136,6 +136,10 @@ func extractTypedSymbols(pkg *packages.Package, ns *model.Namespace) {
 	symbolDeps := collectSymbolDeps(pkg)
 
 	for _, f := range pkg.Syntax {
+		filePath := ""
+		if tokFile := pkg.Fset.File(f.Pos()); tokFile != nil {
+			filePath = tokFile.Name()
+		}
 		for _, decl := range f.Decls {
 			switch d := decl.(type) {
 			case *ast.FuncDecl:
@@ -151,6 +155,8 @@ func extractTypedSymbols(pkg *packages.Package, ns *model.Namespace) {
 					Name:     name,
 					Kind:     model.SymbolFunction,
 					Exported: ast.IsExported(name),
+					File:     filePath,
+					Line:     pkg.Fset.Position(d.Pos()).Line,
 				}
 				if deps, ok := symbolDeps[name]; ok {
 					for dep := range deps {
@@ -160,7 +166,7 @@ func extractTypedSymbols(pkg *packages.Package, ns *model.Namespace) {
 				ns.AddSymbol(sym)
 
 			case *ast.GenDecl:
-				extractGenDeclSymbols(d, ns, seen)
+				extractGenDeclSymbols(d, pkg.Fset, filePath, ns, seen)
 			}
 		}
 	}
