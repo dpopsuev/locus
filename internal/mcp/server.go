@@ -75,6 +75,7 @@ const (
 	ActionSOLIDScan      = "solid_scan"
 	ActionSymbolQuality  = "symbol_quality"
 	ActionVocabMap       = "vocab_map"
+	ActionBloaterScan    = "bloater_scan"
 )
 
 // Constraint actions.
@@ -303,7 +304,7 @@ type analysisInput struct {
 }
 
 type clinicInput struct {
-	Action   string `json:"action" jsonschema:"required,pattern_scan | pattern_catalog | hexa_validate | solid_scan | symbol_quality | vocab_map"`
+	Action   string `json:"action" jsonschema:"required,pattern_scan | pattern_catalog | hexa_validate | solid_scan | symbol_quality | vocab_map | bloater_scan"`
 	Path     string `json:"path,omitempty" jsonschema:"absolute path to local repository"`
 	CacheKey string `json:"cache_key,omitempty" jsonschema:"cache key from scan_remote"`
 	Filter   string `json:"filter,omitempty" jsonschema:"filter for pattern_catalog: pattern, smell, or name"`
@@ -490,6 +491,12 @@ func (h *handler) handleClinic(ctx context.Context, _ *sdkmcp.CallToolRequest, i
 		return jsonResult(r)
 	case ActionVocabMap:
 		r, err := h.proto.GetVocabMap(ctx, in.Path, in.CacheKey)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
+	case ActionBloaterScan:
+		r, err := h.proto.GetBloaterScan(ctx, in.Path, in.CacheKey)
 		if err != nil {
 			return nil, nil, err
 		}

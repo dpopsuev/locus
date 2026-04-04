@@ -1599,6 +1599,15 @@ func (p *Protocol) GetGaps(ctx context.Context, path string) (*constraint.GapRep
 	return constraint.DetectGaps(report, path)
 }
 
+func (p *Protocol) GetBloaterScan(_ context.Context, path string, cacheKey ...string) (*clinic.BloaterReport, error) {
+	path = p.resolvePath(path)
+	report, err := p.getOrScan(path, cacheKey...)
+	if err != nil {
+		return nil, err
+	}
+	return clinic.ComputeBloaterScan(report), nil
+}
+
 func (p *Protocol) GetLeverage(_ context.Context, path, target string, cacheKey ...string) (*impact.LeverageReport, error) {
 	path = p.resolvePath(path)
 	if target == "" {
