@@ -50,18 +50,21 @@ const (
 
 // Analysis actions.
 const (
-	ActionDeps       = "deps"
-	ActionImpact     = "impact"
-	ActionCoupling   = "coupling"
-	ActionCycles     = "cycles"
-	ActionViolations = "violations"
-	ActionCallers    = "callers"
-	ActionComponent  = "component"
-	ActionSearch     = "search"
-	ActionQuery      = "query"
-	ActionPreset     = "preset"
-	ActionScanDiff   = "scan_diff"
-	ActionRiskScores = "risk_scores"
+	ActionDeps         = "deps"
+	ActionImpact       = "impact"
+	ActionCoupling     = "coupling"
+	ActionCycles       = "cycles"
+	ActionViolations   = "violations"
+	ActionCallers      = "callers"
+	ActionComponent    = "component"
+	ActionSearch       = "search"
+	ActionQuery        = "query"
+	ActionPreset       = "preset"
+	ActionScanDiff     = "scan_diff"
+	ActionRiskScores   = "risk_scores"
+	ActionSymbolSearch = "symbol_search"
+	ActionCallees      = "callees"
+	ActionCallPath     = "call_path"
 )
 
 // Clinic actions.
@@ -282,7 +285,7 @@ type codographActionInput struct {
 }
 
 type analysisInput struct {
-	Action    string   `json:"action" jsonschema:"required,deps | impact | coupling | cycles | violations | callers | component | search | query | preset | scan_diff | risk_scores"`
+	Action    string   `json:"action" jsonschema:"required,deps | impact | coupling | cycles | violations | callers | component | search | query | preset | scan_diff | risk_scores | symbol_search | callees | call_path"`
 	Path      string   `json:"path,omitempty" jsonschema:"absolute path to local repository"`
 	CacheKey  string   `json:"cache_key,omitempty" jsonschema:"cache key from scan_remote"`
 	Component string   `json:"component,omitempty" jsonschema:"component path for deps/impact/coupling"`
@@ -419,18 +422,43 @@ func (h *handler) handleAnalysis(ctx context.Context, _ *sdkmcp.CallToolRequest,
 			return nil, nil, err
 		}
 		return jsonResult(r)
-	case ActionRiskScores:
-		r, err := h.proto.GetRiskScores(ctx, in.Path, in.CacheKey)
-		if err != nil {
-			return nil, nil, err
-		}
-		return jsonResult(r)
+	case ActionRiskScores, ActionSymbolSearch, ActionCallees, ActionCallPath:
+		return h.dispatchAnalysisExtended(ctx, &in)
 	default:
 		return nil, nil, fmt.Errorf("%w %q", ErrUnknownAction, in.Action)
 	}
 }
 
 // --- Clinic handler (table-driven) ---
+
+func (h *handler) dispatchAnalysisExtended(ctx context.Context, in *analysisInput) (*sdkmcp.CallToolResult, any, error) {
+	switch in.Action {
+	case ActionRiskScores:
+		r, err := h.proto.GetRiskScores(ctx, in.Path, in.CacheKey)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
+	case ActionSymbolSearch:
+		r, err := h.proto.SearchSymbols(ctx, in.Path, in.Query, in.CacheKey)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
+	case ActionCallees:
+		r, err := h.proto.GetCallees(ctx, in.Path, in.Symbol, in.CacheKey)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
+	default: // ActionCallPath
+		r, err := h.proto.GetCallPath(ctx, in.Path, in.Symbol, in.Query, in.CacheKey)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
+	}
+}
 
 func (h *handler) handleClinic(ctx context.Context, _ *sdkmcp.CallToolRequest, in clinicInput) (*sdkmcp.CallToolResult, any, error) { //nolint:gocritic
 	switch in.Action {

@@ -618,6 +618,50 @@ func (p *Protocol) SearchComponents(ctx context.Context, path, query string, cac
 	return p.db.SearchComponents(ctx, path, sha, query)
 }
 
+// SymbolMatch is a single symbol search result.
+type SymbolMatch struct {
+	Symbol    string `json:"symbol"`
+	Kind      string `json:"kind"`
+	Component string `json:"component"`
+	File      string `json:"file,omitempty"`
+	Line      int    `json:"line,omitempty"`
+}
+
+// SymbolSearchReport holds symbol search results.
+type SymbolSearchReport struct {
+	Query   string        `json:"query"`
+	Matches []SymbolMatch `json:"matches"`
+	Summary string        `json:"summary"`
+}
+
+func (p *Protocol) SearchSymbols(_ context.Context, path, pattern string, cacheKey ...string) (*SymbolSearchReport, error) {
+	path = p.resolvePath(path)
+	report, err := p.getOrScan(path, cacheKey...)
+	if err != nil {
+		return nil, err
+	}
+
+	lower := strings.ToLower(pattern)
+	var matches []SymbolMatch
+	for i := range report.Architecture.Services {
+		svc := &report.Architecture.Services[i]
+		for _, sym := range svc.Symbols {
+			if strings.Contains(strings.ToLower(sym.Name), lower) {
+				matches = append(matches, SymbolMatch{
+					Symbol:    sym.Name,
+					Kind:      sym.Kind.String(),
+					Component: svc.Name,
+					File:      sym.File,
+					Line:      sym.Line,
+				})
+			}
+		}
+	}
+
+	summary := fmt.Sprintf("%d symbol(s) matching %q", len(matches), pattern)
+	return &SymbolSearchReport{Query: pattern, Matches: matches, Summary: summary}, nil
+}
+
 // CallerSite is a type alias for port.CallerSite, kept for backward compatibility.
 type CallerSite = port.CallerSite
 
@@ -627,6 +671,83 @@ type CallersReport struct {
 	Callers []CallerSite `json:"callers"`
 	Summary string       `json:"summary"`
 }
+
+// CalleesReport holds all functions called by a given symbol.
+type CalleesReport struct {
+	Symbol  string       `json:"symbol"`
+	Callees []CallerSite `json:"callees"`
+	Summary string       `json:"summary"`
+}
+
+func (p *Protocol) GetCallees(_ context.Context, path, symbol string, cacheKey ...string) (*CalleesReport, error) {
+	path = p.resolvePath(path)
+	if symbol == "" {
+		return nil, ErrComponentRequired
+	}
+	da := analysis.NewDeepFallback(path)
+	cg, err := da.CallGraph(path, analysis.CallGraphOpts{Depth: analysis.DefaultCallGraphDepth})
+	if err != nil {
+		return nil, fmt.Errorf("call graph: %w", err)
+	}
+
+	var callees []CallerSite
+	for _, e := range cg.Edges {
+		if e.Caller == symbol {
+			callees = append(callees, CallerSite{
+				Caller:       e.Callee,
+				CallerPkg:    e.CalleePkg,
+				Line:         e.Line,
+				File:         e.File,
+				ReceiverType: e.ReceiverType,
+			})
+		}
+	}
+
+	return &CalleesReport{
+		Symbol:  symbol,
+		Callees: callees,
+		Summary: fmt.Sprintf("%s calls %d function(s)", symbol, len(callees)),
+	}, nil
+}
+
+// CallPathReport holds the shortest call chain between two symbols.
+type CallPathReport struct {
+	From    string   `json:"from"`
+	To      string   `json:"to"`
+	Path    []string `json:"path,omitempty"`
+	Found   bool     `json:"found"`
+	Summary string   `json:"summary"`
+}
+
+func (p *Protocol) GetCallPath(_ context.Context, path, from, to string, cacheKey ...string) (*CallPathReport, error) {
+	path = p.resolvePath(path)
+	da := analysis.NewDeepFallback(path)
+	cg, err := da.CallGraph(path, analysis.CallGraphOpts{Depth: analysis.DefaultCallGraphDepth})
+	if err != nil {
+		return nil, fmt.Errorf("call graph: %w", err)
+	}
+
+	// Build edges compatible with graph.ShortestPath.
+	edges := make([]callEdge, len(cg.Edges))
+	for i, e := range cg.Edges {
+		edges[i] = callEdge{e.Caller, e.Callee}
+	}
+
+	result, found := graph.ShortestPath(edges, from, to)
+
+	summary := fmt.Sprintf("no path from %s to %s", from, to)
+	if found {
+		summary = fmt.Sprintf("%s → %s: %d hops", from, to, len(result)-1)
+	}
+
+	return &CallPathReport{From: from, To: to, Path: result, Found: found, Summary: summary}, nil
+}
+
+// callEdge satisfies graph.Edge for call graph path queries.
+type callEdge struct{ caller, callee string }
+
+func (e callEdge) Source() string { return e.caller }
+func (e callEdge) Target() string { return e.callee }
 
 func (p *Protocol) GetInterfaceMetrics(ctx context.Context, path string, cacheKey ...string) (*constraint.InterfaceMetricsReport, error) {
 	path = p.resolvePath(path)
