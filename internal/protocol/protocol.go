@@ -414,12 +414,18 @@ func (p *Protocol) GetDrift(ctx context.Context, path string, cacheKey ...string
 	if err != nil {
 		return nil, err
 	}
-	if ds == nil {
-		return &DriftReport{HasDesiredState: false, Summary: "No desired state configured. Use set_desired_state or suggest_architecture."}, nil
-	}
 	report, err := p.getOrScan(path, cacheKey...)
 	if err != nil {
+		if ds == nil {
+			return &DriftReport{HasDesiredState: false, Summary: "No desired state configured and scan unavailable."}, nil
+		}
 		return nil, err
+	}
+
+	// Auto-bootstrap: infer layers from the graph when no desired state exists.
+	if ds == nil {
+		layers := inferLayerOrder(report)
+		ds = &port.DesiredState{Layers: layers}
 	}
 
 	// 1. Layer purity (existing).
