@@ -3,6 +3,7 @@ package clinic
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/dpopsuev/locus/internal/arch"
 	"github.com/dpopsuev/locus/internal/port"
@@ -78,6 +79,9 @@ func ComputeBloaterScan(report *arch.ContextReport) *BloaterReport {
 		}
 	}
 
+	// Dead symbol detection.
+	detections = append(detections, DetectDeadSymbols(report)...)
+
 	sort.Slice(detections, func(i, j int) bool {
 		return detections[i].LOC > detections[j].LOC
 	})
@@ -96,6 +100,40 @@ func shortComponentName(modPath, importPath string) string {
 		return importPath[len(modPath)+1:]
 	}
 	return importPath
+}
+
+// DetectDeadSymbols finds exported symbols with zero fan-in to their component.
+// A symbol in a component with fan-in=0 is potentially dead code (unless it's
+// an entrypoint). Language-agnostic.
+func DetectDeadSymbols(report *arch.ContextReport) []BloaterDetection {
+	if report.FanIn == nil {
+		return nil
+	}
+
+	var detections []BloaterDetection
+	for i := range report.Architecture.Services {
+		svc := &report.Architecture.Services[i]
+		// Skip entrypoints — they're expected to have 0 fan-in.
+		if strings.HasPrefix(svc.Name, "cmd/") || svc.Name == "." {
+			continue
+		}
+		fi := report.FanIn[svc.Name]
+		if fi > 0 {
+			continue
+		}
+		// Component has 0 fan-in — all its exported symbols are dead.
+		for _, sym := range svc.Symbols {
+			detections = append(detections, BloaterDetection{
+				Component: svc.Name,
+				File:      sym.File,
+				Kind:      "dead_symbol",
+				LOC:       0,
+				Threshold: 0,
+				Severity:  port.SeverityWarning,
+			})
+		}
+	}
+	return detections
 }
 
 func countKind(detections []BloaterDetection, kind string) int {
