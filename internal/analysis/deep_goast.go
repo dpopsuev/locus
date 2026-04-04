@@ -43,7 +43,7 @@ func (a *GoASTDeepAnalyzer) CallGraph(_ string, opts CallGraphOpts) (*CallGraph,
 		depth = DefaultCallGraphDepth
 	}
 
-	funcs, err := a.parseFunctions()
+	funcs, err := a.parseFunctions(opts.Scope)
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +128,7 @@ func (a *GoASTDeepAnalyzer) DataFlowTrace(_, entry string, maxDepth int) (*DataF
 		maxDepth = DefaultDataFlowDepth
 	}
 
-	funcs, err := a.parseFunctions()
+	funcs, err := a.parseFunctions("") // DataFlowTrace needs full graph
 	if err != nil {
 		return nil, err
 	}
@@ -276,7 +276,7 @@ func findASTSwitchTransitions(f *ast.File, states []string) []StateTransition {
 
 // parseFunctions walks the Go source tree and extracts all function declarations
 // with their callees.
-func (a *GoASTDeepAnalyzer) parseFunctions() ([]goFunc, error) {
+func (a *GoASTDeepAnalyzer) parseFunctions(scope string) ([]goFunc, error) {
 	fset := token.NewFileSet()
 	absRoot, err := filepath.Abs(a.root)
 	if err != nil {
@@ -299,15 +299,20 @@ func (a *GoASTDeepAnalyzer) parseFunctions() ([]goFunc, error) {
 			return nil
 		}
 
-		f, parseErr := parser.ParseFile(fset, path, nil, 0)
-		if parseErr != nil {
-			return nil
-		}
-
 		rel, _ := filepath.Rel(absRoot, path)
 		pkg := filepath.ToSlash(filepath.Dir(rel))
 		if pkg == "." {
 			pkg = pkgRoot
+		}
+
+		// Scope filter: skip files outside the requested scope prefix.
+		if scope != "" && !strings.HasPrefix(pkg, scope) {
+			return nil
+		}
+
+		f, parseErr := parser.ParseFile(fset, path, nil, 0)
+		if parseErr != nil {
+			return nil
 		}
 
 		relFile := filepath.ToSlash(rel)
