@@ -3,10 +3,12 @@ package survey_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/dpopsuev/locus/internal/model"
 	"github.com/dpopsuev/locus/internal/survey"
+	"github.com/dpopsuev/locus/internal/testkit"
 )
 
 func TestCompositeScanMergesRustAndTS(t *testing.T) {
@@ -137,6 +139,91 @@ func TestCompositeScanMergesPythonAndTS(t *testing.T) {
 			allPaths = append(allPaths, k)
 		}
 		t.Errorf("missing TypeScript namespace 'web/src'; have: %v", allPaths)
+	}
+}
+
+func TestCompositeScan_GoAndRust(t *testing.T) {
+	dir := t.TempDir()
+
+	files := map[string]string{
+		// Go sub-project at root.
+		"go.mod":      "module example.com/goapp\n\ngo 1.21",
+		"main.go":     "package main\n\nimport \"fmt\"\n\nfunc main() { fmt.Println(\"hello\") }",
+		"pkg/util.go": "package pkg\n\nfunc Helper() string { return \"help\" }",
+		// Rust sub-project at root (workspace layout).
+		"Cargo.toml":         "[workspace]\nmembers = [\"rustlib\"]",
+		"rustlib/Cargo.toml": "[package]\nname = \"rustlib\"\nversion = \"0.1.0\"\nedition = \"2021\"",
+		"rustlib/src/lib.rs": "pub fn greet() -> String { String::from(\"hello\") }",
+	}
+
+	if err := testkit.BuildFixture(dir, files); err != nil {
+		t.Fatal(err)
+	}
+
+	sc := &survey.CompositeScanner{}
+	proj, err := sc.Scan(dir)
+	if err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+
+	nsMap := make(map[string]*model.Namespace)
+	for _, ns := range proj.Namespaces {
+		nsMap[ns.ImportPath] = ns
+	}
+
+	if len(nsMap) < 2 {
+		t.Fatalf("expected at least 2 namespaces, got %d", len(nsMap))
+	}
+
+	// Verify Go namespaces carry the sub-project module path.
+	// GoScanner produces import paths like "example.com/goapp" and
+	// "example.com/goapp/pkg" from the module directive in go.mod.
+	foundGoNS := false
+	for path := range nsMap {
+		if strings.Contains(path, "goapp") {
+			foundGoNS = true
+			break
+		}
+	}
+	if !foundGoNS {
+		allPaths := make([]string, 0, len(nsMap))
+		for k := range nsMap {
+			allPaths = append(allPaths, k)
+		}
+		t.Errorf("no Go namespace containing 'goapp'; have: %v", allPaths)
+	}
+
+	// Verify the pkg sub-package is prefixed with the module path.
+	foundPkg := false
+	for path := range nsMap {
+		if strings.HasSuffix(path, "/pkg") || strings.HasSuffix(path, "goapp/pkg") {
+			foundPkg = true
+			break
+		}
+	}
+	if !foundPkg {
+		allPaths := make([]string, 0, len(nsMap))
+		for k := range nsMap {
+			allPaths = append(allPaths, k)
+		}
+		t.Errorf("no namespace ending with /pkg; have: %v", allPaths)
+	}
+
+	// Verify Rust namespace is present.
+	if _, ok := nsMap["rustlib"]; !ok {
+		allPaths := make([]string, 0, len(nsMap))
+		for k := range nsMap {
+			allPaths = append(allPaths, k)
+		}
+		t.Errorf("missing Rust namespace 'rustlib'; have: %v", allPaths)
+	}
+
+	// Both languages must be represented in the scan results.
+	if !foundGoNS {
+		t.Error("Go language not represented in scan results")
+	}
+	if _, ok := nsMap["rustlib"]; !ok {
+		t.Error("Rust language not represented in scan results")
 	}
 }
 
