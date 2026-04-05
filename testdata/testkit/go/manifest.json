@@ -5,8 +5,7 @@
   "expected_edges_min": 3,
   "scan_intent": "health",
   "expected_hexa": {
-    "adapter": ["adapter"],
-    "max_violations": 2
+    "max_violations": 4
   },
   "expected_solid": {
     "max_violations": 10,

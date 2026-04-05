@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/dpopsuev/locus/internal/model"
@@ -48,7 +49,7 @@ func (s *CtagsScanner) Scan(root string) (*model.Project, error) {
 
 	proj := &model.Project{
 		Path:     root,
-		Language: DetectLanguage(root),
+		Language: DetectFromMarkers(root),
 	}
 
 	dirNS := make(map[string]*model.Namespace)
@@ -110,6 +111,14 @@ func (s *CtagsScanner) Scan(root string) (*model.Project, error) {
 	deps := extractCIncludes(root)
 	if deps != nil && len(deps.Edges) > 0 {
 		proj.DependencyGraph = deps
+	}
+
+	// Extract import edges for non-C/C++ languages (Java, Kotlin, C#, Swift, Zig).
+	if proj.DependencyGraph == nil || len(proj.DependencyGraph.Edges) == 0 {
+		importDeps := extractLanguageImports(root, proj.Language, dirNS)
+		if importDeps != nil && len(importDeps.Edges) > 0 {
+			proj.DependencyGraph = importDeps
+		}
 	}
 
 	return proj, nil
@@ -179,7 +188,9 @@ func extractCIncludes(root string) *model.DependencyGraph {
 			if inc == "" {
 				continue
 			}
-			incDir := filepath.Dir(inc)
+			// Resolve include path relative to source file directory.
+			resolved := filepath.ToSlash(filepath.Clean(filepath.Join(srcDir, inc)))
+			incDir := filepath.Dir(resolved)
 			if incDir == "." {
 				incDir = srcDir
 			}
@@ -190,6 +201,123 @@ func extractCIncludes(root string) *model.DependencyGraph {
 		return nil
 	})
 	return deps
+}
+
+// Language-specific import regex patterns for non-C/C++ languages.
+var (
+	reJavaImport   = regexp.MustCompile(`^\s*import\s+(?:static\s+)?([a-zA-Z0-9_.]+)\.\w+\s*;`)
+	reKotlinImport = regexp.MustCompile(`^\s*import\s+([a-zA-Z0-9_.]+)\.\w+`)
+	reCSharpUsing  = regexp.MustCompile(`^\s*using\s+(?:static\s+)?([a-zA-Z0-9_.]+)\s*;`)
+	reSwiftImport  = regexp.MustCompile(`^\s*import\s+(\w+)`)
+	reZigImport    = regexp.MustCompile(`@import\("([^"]+)"\)`)
+)
+
+// extractLanguageImports scans source files for language-specific import
+// statements and builds a dependency graph mapping directory namespaces.
+func extractLanguageImports(root string, lang model.Language, dirNS map[string]*model.Namespace) *model.DependencyGraph {
+	var importRe *regexp.Regexp
+	var resolver func(match []string, dirNS map[string]*model.Namespace) string
+
+	switch lang {
+	case model.LangJava:
+		importRe = reJavaImport
+		resolver = resolvePackageImport
+	case model.LangKotlin:
+		importRe = reKotlinImport
+		resolver = resolvePackageImport
+	case model.LangCSharp:
+		importRe = reCSharpUsing
+		resolver = resolvePackageImport
+	case model.LangSwift:
+		importRe = reSwiftImport
+		resolver = resolveModuleImport
+	case model.LangZig:
+		importRe = reZigImport
+		resolver = resolveZigImport
+	default:
+		return nil
+	}
+
+	graph := model.NewDependencyGraph()
+	seen := make(map[[2]string]bool)
+
+	for nsKey, ns := range dirNS {
+		for _, f := range ns.Files {
+			fullPath := filepath.Join(root, f.Path)
+			data, err := os.ReadFile(fullPath)
+			if err != nil {
+				continue
+			}
+			for _, line := range strings.Split(string(data), "\n") {
+				if m := importRe.FindStringSubmatch(line); m != nil {
+					targetNS := resolver(m, dirNS)
+					if targetNS != "" && targetNS != nsKey {
+						key := [2]string{nsKey, targetNS}
+						if !seen[key] {
+							seen[key] = true
+							graph.AddEdge(nsKey, targetNS, false)
+						}
+					}
+				}
+			}
+		}
+	}
+	return graph
+}
+
+// resolvePackageImport maps a dotted package path (e.g. "domain.Entity" → captured "domain")
+// to a known directory namespace by matching against namespace keys.
+func resolvePackageImport(match []string, dirNS map[string]*model.Namespace) string {
+	pkg := match[1]
+	// Convert dots to slashes for path matching.
+	pkgPath := strings.ReplaceAll(pkg, ".", "/")
+
+	// Exact match.
+	if _, ok := dirNS[pkgPath]; ok {
+		return pkgPath
+	}
+
+	// Try progressively shorter prefixes.
+	parts := strings.Split(pkgPath, "/")
+	for i := len(parts); i > 0; i-- {
+		candidate := strings.Join(parts[:i], "/")
+		if _, ok := dirNS[candidate]; ok {
+			return candidate
+		}
+	}
+
+	// Try matching just the last segment (common for flat layouts).
+	lastSeg := parts[len(parts)-1]
+	for ns := range dirNS {
+		if filepath.Base(ns) == lastSeg {
+			return ns
+		}
+	}
+	return ""
+}
+
+// resolveModuleImport maps a Swift module name to a directory namespace.
+func resolveModuleImport(match []string, dirNS map[string]*model.Namespace) string {
+	moduleName := match[1]
+	for ns := range dirNS {
+		if filepath.Base(ns) == moduleName {
+			return ns
+		}
+	}
+	return ""
+}
+
+// resolveZigImport maps a Zig @import path to a directory namespace.
+func resolveZigImport(match []string, dirNS map[string]*model.Namespace) string {
+	importPath := match[1]
+	dir := filepath.Dir(importPath)
+	if dir == "." {
+		return ""
+	}
+	if _, ok := dirNS[dir]; ok {
+		return dir
+	}
+	return ""
 }
 
 func parseInclude(line string) string {

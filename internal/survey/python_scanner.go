@@ -315,7 +315,7 @@ func (s *PythonScanner) extractPythonImports(dir string, _ *model.Namespace, imp
 			seen[internalKey] = true
 
 			if matchesInternalPackage(internalKey, internalPkgs) {
-				target := strings.ReplaceAll(internalKey, "/", ".")
+				target := resolveToNamespace(internalKey, internalPkgs)
 				if target != importPath {
 					proj.DependencyGraph.AddEdge(importPath, target, false)
 				}
@@ -329,6 +329,25 @@ func (s *PythonScanner) extractPythonImports(dir string, _ *model.Namespace, imp
 		}
 		f.Close()
 	}
+}
+
+// resolveToNamespace maps an import key (e.g. "domain/entity") to its
+// enclosing namespace (e.g. "domain") by finding the longest matching
+// package prefix. This ensures dependency edges target known namespaces.
+func resolveToNamespace(importKey string, pkgSet map[string]bool) string {
+	if pkgSet[importKey] {
+		return strings.ReplaceAll(importKey, "/", ".")
+	}
+	best := ""
+	for pkg := range pkgSet {
+		if strings.HasPrefix(importKey, pkg+"/") && len(pkg) > len(best) {
+			best = pkg
+		}
+	}
+	if best != "" {
+		return strings.ReplaceAll(best, "/", ".")
+	}
+	return strings.ReplaceAll(importKey, "/", ".")
 }
 
 func matchesInternalPackage(importKey string, pkgSet map[string]bool) bool {

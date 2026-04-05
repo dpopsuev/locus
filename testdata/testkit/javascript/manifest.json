@@ -1,8 +1,8 @@
 {
   "language": "javascript",
   "marker": "package.json",
-  "expected_components_min": 1,
-  "expected_edges_min": 0,
+  "expected_components_min": 2,
+  "expected_edges_min": 1,
   "scan_intent": "architecture",
   "expected_diagrams": ["dependency", "tree"]
 }

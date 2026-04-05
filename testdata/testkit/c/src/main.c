@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <pthread.h>
-#include "entity.h"
+#include "../include/entity.h"
 
 int main(void) {
     Entity* e = entity_new("1", "test");

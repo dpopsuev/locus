@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use crate::domain::entity::{Entity, Repository};
+use domain::{Entity, Repository};
 
 pub struct MemoryRepo {
     data: HashMap<String, Entity>,
@@ -7,7 +7,9 @@ pub struct MemoryRepo {
 
 impl MemoryRepo {
     pub fn new() -> Self {
-        Self { data: HashMap::new() }
+        Self {
+            data: HashMap::new(),
+        }
     }
 }
 

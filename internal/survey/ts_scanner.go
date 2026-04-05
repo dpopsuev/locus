@@ -136,6 +136,7 @@ var (
 	reImportFrom     = regexp.MustCompile(`(?:import|export)\s+.*?\s+from\s+['"]([^'"]+)['"]`)
 	reImportTypeOnly = regexp.MustCompile(`^\s*(?:import|export)\s+type\s+\{`)
 	reImportSide     = regexp.MustCompile(`^\s*import\s+['"]([^'"]+)['"]`)
+	reRequire        = regexp.MustCompile(`require\s*\(\s*['"]([^'"]+)['"]\s*\)`)
 )
 
 func (s *TypeScriptScanner) extractExports(line string, ns *model.Namespace, seen map[string]bool, filePath string, lineNum int) {
@@ -153,6 +154,8 @@ func (s *TypeScriptScanner) extractImportEdge(line, fromDir, _ string, _ map[str
 	if m := reImportFrom.FindStringSubmatch(line); m != nil {
 		spec = m[1]
 	} else if m := reImportSide.FindStringSubmatch(line); m != nil {
+		spec = m[1]
+	} else if m := reRequire.FindStringSubmatch(line); m != nil {
 		spec = m[1]
 	}
 	if spec == "" {

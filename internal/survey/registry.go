@@ -119,7 +119,7 @@ func init() {
 	})
 	Register(&LanguageSupport{
 		Language: model.LangJava,
-		Markers:  []string{"pom.xml", "build.gradle", "build.gradle.kts"},
+		Markers:  []string{"pom.xml", "build.gradle"},
 		ScannerFactory: func(_ string) Scanner {
 			return &CtagsScanner{}
 		},

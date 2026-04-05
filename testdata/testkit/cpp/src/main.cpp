@@ -1,6 +1,6 @@
 #include <iostream>
 #include <thread>
-#include "entity.hpp"
+#include "../include/entity.hpp"
 
 int main() {
     Entity e("1", "test");

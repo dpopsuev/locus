@@ -1,6 +1,6 @@
 #include <stdlib.h>
 #include <string.h>
-#include "entity.h"
+#include "../include/entity.h"
 
 Entity* entity_new(const char* id, const char* name) {
     Entity* e = malloc(sizeof(Entity));
