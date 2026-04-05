@@ -1,5 +1,9 @@
 package graph
 
+import (
+	"gonum.org/v1/gonum/graph/path"
+)
+
 // ShortestPath finds the shortest directed path from src to dst using BFS.
 // Returns the path as an ordered list of node names and true if found,
 // or nil and false if no path exists.
@@ -7,39 +11,27 @@ func ShortestPath[E Edge](edges []E, src, dst string) ([]string, bool) {
 	if src == dst {
 		return []string{src}, true
 	}
-
-	adj := buildAdj(edges)
-	visited := map[string]bool{src: true}
-	parent := map[string]string{src: ""}
-	queue := []string{src}
-
-	for len(queue) > 0 {
-		cur := queue[0]
-		queue = queue[1:]
-		for _, next := range adj[cur] {
-			if visited[next] {
-				continue
-			}
-			visited[next] = true
-			parent[next] = cur
-			if next == dst {
-				return reconstructPath(parent, src, dst), true
-			}
-			queue = append(queue, next)
-		}
+	if len(edges) == 0 {
+		return nil, false
 	}
-	return nil, false
-}
 
-func reconstructPath(parent map[string]string, src, dst string) []string {
-	var path []string
-	for cur := dst; cur != src; cur = parent[cur] {
-		path = append(path, cur)
+	sg := fromEdges(edges)
+	srcID, srcOK := sg.nameToID[src]
+	dstID, dstOK := sg.nameToID[dst]
+	if !srcOK || !dstOK {
+		return nil, false
 	}
-	path = append(path, src)
-	// Reverse.
-	for i, j := 0, len(path)-1; i < j; i, j = i+1, j-1 {
-		path[i], path[j] = path[j], path[i]
+
+	// Use gonum's BFS shortest path.
+	shortest := path.DijkstraFrom(sg.g.Node(srcID), sg.g)
+	nodes, _ := shortest.To(dstID)
+	if len(nodes) == 0 {
+		return nil, false
 	}
-	return path
+
+	result := make([]string, len(nodes))
+	for i, n := range nodes {
+		result[i] = sg.nodeName(n.ID())
+	}
+	return result, true
 }

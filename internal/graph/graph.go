@@ -6,6 +6,8 @@ package graph
 import (
 	"sort"
 	"strings"
+
+	"gonum.org/v1/gonum/graph/topo"
 )
 
 // Edge is the minimal interface that any directed edge must satisfy.
@@ -90,56 +92,32 @@ func BFS(seed NodeSet, adj AdjMap, validSet, skip NodeSet) NodeSet {
 	return visited
 }
 
-// DetectCycles finds all distinct cycles in a directed graph using DFS with
-// color marking (white/gray/black). Returns cycles sorted for determinism.
+// DetectCycles finds all distinct cycles in a directed graph using gonum's
+// Johnson's algorithm. Returns cycles normalized and sorted for determinism.
 func DetectCycles[E Edge](edges []E) []Cycle {
-	adj := buildAdj(edges)
-	nodes := collectNodes(edges)
+	if len(edges) == 0 {
+		return nil
+	}
+	sg := fromEdges(edges)
 
-	const (
-		white = 0
-		gray  = 1
-		black = 2
-	)
-	color := make(map[string]int, len(nodes))
-	var cycles []Cycle
+	rawCycles := topo.DirectedCyclesIn(sg.g)
+	cycles := make([]Cycle, 0, len(sg.selfLoops)+len(rawCycles))
 
-	var dfs func(node string, stack []string)
-	dfs = func(node string, stack []string) {
-		color[node] = gray
-		stack = append(stack, node)
-		for _, next := range adj[node] {
-			switch color[next] {
-			case gray:
-				start := -1
-				for i, s := range stack {
-					if s == next {
-						start = i
-						break
-					}
-				}
-				if start >= 0 {
-					c := make(Cycle, len(stack)-start)
-					copy(c, stack[start:])
-					cycles = append(cycles, normalizeCycle(c))
-				}
-			case white:
-				dfs(next, stack)
+	// Self-loops are single-node cycles (gonum excludes them).
+	for _, name := range sg.selfLoops {
+		cycles = append(cycles, Cycle{name})
+	}
+	for _, rc := range rawCycles {
+		// gonum returns cycles with the start node repeated at the end; trim it.
+		c := make(Cycle, 0, len(rc)-1)
+		for _, n := range rc {
+			name := sg.nodeName(n.ID())
+			if len(c) > 0 && name == c[0] {
+				break
 			}
+			c = append(c, name)
 		}
-		color[node] = black
-	}
-
-	sorted := make([]string, 0, len(nodes))
-	for n := range nodes {
-		sorted = append(sorted, n)
-	}
-	sort.Strings(sorted)
-
-	for _, n := range sorted {
-		if color[n] == white {
-			dfs(n, nil)
-		}
+		cycles = append(cycles, normalizeCycle(c))
 	}
 
 	return deduplicateCycles(cycles)
