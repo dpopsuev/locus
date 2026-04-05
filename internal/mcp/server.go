@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"strings"
 	"time"
 
@@ -46,6 +47,7 @@ const (
 	ActionGetDesiredState = "get_desired_state"
 	ActionAcceptViolation = "accept_violation"
 	ActionStatus          = "status"
+	ActionFlush           = "flush"
 )
 
 // Analysis actions.
@@ -176,6 +178,13 @@ func NewServer(s store.Store, workspaceRoots []string, version string) (*sdkmcp.
 		},
 	)
 	h := &handler{proto: proto}
+	// Record binary mtime at startup for stale binary detection (BUG-33).
+	if exe, err := os.Executable(); err == nil {
+		h.binPath = exe
+		if info, err := os.Stat(exe); err == nil {
+			h.binStart = info.ModTime()
+		}
+	}
 	reg := triage.New()
 
 	triage.AddTool(reg, srv, triage.ToolMeta{
@@ -253,8 +262,10 @@ func NewServer(s store.Store, workspaceRoots []string, version string) (*sdkmcp.
 }
 
 type handler struct {
-	proto *protocol.Protocol
-	reg   *triage.Registry
+	proto    *protocol.Protocol
+	reg      *triage.Registry
+	binStart time.Time // mtime of binary at startup, for stale detection
+	binPath  string    // path to running binary
 }
 
 // --- Input structs (per-tool, only relevant fields) ---
@@ -332,7 +343,23 @@ type refactorInput struct {
 	Since     string            `json:"since,omitempty" jsonschema:"git ref for diff_intelligence"`
 }
 
-// --- Codograph handler (unchanged) ---
+// staleBinaryWarning returns a warning string if the on-disk binary has been
+// updated since the MCP server started. Empty string if current.
+func (h *handler) staleBinaryWarning() string {
+	if h.binPath == "" || h.binStart.IsZero() {
+		return ""
+	}
+	info, err := os.Stat(h.binPath)
+	if err != nil {
+		return ""
+	}
+	if info.ModTime().After(h.binStart) {
+		return "⚠ Locus binary upgraded on disk — restart MCP server for latest analysis"
+	}
+	return ""
+}
+
+// --- Codograph handler ---
 
 func (h *handler) handleCodograph(ctx context.Context, req *sdkmcp.CallToolRequest, in codographActionInput) (*sdkmcp.CallToolResult, any, error) { //nolint:gocritic
 	switch in.Action {
@@ -371,7 +398,16 @@ func (h *handler) handleCodograph(ctx context.Context, req *sdkmcp.CallToolReque
 		if err != nil {
 			return nil, nil, err
 		}
+		if warn := h.staleBinaryWarning(); warn != "" {
+			r.Version = warn
+		}
 		return jsonResult(r)
+	case ActionFlush:
+		n, err := h.proto.FlushCache(ctx, in.Path)
+		if err != nil {
+			return nil, nil, err
+		}
+		return text(fmt.Sprintf("flushed %d project cache(s)", n)), nil, nil
 	default:
 		return nil, nil, fmt.Errorf("%w %q", ErrUnknownCodographAction, in.Action)
 	}

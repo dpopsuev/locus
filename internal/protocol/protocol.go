@@ -537,6 +537,24 @@ func (p *Protocol) Status(ctx context.Context) (*StatusResult, error) {
 	}, nil
 }
 
+// FlushCache invalidates cached scan results for a project, forcing a fresh scan
+// on the next request. If path is empty, flushes all projects.
+func (p *Protocol) FlushCache(ctx context.Context, path string) (int, error) {
+	if path != "" {
+		path = p.resolvePath(path)
+		return 1, p.db.Invalidate(ctx, path)
+	}
+	// Flush all projects.
+	projects, err := p.db.ListProjects(ctx)
+	if err != nil {
+		return 0, err
+	}
+	for _, proj := range projects {
+		_ = p.db.Invalidate(ctx, proj.Path)
+	}
+	return len(projects), nil
+}
+
 // CheckDriftOnScan checks desired state against a scan report and returns a one-liner.
 // Returns empty string if no desired state exists.
 func (p *Protocol) CheckDriftOnScan(ctx context.Context, path string, report *arch.ContextReport) string {

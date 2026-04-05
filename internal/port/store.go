@@ -18,6 +18,7 @@ import (
 type ReportStore interface {
 	GetReport(ctx context.Context, project, sha string) (*arch.ContextReport, bool, error)
 	PutReport(ctx context.Context, project, sha string, report *arch.ContextReport) error
+	Invalidate(ctx context.Context, project string) error
 }
 
 // HistoryStore handles the append-only log of scan events per project.

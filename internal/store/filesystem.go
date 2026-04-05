@@ -41,6 +41,10 @@ func (f *FilesystemStore) PutReport(_ context.Context, project, sha string, repo
 	return nil
 }
 
+func (f *FilesystemStore) Invalidate(_ context.Context, project string) error {
+	return f.sc.Invalidate(project)
+}
+
 func (f *FilesystemStore) RecordScan(_ context.Context, source, repoPath, sha string, report *arch.ContextReport) error {
 	return history.Record(f.sc, f.histDir, history.Source(source), repoPath, sha, report)
 }

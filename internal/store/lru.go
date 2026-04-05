@@ -3,6 +3,7 @@ package store
 import (
 	"container/list"
 	"context"
+	"strings"
 	"sync"
 
 	"github.com/dpopsuev/locus/internal/arch"
@@ -100,6 +101,20 @@ func (s *LRUStore) evictLocked() {
 	}
 	s.order.Remove(back)
 	delete(s.items, back.Value.(*lruEntry).key)
+}
+
+func (s *LRUStore) Invalidate(ctx context.Context, project string) error {
+	// Evict all LRU entries for this project.
+	prefix := project + "\x00"
+	s.mu.Lock()
+	for key, el := range s.items {
+		if strings.HasPrefix(key, prefix) {
+			s.order.Remove(el)
+			delete(s.items, key)
+		}
+	}
+	s.mu.Unlock()
+	return s.inner.Invalidate(ctx, project)
 }
 
 // All other methods delegate to inner.
