@@ -1,6 +1,7 @@
 package analysis
 
 import (
+	"os"
 	"os/exec"
 	"strings"
 
@@ -25,12 +26,21 @@ func NewDeepFallback(root string) *DeepFallbackAnalyzer {
 		regex: &RegexDeepAnalyzer{},
 	}
 	// Language-specific AST analyzers — auto-detected.
-	if ga := NewGoASTDeep(root); ga != nil {
-		f.goast = ga
-	} else if pa := NewPythonDeep(root); pa != nil {
-		f.goast = pa
-	} else if ta := NewTypeScriptDeep(root); ta != nil {
-		f.goast = ta
+	// LOCUS_CALLGRAPH_BACKEND=gotools uses x/tools/go/callgraph (CHA) for
+	// higher precision at the cost of speed (requires full type-checking).
+	if os.Getenv("LOCUS_CALLGRAPH_BACKEND") == "gotools" {
+		if gt := NewGoToolsDeep(root); gt != nil {
+			f.goast = gt
+		}
+	}
+	if f.goast == nil {
+		if ga := NewGoASTDeep(root); ga != nil {
+			f.goast = ga
+		} else if pa := NewPythonDeep(root); pa != nil {
+			f.goast = pa
+		} else if ta := NewTypeScriptDeep(root); ta != nil {
+			f.goast = ta
+		}
 	}
 	// Tree-sitter deep analyzer uses ParsedProject
 	if ts, err := NewTreeSitterDeep(root); err == nil {
