@@ -1,4 +1,4 @@
-package survey
+package lsp
 
 import (
 	"bytes"
@@ -8,11 +8,11 @@ import (
 	"testing"
 )
 
-func TestLSPClientWriteMessage(t *testing.T) {
+func TestClientWriteMessage(t *testing.T) {
 	var buf bytes.Buffer
-	c := newLSPClient(strings.NewReader(""), &buf)
+	c := NewClient(strings.NewReader(""), &buf)
 
-	err := c.writeMessage(jsonRPCRequest{
+	err := c.writeMessage(JSONRPCRequest{
 		JSONRPC: "2.0",
 		ID:      1,
 		Method:  "initialize",
@@ -33,7 +33,7 @@ func TestLSPClientWriteMessage(t *testing.T) {
 	if len(parts) != 2 {
 		t.Fatalf("unexpected format: %q", out)
 	}
-	var req jsonRPCRequest
+	var req JSONRPCRequest
 	if err := json.Unmarshal([]byte(parts[1]), &req); err != nil {
 		t.Fatalf("unmarshal body: %v", err)
 	}
@@ -42,11 +42,11 @@ func TestLSPClientWriteMessage(t *testing.T) {
 	}
 }
 
-func TestLSPClientReadMessage(t *testing.T) {
+func TestClientReadMessage(t *testing.T) {
 	body := `{"jsonrpc":"2.0","id":1,"result":{"capabilities":{}}}`
 	msg := fmt.Sprintf("Content-Length: %d\r\n\r\n%s", len(body), body)
 
-	c := newLSPClient(strings.NewReader(msg), nil)
+	c := NewClient(strings.NewReader(msg), nil)
 	resp, err := c.readMessage()
 	if err != nil {
 		t.Fatalf("readMessage: %v", err)
@@ -62,12 +62,12 @@ func TestLSPClientReadMessage(t *testing.T) {
 	}
 }
 
-func TestLSPClientRoundTrip(t *testing.T) {
+func TestClientRoundTrip(t *testing.T) {
 	respBody := `{"jsonrpc":"2.0","id":1,"result":{"serverInfo":{"name":"test"}}}`
 	respMsg := fmt.Sprintf("Content-Length: %d\r\n\r\n%s", len(respBody), respBody)
 
 	var reqBuf bytes.Buffer
-	c := newLSPClient(strings.NewReader(respMsg), &reqBuf)
+	c := NewClient(strings.NewReader(respMsg), &reqBuf)
 
 	result, err := c.Request("initialize", map[string]any{"processId": 1})
 	if err != nil {
@@ -84,9 +84,9 @@ func TestLSPClientRoundTrip(t *testing.T) {
 	}
 }
 
-func TestLSPClientNotify(t *testing.T) {
+func TestClientNotify(t *testing.T) {
 	var buf bytes.Buffer
-	c := newLSPClient(strings.NewReader(""), &buf)
+	c := NewClient(strings.NewReader(""), &buf)
 
 	err := c.Notify("initialized", struct{}{})
 	if err != nil {
@@ -102,11 +102,11 @@ func TestLSPClientNotify(t *testing.T) {
 	}
 }
 
-func TestLSPClientReadError(t *testing.T) {
+func TestClientReadError(t *testing.T) {
 	body := `{"jsonrpc":"2.0","id":1,"error":{"code":-32600,"message":"invalid request"}}`
 	msg := fmt.Sprintf("Content-Length: %d\r\n\r\n%s", len(body), body)
 
-	c := newLSPClient(strings.NewReader(msg), nil)
+	c := NewClient(strings.NewReader(msg), nil)
 	resp, err := c.readMessage()
 	if err != nil {
 		t.Fatalf("readMessage: %v", err)
@@ -119,9 +119,9 @@ func TestLSPClientReadError(t *testing.T) {
 	}
 }
 
-func TestLSPClientMissingContentLength(t *testing.T) {
+func TestClientMissingContentLength(t *testing.T) {
 	msg := "Content-Type: application/json\r\n\r\n{}"
-	c := newLSPClient(strings.NewReader(msg), nil)
+	c := NewClient(strings.NewReader(msg), nil)
 	_, err := c.readMessage()
 	if err == nil {
 		t.Fatal("expected error for missing Content-Length")

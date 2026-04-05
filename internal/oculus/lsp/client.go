@@ -1,4 +1,6 @@
-package survey
+// Package lsp provides a JSON-RPC 2.0 client for Language Server Protocol
+// communication. Part of the Oculus symbol resolution library.
+package lsp
 
 import (
 	"bufio"
@@ -11,58 +13,64 @@ import (
 	"sync"
 )
 
-var errMissingContentLength = errors.New("missing Content-Length header")
+// ErrMissingContentLength is returned when an LSP message lacks the header.
+var ErrMissingContentLength = errors.New("missing Content-Length header")
 
-// lspClient implements the JSON-RPC 2.0 transport for LSP communication
+// Client implements the JSON-RPC 2.0 transport for LSP communication
 // over a stdin/stdout pipe pair.
-type lspClient struct {
+type Client struct {
 	w      io.Writer
 	r      *bufio.Reader
 	mu     sync.Mutex
 	nextID int
 }
 
-func newLSPClient(r io.Reader, w io.Writer) *lspClient {
-	return &lspClient{
+// NewClient creates an LSP client from reader/writer pairs (typically
+// connected to an LSP server's stdin/stdout).
+func NewClient(r io.Reader, w io.Writer) *Client {
+	return &Client{
 		w:      w,
 		r:      bufio.NewReader(r),
 		nextID: 1,
 	}
 }
 
-type jsonRPCRequest struct {
+// JSONRPCRequest is a JSON-RPC 2.0 request message.
+type JSONRPCRequest struct {
 	JSONRPC string `json:"jsonrpc"`
 	ID      int    `json:"id,omitempty"`
 	Method  string `json:"method"`
 	Params  any    `json:"params,omitempty"`
 }
 
-type jsonRPCResponse struct {
+// JSONRPCResponse is a JSON-RPC 2.0 response message.
+type JSONRPCResponse struct {
 	JSONRPC string          `json:"jsonrpc"`
 	ID      *int            `json:"id,omitempty"`
 	Method  string          `json:"method,omitempty"`
 	Result  json.RawMessage `json:"result,omitempty"`
-	Error   *jsonRPCError   `json:"error,omitempty"`
+	Error   *JSONRPCError   `json:"error,omitempty"`
 }
 
-type jsonRPCError struct {
+// JSONRPCError represents an error in a JSON-RPC response.
+type JSONRPCError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
 }
 
-func (e *jsonRPCError) Error() string {
+func (e *JSONRPCError) Error() string {
 	return fmt.Sprintf("LSP error %d: %s", e.Code, e.Message)
 }
 
 // Request sends a JSON-RPC request and reads the response, skipping
 // any interleaved notifications from the server.
-func (c *lspClient) Request(method string, params any) (json.RawMessage, error) {
+func (c *Client) Request(method string, params any) (json.RawMessage, error) {
 	c.mu.Lock()
 	id := c.nextID
 	c.nextID++
 	c.mu.Unlock()
 
-	req := jsonRPCRequest{
+	req := JSONRPCRequest{
 		JSONRPC: "2.0",
 		ID:      id,
 		Method:  method,
@@ -95,8 +103,8 @@ func (c *lspClient) Request(method string, params any) (json.RawMessage, error) 
 }
 
 // Notify sends a JSON-RPC notification (no response expected).
-func (c *lspClient) Notify(method string, params any) error {
-	req := jsonRPCRequest{
+func (c *Client) Notify(method string, params any) error {
+	req := JSONRPCRequest{
 		JSONRPC: "2.0",
 		Method:  method,
 		Params:  params,
@@ -104,7 +112,7 @@ func (c *lspClient) Notify(method string, params any) error {
 	return c.writeMessage(req)
 }
 
-func (c *lspClient) writeMessage(msg any) error {
+func (c *Client) writeMessage(msg any) error {
 	body, err := json.Marshal(msg)
 	if err != nil {
 		return err
@@ -117,7 +125,7 @@ func (c *lspClient) writeMessage(msg any) error {
 	return err
 }
 
-func (c *lspClient) readMessage() (*jsonRPCResponse, error) {
+func (c *Client) readMessage() (*JSONRPCResponse, error) {
 	contentLen := -1
 	for {
 		line, err := c.r.ReadString('\n')
@@ -138,7 +146,7 @@ func (c *lspClient) readMessage() (*jsonRPCResponse, error) {
 	}
 
 	if contentLen < 0 {
-		return nil, errMissingContentLength
+		return nil, ErrMissingContentLength
 	}
 
 	body := make([]byte, contentLen)
@@ -146,7 +154,7 @@ func (c *lspClient) readMessage() (*jsonRPCResponse, error) {
 		return nil, fmt.Errorf("reading body: %w", err)
 	}
 
-	var resp jsonRPCResponse
+	var resp JSONRPCResponse
 	if err := json.Unmarshal(body, &resp); err != nil {
 		return nil, fmt.Errorf("decoding response: %w", err)
 	}

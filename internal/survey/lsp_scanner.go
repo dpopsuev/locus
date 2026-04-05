@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/dpopsuev/locus/internal/model"
+	"github.com/dpopsuev/locus/internal/oculus/lsp"
 )
 
 var errEmptyServerCmd = errors.New("lsp scanner: empty ServerCmd")
@@ -77,7 +78,7 @@ func (s *LSPScanner) Scan(root string) (*model.Project, error) {
 		return nil, fmt.Errorf("lsp scanner: start %s: %w", parts[0], err)
 	}
 
-	client := newLSPClient(stdout, stdin)
+	client := lsp.NewClient(stdout, stdin)
 
 	proj, scanErr := s.runProtocol(client, absRoot)
 
@@ -92,7 +93,7 @@ func (s *LSPScanner) Scan(root string) (*model.Project, error) {
 	return proj, nil
 }
 
-func (s *LSPScanner) runProtocol(client *lspClient, root string) (*model.Project, error) {
+func (s *LSPScanner) runProtocol(client *lsp.Client, root string) (*model.Project, error) {
 	rootURI := pathToURI(root)
 
 	initParams := map[string]any{
@@ -233,7 +234,7 @@ func findSourceFiles(root string) ([]string, error) {
 	return files, err
 }
 
-func shutdownLSP(client *lspClient) error {
+func shutdownLSP(client *lsp.Client) error {
 	_, err := client.Request("shutdown", nil)
 	if err != nil {
 		return err
