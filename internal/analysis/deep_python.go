@@ -9,8 +9,7 @@ import (
 	sitter "github.com/smacker/go-tree-sitter"
 	"github.com/smacker/go-tree-sitter/python"
 
-	"github.com/dpopsuev/locus/internal/model"
-	"github.com/dpopsuev/locus/internal/survey"
+	"github.com/dpopsuev/locus/internal/oculus/lang"
 )
 
 // PythonDeepAnalyzer uses tree-sitter-python for call graph analysis.
@@ -20,7 +19,7 @@ type PythonDeepAnalyzer struct {
 
 // NewPythonDeep creates a PythonDeepAnalyzer. Returns nil for non-Python projects.
 func NewPythonDeep(root string) *PythonDeepAnalyzer {
-	if survey.DetectLanguage(root) != model.LangPython {
+	if lang.DetectLanguage(root) != lang.Python {
 		return nil
 	}
 	return &PythonDeepAnalyzer{root: root}
@@ -105,7 +104,7 @@ func (a *PythonDeepAnalyzer) parseFunctions() ([]pyFunc, error) {
 			return err
 		}
 		if d.IsDir() {
-			if survey.ShouldSkipPythonDir(d.Name()) {
+			if lang.ShouldSkipPythonDir(d.Name()) {
 				return filepath.SkipDir
 			}
 			return nil

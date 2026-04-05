@@ -8,8 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/dpopsuev/locus/internal/model"
-	"github.com/dpopsuev/locus/internal/survey"
+	"github.com/dpopsuev/locus/internal/oculus/lang"
 )
 
 // GoASTDeepAnalyzer uses go/ast for call graph, data flow, and state machine
@@ -21,7 +20,7 @@ type GoASTDeepAnalyzer struct {
 // NewGoASTDeep creates a GoASTDeepAnalyzer for the given root directory.
 // Returns nil if the root is not a Go project.
 func NewGoASTDeep(root string) *GoASTDeepAnalyzer {
-	if survey.DetectLanguage(root) != model.LangGo {
+	if lang.DetectLanguage(root) != lang.Go {
 		return nil
 	}
 	return &GoASTDeepAnalyzer{root: root}
@@ -151,7 +150,7 @@ func (a *GoASTDeepAnalyzer) DetectStateMachines(_ string) ([]StateMachine, error
 			return err
 		}
 		if d.IsDir() {
-			if survey.ShouldSkipDir(d.Name()) {
+			if lang.ShouldSkipDir(d.Name()) {
 				return filepath.SkipDir
 			}
 			return nil
@@ -290,7 +289,7 @@ func (a *GoASTDeepAnalyzer) parseFunctions(scope string) ([]goFunc, error) {
 			return err
 		}
 		if d.IsDir() {
-			if survey.ShouldSkipDir(d.Name()) {
+			if lang.ShouldSkipDir(d.Name()) {
 				return filepath.SkipDir
 			}
 			return nil

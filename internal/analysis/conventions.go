@@ -6,7 +6,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/dpopsuev/locus/internal/survey"
+	"github.com/dpopsuev/locus/internal/oculus/lang"
 )
 
 // Convention represents a detected coding convention.
@@ -56,7 +56,7 @@ func DetectConventions(root string) (*ConventionReport, error) {
 			return err
 		}
 		if d.IsDir() {
-			if survey.ShouldSkipDir(d.Name()) {
+			if lang.ShouldSkipDir(d.Name()) {
 				return filepath.SkipDir
 			}
 			return nil

@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"strings"
 	"time"
-
-	"github.com/dpopsuev/locus/internal/model"
 )
 
 // LSPDeepAnalyzer uses a single gopls connection for all DeepAnalyzer
@@ -64,7 +62,7 @@ func (a *LSPDeepAnalyzer) CallGraph(_ string, opts CallGraphOpts) (*CallGraph, e
 				Name: it.Name, Package: pkg, Line: it.Range.Start.Line + 1,
 			}
 
-			outgoing, err := conn.request("callHierarchy/outgoingCalls", map[string]any{"item": it})
+			outgoing, err := conn.Request("callHierarchy/outgoingCalls", map[string]any{"item": it})
 			if err != nil {
 				return
 			}
@@ -140,7 +138,7 @@ func (a *LSPDeepAnalyzer) DataFlowTrace(_, entry string, maxDepth int) (*DataFlo
 			nodeMap[it.Name] = DataFlowNode{Name: it.Name, Kind: "process", Pkg: pkg}
 		}
 
-		outgoing, err := conn.request("callHierarchy/outgoingCalls", map[string]any{"item": it})
+		outgoing, err := conn.Request("callHierarchy/outgoingCalls", map[string]any{"item": it})
 		if err != nil {
 			return
 		}
@@ -202,7 +200,7 @@ func (a *LSPDeepAnalyzer) DetectStateMachines(_ string) ([]StateMachine, error) 
 
 		// Look for const groups that might represent state enums
 		for _, sym := range syms {
-			if sym.Kind != int(model.SymbolConstant) {
+			if sym.Kind != 14 {
 				continue
 			}
 			if len(sym.Children) < 2 {
@@ -259,7 +257,7 @@ func lspCallGraphRoots(opts CallGraphOpts, conn *lspConn, root string) []string 
 			if !isExported(sym.Name) {
 				continue
 			}
-			if sym.Kind != int(model.SymbolFunction) && sym.Kind != int(model.SymbolMethod) {
+			if sym.Kind != 12 && sym.Kind != 6 {
 				continue
 			}
 			if !seen[sym.Name] {

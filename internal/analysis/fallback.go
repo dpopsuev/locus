@@ -4,7 +4,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/dpopsuev/locus/internal/survey"
+	"github.com/dpopsuev/locus/internal/oculus/lang"
 )
 
 // FallbackAnalyzer chains LSP -> tree-sitter -> regex. Each method tries
@@ -22,8 +22,8 @@ func NewFallback(root string) *FallbackAnalyzer {
 		ts:    &TreeSitterAnalyzer{},
 		regex: &RegexAnalyzer{},
 	}
-	lang := survey.DetectLanguage(root)
-	cmd := survey.DefaultLSPServer(lang)
+	detected := lang.DetectLanguage(root)
+	cmd := lang.DefaultLSPServer(detected)
 	if cmd != "" {
 		bin := strings.Fields(cmd)[0]
 		if _, err := exec.LookPath(bin); err == nil {

@@ -5,7 +5,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/dpopsuev/locus/internal/survey"
+	"github.com/dpopsuev/locus/internal/oculus/lang"
 )
 
 // DeepFallbackAnalyzer chains LSP -> TreeSitter -> Regex for DeepAnalyzer
@@ -47,8 +47,8 @@ func NewDeepFallback(root string) *DeepFallbackAnalyzer {
 		f.ts = ts
 	}
 	// LSP deep analyzer checks for gopls
-	lang := survey.DetectLanguage(root)
-	cmd := survey.DefaultLSPServer(lang)
+	detected := lang.DetectLanguage(root)
+	cmd := lang.DefaultLSPServer(detected)
 	if cmd != "" {
 		bin := strings.Fields(cmd)[0]
 		if _, err := exec.LookPath(bin); err == nil {

@@ -18,6 +18,7 @@ import (
 	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/graph"
 	"github.com/dpopsuev/locus/internal/model"
+	olang "github.com/dpopsuev/locus/internal/oculus/lang"
 	"github.com/dpopsuev/locus/internal/survey"
 )
 
@@ -362,15 +363,15 @@ func resolvedScannerName(override, root string) string {
 	if override != "" && override != "auto" {
 		return override
 	}
-	lang := survey.DetectLanguage(root)
-	switch lang {
-	case model.LangGo:
+	detected := olang.DetectLanguage(root)
+	switch detected {
+	case olang.Go:
 		return "packages"
-	case model.LangRust:
+	case olang.Rust:
 		return "rust"
-	case model.LangTypeScript:
+	case olang.TypeScript:
 		return "typescript"
-	case model.LangPython:
+	case olang.Python:
 		return "python"
 	default:
 		return "auto"

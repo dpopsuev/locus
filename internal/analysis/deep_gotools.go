@@ -11,8 +11,7 @@ import (
 	"golang.org/x/tools/go/ssa"
 	"golang.org/x/tools/go/ssa/ssautil"
 
-	"github.com/dpopsuev/locus/internal/model"
-	"github.com/dpopsuev/locus/internal/survey"
+	"github.com/dpopsuev/locus/internal/oculus/lang"
 )
 
 const LayerGoTools = "gotools"
@@ -27,7 +26,7 @@ type GoToolsDeepAnalyzer struct {
 
 // NewGoToolsDeep creates a GoToolsDeepAnalyzer. Returns nil if not a Go project.
 func NewGoToolsDeep(root string) *GoToolsDeepAnalyzer {
-	if survey.DetectLanguage(root) != model.LangGo {
+	if lang.DetectLanguage(root) != lang.Go {
 		return nil
 	}
 	return &GoToolsDeepAnalyzer{root: root}

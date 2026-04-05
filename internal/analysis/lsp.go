@@ -5,16 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
-	"github.com/dpopsuev/locus/internal/model"
-	"github.com/dpopsuev/locus/internal/survey"
+	"github.com/dpopsuev/locus/internal/oculus/lang"
+	"github.com/dpopsuev/locus/internal/oculus/lsp"
 )
 
 var (
@@ -84,111 +82,15 @@ func (a *LSPAnalyzer) NestingDepth(root string) ([]NestingResult, error) {
 	return nil, ErrLSPNestingDepth
 }
 
-// --- LSP connection ---
+// --- LSP connection wrapper ---
 
+// lspConn wraps oculus/lsp.Client with LSP protocol lifecycle methods.
 type lspConn struct {
-	w      io.Writer
-	r      *bufio.Reader
-	nextID int
+	*lsp.Client
 }
 
-func newLSPConn(r io.Reader, w io.Writer) *lspConn {
-	return &lspConn{w: w, r: bufio.NewReader(r), nextID: 1}
-}
-
-type lspRequest struct {
-	JSONRPC string `json:"jsonrpc"`
-	ID      int    `json:"id,omitempty"`
-	Method  string `json:"method"`
-	Params  any    `json:"params,omitempty"`
-}
-
-type lspResponse struct {
-	JSONRPC string          `json:"jsonrpc"`
-	ID      *int            `json:"id,omitempty"`
-	Method  string          `json:"method,omitempty"`
-	Result  json.RawMessage `json:"result,omitempty"`
-	Error   *lspError       `json:"error,omitempty"`
-}
-
-type lspError struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
-}
-
-func (c *lspConn) request(method string, params any) (json.RawMessage, error) {
-	id := c.nextID
-	c.nextID++
-	req := lspRequest{JSONRPC: "2.0", ID: id, Method: method, Params: params}
-	if err := c.writeMsg(req); err != nil {
-		return nil, fmt.Errorf("lsp %s: %w", method, err)
-	}
-	for {
-		resp, err := c.readMsg()
-		if err != nil {
-			return nil, fmt.Errorf("lsp %s: %w", method, err)
-		}
-		if resp.ID == nil || resp.Method != "" {
-			continue
-		}
-		if *resp.ID == id {
-			if resp.Error != nil {
-				return nil, fmt.Errorf("%w: %s (code %d: %s)", ErrLSPRequest, method, resp.Error.Code, resp.Error.Message)
-			}
-			return resp.Result, nil
-		}
-	}
-}
-
-func (c *lspConn) notify(method string, params any) error {
-	req := lspRequest{JSONRPC: "2.0", Method: method, Params: params}
-	return c.writeMsg(req)
-}
-
-func (c *lspConn) writeMsg(msg any) error {
-	body, err := json.Marshal(msg)
-	if err != nil {
-		return err
-	}
-	header := fmt.Sprintf("Content-Length: %d\r\n\r\n", len(body))
-	if _, err := io.WriteString(c.w, header); err != nil {
-		return err
-	}
-	_, err = c.w.Write(body)
-	return err
-}
-
-func (c *lspConn) readMsg() (*lspResponse, error) {
-	contentLen := -1
-	for {
-		line, err := c.r.ReadString('\n')
-		if err != nil {
-			return nil, fmt.Errorf("reading header: %w", err)
-		}
-		line = strings.TrimRight(line, "\r\n")
-		if line == "" {
-			break
-		}
-		if strings.HasPrefix(line, "Content-Length:") {
-			val := strings.TrimSpace(strings.TrimPrefix(line, "Content-Length:"))
-			contentLen, err = strconv.Atoi(val)
-			if err != nil {
-				return nil, fmt.Errorf("invalid Content-Length %q: %w", val, err)
-			}
-		}
-	}
-	if contentLen < 0 {
-		return nil, ErrContentLengthMissing
-	}
-	body := make([]byte, contentLen)
-	if _, err := io.ReadFull(c.r, body); err != nil {
-		return nil, fmt.Errorf("reading body: %w", err)
-	}
-	var resp lspResponse
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return nil, fmt.Errorf("decoding response: %w", err)
-	}
-	return &resp, nil
+func newLSPConn(r interface{ Read([]byte) (int, error) }, w interface{ Write([]byte) (int, error) }) *lspConn {
+	return &lspConn{Client: lsp.NewClient(r, w)}
 }
 
 func (c *lspConn) initialize(root string) error {
@@ -205,15 +107,15 @@ func (c *lspConn) initialize(root string) error {
 			},
 		},
 	}
-	if _, err := c.request("initialize", params); err != nil {
+	if _, err := c.Request("initialize", params); err != nil {
 		return err
 	}
-	return c.notify("initialized", struct{}{})
+	return c.Notify("initialized", struct{}{})
 }
 
 func (c *lspConn) shutdown() {
-	_, _ = c.request("shutdown", nil)
-	_ = c.notify("exit", nil)
+	_, _ = c.Request("shutdown", nil)
+	_ = c.Notify("exit", nil)
 }
 
 // documentClasses uses textDocument/documentSymbol on all source files.
@@ -293,7 +195,7 @@ func (c *lspConn) implementations(root string) ([]ImplEdge, error) {
 				"textDocument": map[string]string{"uri": pathToURI(f)},
 				"position":     map[string]int{"line": sym.Line, "character": sym.Col},
 			}
-			impls, err := c.request("textDocument/implementation", implParams)
+			impls, err := c.Request("textDocument/implementation", implParams)
 			if err != nil {
 				continue
 			}
@@ -342,7 +244,7 @@ func (c *lspConn) callChain(root, entry string, maxDepth int) ([]Call, error) {
 			return
 		}
 		visited[it.Name] = true
-		outgoing, err := c.request("callHierarchy/outgoingCalls", map[string]any{"item": it})
+		outgoing, err := c.Request("callHierarchy/outgoingCalls", map[string]any{"item": it})
 		if err != nil {
 			return
 		}
@@ -380,7 +282,7 @@ type callHierarchyItem struct {
 
 func (c *lspConn) findCallHierarchyItem(_, name string) (*callHierarchyItem, error) {
 	// Use workspace/symbol to find the function, then prepare callHierarchy
-	wsResult, err := c.request("workspace/symbol", map[string]any{"query": name})
+	wsResult, err := c.Request("workspace/symbol", map[string]any{"query": name})
 	if err != nil {
 		return nil, err
 	}
@@ -402,10 +304,10 @@ func (c *lspConn) findCallHierarchyItem(_, name string) (*callHierarchyItem, err
 	}
 	// Find exact match
 	for _, s := range symbols {
-		if s.Name != name || (s.Kind != int(model.SymbolFunction) && s.Kind != int(model.SymbolMethod)) {
+		if s.Name != name || (s.Kind != 12 && s.Kind != 6) { // 12=function, 6=method
 			continue
 		}
-		prepResult, err := c.request("textDocument/prepareCallHierarchy", map[string]any{
+		prepResult, err := c.Request("textDocument/prepareCallHierarchy", map[string]any{
 			"textDocument": map[string]string{"uri": s.Location.URI},
 			"position": map[string]int{
 				"line":      s.Location.Range.Start.Line,
@@ -449,12 +351,12 @@ func (c *lspConn) documentSymbols(file, _ string) ([]docSymbol, error) {
 	case extJava:
 		lang = "java"
 	}
-	_ = c.notify("textDocument/didOpen", map[string]any{
+	_ = c.Notify("textDocument/didOpen", map[string]any{
 		"textDocument": map[string]any{
 			"uri": uri, "languageId": lang, "version": 1, "text": string(content),
 		},
 	})
-	result, err := c.request("textDocument/documentSymbol", map[string]any{
+	result, err := c.Request("textDocument/documentSymbol", map[string]any{
 		"textDocument": map[string]string{"uri": uri},
 	})
 	if err != nil {
@@ -503,10 +405,10 @@ func (c *lspConn) documentSymbols(file, _ string) ([]docSymbol, error) {
 // --- helpers ---
 
 func (a *LSPAnalyzer) startServer(root string) (*lspConn, func(), error) {
-	lang := survey.DetectLanguage(root)
-	cmdStr := survey.DefaultLSPServer(lang)
+	detected := lang.DetectLanguage(root)
+	cmdStr := lang.DefaultLSPServer(detected)
 	if cmdStr == "" {
-		return nil, nil, fmt.Errorf("%w: %v", ErrLSPNoServer, lang)
+		return nil, nil, fmt.Errorf("%w: %v", ErrLSPNoServer, detected)
 	}
 	parts := strings.Fields(cmdStr)
 	bin, err := exec.LookPath(parts[0])

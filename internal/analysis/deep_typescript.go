@@ -9,8 +9,7 @@ import (
 	sitter "github.com/smacker/go-tree-sitter"
 	"github.com/smacker/go-tree-sitter/typescript/typescript"
 
-	"github.com/dpopsuev/locus/internal/model"
-	"github.com/dpopsuev/locus/internal/survey"
+	"github.com/dpopsuev/locus/internal/oculus/lang"
 )
 
 // TypeScriptDeepAnalyzer uses tree-sitter-typescript for call graph analysis.
@@ -20,7 +19,7 @@ type TypeScriptDeepAnalyzer struct {
 
 // NewTypeScriptDeep creates a TypeScriptDeepAnalyzer. Returns nil for non-TS projects.
 func NewTypeScriptDeep(root string) *TypeScriptDeepAnalyzer {
-	if survey.DetectLanguage(root) != model.LangTypeScript {
+	if lang.DetectLanguage(root) != lang.TypeScript {
 		return nil
 	}
 	return &TypeScriptDeepAnalyzer{root: root}
@@ -100,7 +99,7 @@ func (a *TypeScriptDeepAnalyzer) parseFunctions() ([]tsFunc, error) {
 			return err
 		}
 		if d.IsDir() {
-			if survey.ShouldSkipTSDir(d.Name()) {
+			if lang.ShouldSkipTSDir(d.Name()) {
 				return filepath.SkipDir
 			}
 			return nil

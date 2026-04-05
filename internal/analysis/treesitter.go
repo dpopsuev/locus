@@ -11,8 +11,7 @@ import (
 	sitter "github.com/smacker/go-tree-sitter"
 	"github.com/smacker/go-tree-sitter/golang"
 
-	"github.com/dpopsuev/locus/internal/model"
-	"github.com/dpopsuev/locus/internal/survey"
+	olang "github.com/dpopsuev/locus/internal/oculus/lang"
 )
 
 // ErrUnsupportedLanguage is returned when tree-sitter does not support the detected language.
@@ -23,9 +22,9 @@ var ErrUnsupportedLanguage = errors.New("tree-sitter: unsupported language")
 type TreeSitterAnalyzer struct{}
 
 func (a *TreeSitterAnalyzer) Classes(root string) ([]ClassInfo, error) {
-	lang := survey.DetectLanguage(root)
+	lang := olang.DetectLanguage(root)
 	switch lang {
-	case model.LangGo:
+	case olang.Go:
 		return a.goClasses(root)
 	default:
 		return nil, fmt.Errorf("%w: %v (classes)", ErrUnsupportedLanguage, lang)
@@ -33,9 +32,9 @@ func (a *TreeSitterAnalyzer) Classes(root string) ([]ClassInfo, error) {
 }
 
 func (a *TreeSitterAnalyzer) Implements(root string) ([]ImplEdge, error) {
-	lang := survey.DetectLanguage(root)
+	lang := olang.DetectLanguage(root)
 	switch lang {
-	case model.LangGo:
+	case olang.Go:
 		return a.goImplements(root)
 	default:
 		return nil, fmt.Errorf("%w: %v (implements)", ErrUnsupportedLanguage, lang)
@@ -43,9 +42,9 @@ func (a *TreeSitterAnalyzer) Implements(root string) ([]ImplEdge, error) {
 }
 
 func (a *TreeSitterAnalyzer) FieldRefs(root string) ([]FieldRef, error) {
-	lang := survey.DetectLanguage(root)
+	lang := olang.DetectLanguage(root)
 	switch lang {
-	case model.LangGo:
+	case olang.Go:
 		return a.goFieldRefs(root)
 	default:
 		return nil, fmt.Errorf("%w: %v (field refs)", ErrUnsupportedLanguage, lang)
@@ -53,9 +52,9 @@ func (a *TreeSitterAnalyzer) FieldRefs(root string) ([]FieldRef, error) {
 }
 
 func (a *TreeSitterAnalyzer) CallChain(root, entry string, depth int) ([]Call, error) {
-	lang := survey.DetectLanguage(root)
+	lang := olang.DetectLanguage(root)
 	switch lang {
-	case model.LangGo:
+	case olang.Go:
 		return a.goCallChain(root, entry, depth)
 	default:
 		return nil, fmt.Errorf("%w: %v (call chain)", ErrUnsupportedLanguage, lang)
@@ -63,9 +62,9 @@ func (a *TreeSitterAnalyzer) CallChain(root, entry string, depth int) ([]Call, e
 }
 
 func (a *TreeSitterAnalyzer) EntryPoints(root string) ([]EntryPoint, error) {
-	lang := survey.DetectLanguage(root)
+	lang := olang.DetectLanguage(root)
 	switch lang {
-	case model.LangGo:
+	case olang.Go:
 		return a.goEntryPoints(root)
 	default:
 		return nil, fmt.Errorf("%w: %v (entry points)", ErrUnsupportedLanguage, lang)
@@ -73,9 +72,9 @@ func (a *TreeSitterAnalyzer) EntryPoints(root string) ([]EntryPoint, error) {
 }
 
 func (a *TreeSitterAnalyzer) NestingDepth(root string) ([]NestingResult, error) {
-	lang := survey.DetectLanguage(root)
+	lang := olang.DetectLanguage(root)
 	switch lang {
-	case model.LangGo:
+	case olang.Go:
 		return a.goNestingDepth(root)
 	default:
 		return nil, fmt.Errorf("%w: %v (nesting)", ErrUnsupportedLanguage, lang)
