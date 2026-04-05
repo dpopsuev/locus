@@ -77,7 +77,7 @@ func discoverSubProjects(root string) []subProject {
 
 	for _, m := range RootProjectMarkers {
 		if _, err := os.Stat(filepath.Join(root, m.File)); err == nil {
-			subs = append(subs, subProject{relPath: ".", lang: m.Lang})
+			subs = append(subs, subProject{relPath: ".", lang: ToModelLanguage(m.Lang)})
 			seen["."] = true
 		}
 	}

@@ -1,103 +1,50 @@
 package survey
 
 import (
-	"strings"
-
 	"github.com/dpopsuev/locus/internal/model"
+	"github.com/dpopsuev/locus/internal/oculus/lang"
 )
 
-// LanguageMarker maps a project manifest file to its language.
-type LanguageMarker struct {
-	File string
-	Lang model.Language
-}
+// LanguageMarker is re-exported from oculus/lang for backward compatibility.
+type LanguageMarker = lang.LanguageMarker
 
-// LanguageMarkers is the canonical list of file→language mappings,
-// ordered by specificity (most specific first, ambiguous markers last).
-var LanguageMarkers = []LanguageMarker{
-	{"go.mod", model.LangGo},
-	{"Cargo.toml", model.LangRust},
-	{"CMakeLists.txt", model.LangCpp},
-	{"pyproject.toml", model.LangPython},
-	{"setup.py", model.LangPython},
-	{"tsconfig.json", model.LangTypeScript},
-	{"package.json", model.LangTypeScript},
-	{"Makefile", model.LangC},
-}
+// LanguageMarkers delegates to oculus/lang.
+var LanguageMarkers = lang.LanguageMarkers
 
-// RootProjectMarkers is the subset of LanguageMarkers used for
-// discovering sub-projects at the root of a polyglot repo.
-// TypeScript is excluded here because it's discovered via directory walk.
-var RootProjectMarkers = []LanguageMarker{
-	{"go.mod", model.LangGo},
-	{"Cargo.toml", model.LangRust},
-	{"pyproject.toml", model.LangPython},
-	{"setup.py", model.LangPython},
-}
+// RootProjectMarkers delegates to oculus/lang.
+var RootProjectMarkers = lang.RootProjectMarkers
 
-// CommonSkipDirs are directories skipped by all scanners.
-var CommonSkipDirs = map[string]bool{
-	"vendor":       true,
-	"testdata":     true,
-	"node_modules": true,
-	"dist":         true,
-	"build":        true,
-	"target":       true,
-	".git":         true,
-	".hg":          true,
-	".svn":         true,
-	".mos":         true,
-}
+// CommonSkipDirs delegates to oculus/lang.
+var CommonSkipDirs = lang.CommonSkipDirs
 
-// ShouldSkipDir returns true if the directory should be skipped during scanning.
-// It checks common skip dirs and hidden directories (dot-prefixed).
-func ShouldSkipDir(name string) bool {
-	if CommonSkipDirs[name] {
-		return true
-	}
-	return strings.HasPrefix(name, ".")
-}
+// PythonSkipDirs delegates to oculus/lang.
+var PythonSkipDirs = lang.PythonSkipDirs
 
-// PythonSkipDirs are additional directories skipped for Python projects.
-var PythonSkipDirs = map[string]bool{
-	"__pycache__":   true,
-	".tox":          true,
-	".nox":          true,
-	".mypy_cache":   true,
-	".pytest_cache": true,
-	".ruff_cache":   true,
-	"venv":          true,
-	".venv":         true,
-	"env":           true,
-	".env":          true,
-	".eggs":         true,
-}
+// TSSkipDirs delegates to oculus/lang.
+var TSSkipDirs = lang.TSSkipDirs
 
-// ShouldSkipPythonDir returns true if the directory should be skipped for Python scanning.
-func ShouldSkipPythonDir(name string) bool {
-	if PythonSkipDirs[name] || strings.HasSuffix(name, ".egg-info") {
-		return true
-	}
-	return ShouldSkipDir(name)
-}
+// ShouldSkipDir delegates to oculus/lang.
+func ShouldSkipDir(name string) bool { return lang.ShouldSkipDir(name) }
 
-// TSSkipDirs are additional directories skipped for TypeScript projects.
-var TSSkipDirs = map[string]bool{
-	".next":    true,
-	"coverage": true,
-}
+// ShouldSkipPythonDir delegates to oculus/lang.
+func ShouldSkipPythonDir(name string) bool { return lang.ShouldSkipPythonDir(name) }
 
-// ShouldSkipTSDir returns true if the directory should be skipped for TypeScript scanning.
-func ShouldSkipTSDir(name string) bool {
-	if TSSkipDirs[name] {
-		return true
-	}
-	return ShouldSkipDir(name)
+// ShouldSkipTSDir delegates to oculus/lang.
+func ShouldSkipTSDir(name string) bool { return lang.ShouldSkipTSDir(name) }
+
+// DefaultLSPServers delegates to oculus/lang (converted to model.Language keys).
+var DefaultLSPServers = map[model.Language]string{
+	model.LangGo:         lang.DefaultLSPServer(lang.Go),
+	model.LangRust:       lang.DefaultLSPServer(lang.Rust),
+	model.LangPython:     lang.DefaultLSPServer(lang.Python),
+	model.LangTypeScript: lang.DefaultLSPServer(lang.TypeScript),
+	model.LangC:          lang.DefaultLSPServer(lang.C),
+	model.LangCpp:        lang.DefaultLSPServer(lang.Cpp),
 }
 
 // ScannerForLang returns the appropriate scanner for a detected language.
-func ScannerForLang(lang model.Language) Scanner {
-	switch lang {
+func ScannerForLang(l model.Language) Scanner {
+	switch l {
 	case model.LangGo:
 		return &PackagesScanner{Fallback: &GoScanner{}}
 	case model.LangRust:
@@ -113,12 +60,39 @@ func ScannerForLang(lang model.Language) Scanner {
 	}
 }
 
-// DefaultLSPServers maps languages to their conventional LSP server commands.
-var DefaultLSPServers = map[model.Language]string{
-	model.LangGo:         "gopls serve",
-	model.LangRust:       "rust-analyzer",
-	model.LangPython:     "pyright-langserver --stdio",
-	model.LangTypeScript: "typescript-language-server --stdio",
-	model.LangC:          "clangd",
-	model.LangCpp:        "clangd",
+// ToOculusLanguage converts a model.Language to an oculus/lang.Language.
+func ToOculusLanguage(l model.Language) lang.Language {
+	return lang.Language(l.String())
+}
+
+// ToModelLanguage converts an oculus/lang.Language to a model.Language.
+func ToModelLanguage(l lang.Language) model.Language {
+	switch l {
+	case lang.Go:
+		return model.LangGo
+	case lang.Rust:
+		return model.LangRust
+	case lang.Python:
+		return model.LangPython
+	case lang.TypeScript:
+		return model.LangTypeScript
+	case lang.C:
+		return model.LangC
+	case lang.Cpp:
+		return model.LangCpp
+	case lang.Java:
+		return model.LangJava
+	case lang.JavaScript:
+		return model.LangJavaScript
+	case lang.Zig:
+		return model.LangZig
+	case lang.Kotlin:
+		return model.LangKotlin
+	case lang.Swift:
+		return model.LangSwift
+	case lang.CSharp:
+		return model.LangCSharp
+	default:
+		return model.LangUnknown
+	}
 }

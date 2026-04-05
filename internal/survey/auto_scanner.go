@@ -1,11 +1,11 @@
 package survey
 
 import (
-	"os"
 	"os/exec"
 	"path/filepath"
 
 	"github.com/dpopsuev/locus/internal/model"
+	"github.com/dpopsuev/locus/internal/oculus/lang"
 )
 
 // AutoScanner selects the best available scanner for a project root.
@@ -80,17 +80,12 @@ func (s *AutoScanner) resolve(root string) Scanner {
 
 // DetectLanguage inspects marker files in root to determine the project language.
 func DetectLanguage(root string) model.Language {
-	for _, m := range LanguageMarkers {
-		if _, err := os.Stat(filepath.Join(root, m.File)); err == nil {
-			return m.Lang
-		}
-	}
-	return model.LangUnknown
+	return ToModelLanguage(lang.DetectLanguage(root))
 }
 
 // DefaultLSPServer returns the conventional LSP server command for a language.
-func DefaultLSPServer(lang model.Language) string {
-	return DefaultLSPServers[lang]
+func DefaultLSPServer(l model.Language) string {
+	return DefaultLSPServers[l]
 }
 
 func splitFirst(cmd string) string {
