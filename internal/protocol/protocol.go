@@ -18,6 +18,7 @@ import (
 	"github.com/dpopsuev/locus/internal/clinic"
 	"github.com/dpopsuev/locus/internal/constraint"
 	"github.com/dpopsuev/locus/internal/cursor"
+	gitpkg "github.com/dpopsuev/locus/internal/git"
 	"github.com/dpopsuev/locus/internal/graph"
 	"github.com/dpopsuev/locus/internal/history"
 	"github.com/dpopsuev/locus/internal/impact"
@@ -2226,21 +2227,9 @@ func RenderEvolutionTable(r *EvolutionResult) string {
 	return b.String()
 }
 
-// changedFilesSince returns the list of changed files since a git ref.
+// changedFilesSince delegates to git.ChangedFilesSince.
 func changedFilesSince(repoPath, since string) ([]string, error) {
-	cmd := exec.Command("git", "diff", "--name-only", since)
-	cmd.Dir = repoPath
-	out, err := cmd.Output()
-	if err != nil {
-		return nil, err
-	}
-	var files []string
-	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
-		if line != "" {
-			files = append(files, line)
-		}
-	}
-	return files, nil
+	return gitpkg.ChangedFilesSince(repoPath, since)
 }
 
 // desiredRolesForTrust returns the desired-state roles map for trust boundary detection.
