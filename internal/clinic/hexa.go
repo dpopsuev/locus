@@ -45,6 +45,10 @@ const (
 	infraFanInRatio = 0.4
 	// compositionRootFanOut: fan-out >= this AND fan-in <= 1 → composition root (entrypoint/app).
 	compositionRootFanOut = 10
+	// infraTypeThreshold: packages with more than this many exported types are
+	// likely domain core, not infrastructure utilities. Infrastructure packages
+	// (loggers, config, caches) export 1-3 types; domain packages export many.
+	infraTypeThreshold = 3
 )
 
 // HexaComponent represents a classified component in a hexagonal architecture.
@@ -176,12 +180,40 @@ func classifyService(
 	}
 
 	// 4. Infra: imported by >40% of all components (widely used infrastructure).
-	if totalComponents > 2 && float64(fi)/float64(totalComponents) > infraFanInRatio {
+	// Guard: packages with a rich type surface (>3 exported types) are domain
+	// core, not infrastructure utilities. Infra packages export few types.
+	if isInfraCandidate(fi, totalComponents) && isLowTypeSurface(svc, pkg, totalCounts) {
 		return HexaRoleInfra, fmt.Sprintf("imported by %d/%d components (%.0f%%)", fi, totalComponents, float64(fi)/float64(totalComponents)*100)
 	}
 
 	// 5. Domain: default.
 	return HexaRoleDomain, "default classification"
+}
+
+// isInfraCandidate returns true if the package has high enough fan-in to be
+// considered for infra classification.
+func isInfraCandidate(fanIn, totalComponents int) bool {
+	return totalComponents > 2 && float64(fanIn)/float64(totalComponents) > infraFanInRatio
+}
+
+// isLowTypeSurface returns true if the package exports few types, indicating
+// it's a utility/infra package rather than domain core.
+func isLowTypeSurface(svc *arch.ArchService, pkg string, totalCounts map[string]int) bool {
+	exportedTypes := totalCounts[svc.Name]
+	if pkg != "" {
+		exportedTypes = totalCounts[pkg]
+	}
+	// Fallback: if class analysis produced no results (no LSP/tree-sitter),
+	// count exported struct/interface/type symbols from the scanner output.
+	if exportedTypes == 0 {
+		for i := range svc.Symbols {
+			k := svc.Symbols[i].Kind
+			if k == model.SymbolStruct || k == model.SymbolInterface || k == model.SymbolClass || k == model.SymbolEnum {
+				exportedTypes++
+			}
+		}
+	}
+	return exportedTypes <= infraTypeThreshold
 }
 
 // hasMainSymbol checks if the component exports a "main" or "Main" symbol.

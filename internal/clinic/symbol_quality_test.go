@@ -6,6 +6,7 @@ import (
 
 	"github.com/dpopsuev/locus/internal/arch"
 	"github.com/dpopsuev/locus/internal/model"
+	"github.com/dpopsuev/locus/internal/oculus/lang"
 	"github.com/dpopsuev/locus/internal/port"
 )
 
@@ -142,7 +143,8 @@ func TestComputeSymbolQuality_VerblessExport(t *testing.T) {
 		{Name: "svc/ops", Package: "pkg/ops", Symbols: model.SymbolsFromNames("Frobnicate")},
 	}
 
-	report := ComputeSymbolQuality(services, nil)
+	// With GoRules, verbless exports are detected.
+	report := ComputeSymbolQuality(services, nil, &lang.GoRules{})
 
 	found := false
 	for _, issue := range report.Issues {
@@ -158,6 +160,21 @@ func TestComputeSymbolQuality_VerblessExport(t *testing.T) {
 	}
 }
 
+func TestComputeSymbolQuality_VerblessExport_GenericRulesNeverFlags(t *testing.T) {
+	services := []arch.ArchService{
+		{Name: "svc/ops", Package: "pkg/ops", Symbols: model.SymbolsFromNames("Frobnicate")},
+	}
+
+	// Without rules (GenericRules default), no verbless violations are reported.
+	report := ComputeSymbolQuality(services, nil)
+
+	for _, issue := range report.Issues {
+		if issue.Issue == "verbless_export" {
+			t.Errorf("GenericRules should not flag verbless exports, got %q", issue.Symbol)
+		}
+	}
+}
+
 func TestComputeSymbolQuality_TypeSuffixNotFlagged(t *testing.T) {
 	services := []arch.ArchService{
 		{Name: "svc/http", Package: "pkg/http", Symbols: model.SymbolsFromNames(
@@ -165,7 +182,8 @@ func TestComputeSymbolQuality_TypeSuffixNotFlagged(t *testing.T) {
 		)},
 	}
 
-	report := ComputeSymbolQuality(services, nil)
+	// Even with GoRules, type-suffix symbols should not be flagged.
+	report := ComputeSymbolQuality(services, nil, &lang.GoRules{})
 
 	for _, issue := range report.Issues {
 		if issue.Issue == "verbless_export" {

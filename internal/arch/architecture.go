@@ -24,6 +24,7 @@ func ContainsAny(s string, subs ...string) bool {
 type ArchService struct {
 	Name       string
 	Package    string
+	Language   model.Language `json:"language,omitempty"`
 	TrustZone  string
 	Symbols    []model.Symbol
 	Churn      int
@@ -121,9 +122,10 @@ func projectToArchPackageLevel(proj *model.Project, modPath string, m ArchModel,
 			continue
 		}
 		svc := ArchService{
-			Name:    rel,
-			Package: ns.ImportPath,
-			Churn:   opts.ChurnData[rel],
+			Name:     rel,
+			Package:  ns.ImportPath,
+			Language: proj.Language,
+			Churn:    opts.ChurnData[rel],
 		}
 		for _, sym := range ns.Symbols {
 			if sym.Exported {
@@ -200,7 +202,7 @@ func projectToArchGroupLevel(proj *model.Project, modPath string, m ArchModel, o
 		groupChurn[gName] += opts.ChurnData[rel]
 		if !groupSet[gName] {
 			groupSet[gName] = true
-			m.Services = append(m.Services, ArchService{Name: gName})
+			m.Services = append(m.Services, ArchService{Name: gName, Language: proj.Language})
 		}
 	}
 
@@ -248,7 +250,7 @@ func buildGroupEdges(proj *model.Project, modPath string, m ArchModel, opts Sync
 			toGroup = toRel
 			if !groupSet[toGroup] {
 				groupSet[toGroup] = true
-				m.Services = append(m.Services, ArchService{Name: toGroup})
+				m.Services = append(m.Services, ArchService{Name: toGroup, Language: proj.Language})
 			}
 		} else {
 			toGroup = pkgToGroup[toRel]

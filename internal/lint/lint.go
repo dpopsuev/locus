@@ -13,7 +13,9 @@ import (
 	"github.com/dpopsuev/locus/internal/clinic"
 	"github.com/dpopsuev/locus/internal/constraint"
 	"github.com/dpopsuev/locus/internal/graph"
+	"github.com/dpopsuev/locus/internal/oculus/lang"
 	"github.com/dpopsuev/locus/internal/port"
+	"github.com/dpopsuev/locus/internal/survey"
 )
 
 // Category identifies which linter produced a violation.
@@ -295,7 +297,15 @@ func runPattern(
 }
 
 func runSymbol(services []arch.ArchService, edges []arch.ArchEdge) []Violation {
-	sr := clinic.ComputeSymbolQuality(services, edges)
+	// Resolve language-specific rules from the first service's language.
+	var rules lang.Rules
+	if len(services) > 0 {
+		if ls := survey.GetLanguageSupport(services[0].Language); ls != nil && ls.Rules != nil {
+			rules = ls.Rules
+		}
+	}
+
+	sr := clinic.ComputeSymbolQuality(services, edges, rules)
 	if sr == nil {
 		return nil
 	}

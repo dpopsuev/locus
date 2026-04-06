@@ -7,6 +7,7 @@ import (
 	"unicode"
 
 	"github.com/dpopsuev/locus/internal/arch"
+	"github.com/dpopsuev/locus/internal/oculus/lang"
 	"github.com/dpopsuev/locus/internal/port"
 )
 
@@ -70,8 +71,8 @@ var badAbbreviations = map[string]string{
 	"Buf":  "Buffer",
 }
 
-// stdlibIdioms are abbreviations that are idiomatic in Go's standard library.
-var stdlibIdioms = map[string]bool{
+// defaultStdlibIdioms is the fallback set when no language-specific rules are provided.
+var defaultStdlibIdioms = map[string]bool{
 	"DB": true, "HTTP": true, "URL": true, "API": true, "ID": true,
 	"IO": true, "IP": true, "TCP": true, "UDP": true, "JSON": true,
 	"XML": true, "SQL": true, "CSS": true, "HTML": true, "OK": true,
@@ -82,64 +83,6 @@ var stdlibIdioms = map[string]bool{
 var genericSuffixes = []string{
 	"Manager", "Helper", "Util", "Utils", "Data", "Info",
 	"Object", "Base", "Common", "General", "Misc",
-}
-
-// knownVerbPrefixes lists verbs that commonly start function names.
-var knownVerbPrefixes = []string{
-	"Get", "Set", "Create", "Delete", "Update", "Find", "Run",
-	"Start", "Stop", "Open", "Close", "Read", "Write", "Parse",
-	"Build", "Make", "Check", "Validate", "Compute", "Render",
-	"Handle", "Process", "Init", "Register", "Add", "Remove",
-	"Send", "Receive", "Load", "Save", "Fetch", "Put", "Do",
-	"Apply", "Enable", "Disable", "Reset", "Clear", "Format",
-	"Convert", "Transform", "Resolve", "Execute", "Marshal",
-	"Unmarshal", "Encode", "Decode", "Scan", "Sort", "Filter",
-	"Map", "Reduce", "Merge", "Split", "Join", "Wrap", "Unwrap",
-	"Lock", "Unlock", "Wait", "Signal", "Notify", "Subscribe",
-	"Publish", "Listen", "Serve", "Dial", "Connect", "Disconnect",
-	"Flush", "Sync", "Log", "Print", "Dump",
-}
-
-// exemptPrefixes are non-verb prefixes common in Go naming that should not be flagged.
-var exemptPrefixes = []string{
-	"Is", "Has", "Can", "Must", "No", "With", "New",
-	"Default", "Max", "Min", "Err",
-}
-
-// typeSuffixes identify symbols that are likely type declarations rather than functions.
-var typeSuffixes = []string{
-	// Common suffixes
-	"Error", "Handler", "Server", "Client", "Config", "Options",
-	"Result", "Response", "Request", "Store", "Cache", "Pool",
-	"Queue", "Stack", "Buffer", "Builder", "Factory", "Provider",
-	"Service", "Controller", "Middleware", "Router", "Adapter",
-	"Wrapper", "Iterator", "Scanner", "Parser", "Encoder",
-	"Decoder", "Formatter", "Validator", "Resolver", "Executor",
-	"Scheduler", "Listener", "Observer", "Reporter", "Monitor",
-	"Tracker", "Counter", "Logger", "Writer", "Reader", "Closer",
-	"Flusher", "Interface", "Impl", "Func", "Map", "Set", "List",
-	"Slice", "Array", "Chan", "Mutex", "Lock", "WaitGroup",
-	"Context", "Signal", "Event", "Message", "Payload", "Packet",
-	"Frame", "Record", "Entry", "Item", "Node", "Edge", "Graph",
-	"Tree", "Spec", "Rule", "Policy", "Strategy", "Pattern",
-	"Template", "Schema", "Model", "Entity", "DTO", "VO",
-	// Enum/classification types
-	"Kind", "Type", "Mode", "State", "Status", "Level", "Phase",
-	"Role", "Scope", "Zone", "Layer", "Tier", "Class", "Category",
-	// Data/metric types
-	"Info", "Data", "Metric", "Metrics", "Report", "Summary",
-	"Depth", "Width", "Height", "Size", "Count", "Index", "Offset",
-	// Identifier/reference types
-	"Key", "Value", "Name", "Path", "Dir", "File", "Ref",
-	"ID", "URI", "URL", "Opt", "Opts", "Param", "Params",
-	// AST/compiler types
-	"Def", "Decl", "Stmt", "Expr", "Tok", "Op",
-	// Domain-specific architectural types
-	"Crossing", "Violation", "Constraint", "Threshold",
-	"Component", "Package", "Module", "Namespace",
-	"Anchor", "Symbol", "Token", "Annotation",
-	"Cycle", "HotSpot", "Surface", "Drift",
-	"Fingerprint", "Detection", "Catalog", "Evidence",
 }
 
 // knownSynonyms maps variant terms to a canonical form for vocabulary consistency checks.
@@ -160,8 +103,22 @@ var knownSynonyms = map[string]string{
 }
 
 // ComputeSymbolQuality analyzes exported symbol names for naming quality issues.
-func ComputeSymbolQuality(services []arch.ArchService, edges []arch.ArchEdge) *SymbolQualityReport {
+// If rules is nil, GenericRules is used (no verbless violations reported).
+func ComputeSymbolQuality(services []arch.ArchService, edges []arch.ArchEdge, rules ...lang.Rules) *SymbolQualityReport {
+	var r lang.Rules
+	if len(rules) > 0 && rules[0] != nil {
+		r = rules[0]
+	} else {
+		r = &lang.GenericRules{}
+	}
+
 	fanIn := buildFanInMap(edges)
+
+	// Resolve idioms for abbreviation checks.
+	idioms := r.StdlibIdioms()
+	if idioms == nil {
+		idioms = defaultStdlibIdioms
+	}
 
 	var issues []SymbolIssue
 	totalChecked := 0
@@ -171,9 +128,9 @@ func ComputeSymbolQuality(services []arch.ArchService, edges []arch.ArchEdge) *S
 		svcFanIn := fanIn[svc.Name]
 		for _, sym := range svc.Symbols {
 			totalChecked++
-			issues = append(issues, checkAbbreviation(sym.Name, svc.Package, svcFanIn)...)
+			issues = append(issues, checkAbbreviation(sym.Name, svc.Package, svcFanIn, idioms)...)
 			issues = append(issues, checkGenericName(sym.Name, svc.Package, svcFanIn)...)
-			issues = append(issues, checkVerblessExport(sym.Name, svc.Package, svcFanIn)...)
+			issues = append(issues, checkVerblessExport(sym.Name, sym.Kind.String(), svc.Package, svcFanIn, r)...)
 		}
 	}
 
@@ -214,10 +171,10 @@ func buildFanInMap(edges []arch.ArchEdge) map[string]int {
 }
 
 // checkAbbreviation flags symbols that use common abbreviations instead of full words.
-func checkAbbreviation(sym, pkg string, svcFanIn int) []SymbolIssue {
+func checkAbbreviation(sym, pkg string, svcFanIn int, idioms map[string]bool) []SymbolIssue {
 	for abbr, expansion := range badAbbreviations {
 		if sym == abbr || strings.HasSuffix(sym, abbr) {
-			if stdlibIdioms[sym] {
+			if idioms[sym] {
 				continue
 			}
 			severity := port.SeverityWarning
@@ -261,51 +218,12 @@ func checkGenericName(sym, pkg string, svcFanIn int) []SymbolIssue {
 	return nil
 }
 
-// verblessMinLen is the minimum symbol length to consider for verbless check.
-// Short names (≤6 chars) are usually types (Config, Signal, etc.).
-const verblessMinLen = 7
-
 // checkVerblessExport flags exported symbols that lack a verb prefix and don't look like types.
-func checkVerblessExport(sym, pkg string, svcFanIn int) []SymbolIssue {
-	if len(sym) <= verblessMinLen {
+// Delegates to language-specific Rules for the actual check. If rules reports no violation,
+// the symbol is clean. GenericRules (the default) never reports violations — conservative default.
+func checkVerblessExport(sym, kind, pkg string, svcFanIn int, rules lang.Rules) []SymbolIssue {
+	if !rules.IsVerblessViolation(sym, kind) {
 		return nil
-	}
-
-	runes := []rune(sym)
-	if !unicode.IsUpper(runes[0]) {
-		return nil
-	}
-
-	// Skip symbols with exempt prefixes.
-	for _, prefix := range exemptPrefixes {
-		if strings.HasPrefix(sym, prefix) {
-			return nil
-		}
-	}
-
-	// Skip symbols that start with a known verb.
-	for _, verb := range knownVerbPrefixes {
-		if strings.HasPrefix(sym, verb) {
-			return nil
-		}
-	}
-
-	// Skip symbols that end with a known type suffix.
-	for _, suffix := range typeSuffixes {
-		if strings.HasSuffix(sym, suffix) {
-			return nil
-		}
-	}
-
-	// Skip symbols where any camelCase token matches a type suffix.
-	// This catches "BoundaryCrossing" (Crossing is a suffix) and "ArchModel" (Model is a suffix).
-	tokens := splitCamelCase(sym)
-	for _, tok := range tokens {
-		for _, suffix := range typeSuffixes {
-			if strings.EqualFold(tok, suffix) {
-				return nil
-			}
-		}
 	}
 
 	severity := port.SeverityInfo

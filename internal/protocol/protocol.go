@@ -22,8 +22,10 @@ import (
 	"github.com/dpopsuev/locus/internal/graph"
 	"github.com/dpopsuev/locus/internal/history"
 	"github.com/dpopsuev/locus/internal/impact"
+	"github.com/dpopsuev/locus/internal/oculus/lang"
 	"github.com/dpopsuev/locus/internal/port"
 	"github.com/dpopsuev/locus/internal/remote"
+	"github.com/dpopsuev/locus/internal/survey"
 )
 
 // Error messages used across protocol methods.
@@ -1131,7 +1133,8 @@ func (p *Protocol) renderPresetFullClinic(ctx context.Context, b *strings.Builde
 		fmt.Fprintf(b, "\n## SOLID Principles\n%s\n", solidReport.Summary)
 	}
 
-	sqReport := clinic.ComputeSymbolQuality(report.Architecture.Services, report.Architecture.Edges)
+	rules := rulesFromServices(report.Architecture.Services)
+	sqReport := clinic.ComputeSymbolQuality(report.Architecture.Services, report.Architecture.Edges, rules)
 	fmt.Fprintf(b, "\n## Symbol Quality\n%s\n", sqReport.Summary)
 }
 
@@ -1154,7 +1157,8 @@ func (p *Protocol) renderPresetCodeHealth(b *strings.Builder, path string, repor
 	solidReport := clinic.ComputeSOLIDScan(report.Architecture.Services, report.Architecture.Edges, classes, impls, hexaClass, path, nil, nil)
 	fmt.Fprintf(b, "## SOLID Principles\n%s\n\n", solidReport.Summary)
 
-	sqReport := clinic.ComputeSymbolQuality(report.Architecture.Services, report.Architecture.Edges)
+	rules := rulesFromServices(report.Architecture.Services)
+	sqReport := clinic.ComputeSymbolQuality(report.Architecture.Services, report.Architecture.Edges, rules)
 	fmt.Fprintf(b, "## Symbol Quality\n%s\n", sqReport.Summary)
 }
 
@@ -1755,7 +1759,8 @@ func (p *Protocol) GetSymbolQuality(_ context.Context, path string, cacheKey ...
 	if err != nil {
 		return nil, err
 	}
-	return clinic.ComputeSymbolQuality(report.Architecture.Services, report.Architecture.Edges), nil
+	rules := rulesFromServices(report.Architecture.Services)
+	return clinic.ComputeSymbolQuality(report.Architecture.Services, report.Architecture.Edges, rules), nil
 }
 
 func (p *Protocol) GetVocabMap(_ context.Context, path string, cacheKey ...string) (*clinic.VocabMapReport, error) {
@@ -2225,6 +2230,18 @@ func RenderEvolutionTable(r *EvolutionResult) string {
 
 	fmt.Fprintf(&b, "\n%s\n", r.Summary)
 	return b.String()
+}
+
+// rulesFromServices resolves language-specific naming rules from the first service's language.
+// Returns nil (GenericRules default) if no language is detected.
+func rulesFromServices(services []arch.ArchService) lang.Rules {
+	if len(services) == 0 {
+		return nil
+	}
+	if ls := survey.GetLanguageSupport(services[0].Language); ls != nil && ls.Rules != nil {
+		return ls.Rules
+	}
+	return nil
 }
 
 // changedFilesSince delegates to git.ChangedFilesSince.

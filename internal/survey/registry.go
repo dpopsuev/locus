@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/dpopsuev/locus/internal/model"
+	"github.com/dpopsuev/locus/internal/oculus/lang"
 )
 
 // LanguageSupport describes how to scan a particular language.
@@ -14,6 +15,7 @@ type LanguageSupport struct {
 	Markers        []string                  // project marker files (go.mod, Cargo.toml, etc.)
 	ScannerFactory func(root string) Scanner // creates a scanner for this language
 	SkipDirs       map[string]bool           // language-specific directories to skip
+	Rules          lang.Rules                // per-language naming rules for symbol quality
 }
 
 var (
@@ -79,6 +81,7 @@ func init() {
 		ScannerFactory: func(_ string) Scanner {
 			return &PackagesScanner{Fallback: &GoScanner{}}
 		},
+		Rules: &lang.GoRules{},
 	})
 	Register(&LanguageSupport{
 		Language: model.LangRust,
@@ -86,6 +89,7 @@ func init() {
 		ScannerFactory: func(_ string) Scanner {
 			return &RustScanner{}
 		},
+		Rules: &lang.RustRules{},
 	})
 	Register(&LanguageSupport{
 		Language: model.LangPython,
@@ -94,6 +98,7 @@ func init() {
 			return &PythonScanner{}
 		},
 		SkipDirs: PythonSkipDirs,
+		Rules:    &lang.PythonRules{},
 	})
 	Register(&LanguageSupport{
 		Language: model.LangTypeScript,
@@ -102,6 +107,7 @@ func init() {
 			return &TypeScriptScanner{}
 		},
 		SkipDirs: TSSkipDirs,
+		Rules:    &lang.TypeScriptRules{},
 	})
 	Register(&LanguageSupport{
 		Language: model.LangC,
@@ -109,6 +115,7 @@ func init() {
 		ScannerFactory: func(_ string) Scanner {
 			return &CtagsScanner{}
 		},
+		Rules: &lang.GenericRules{},
 	})
 	Register(&LanguageSupport{
 		Language: model.LangCpp,
@@ -116,6 +123,7 @@ func init() {
 		ScannerFactory: func(_ string) Scanner {
 			return &CtagsScanner{}
 		},
+		Rules: &lang.GenericRules{},
 	})
 	Register(&LanguageSupport{
 		Language: model.LangJava,
@@ -123,6 +131,7 @@ func init() {
 		ScannerFactory: func(_ string) Scanner {
 			return &CtagsScanner{}
 		},
+		Rules: &lang.GenericRules{},
 	})
 	Register(&LanguageSupport{
 		Language: model.LangJavaScript,
@@ -131,6 +140,7 @@ func init() {
 			return &TypeScriptScanner{}
 		},
 		SkipDirs: TSSkipDirs,
+		Rules:    &lang.TypeScriptRules{},
 	})
 	Register(&LanguageSupport{
 		Language: model.LangKotlin,
@@ -138,6 +148,7 @@ func init() {
 		ScannerFactory: func(_ string) Scanner {
 			return &CtagsScanner{}
 		},
+		Rules: &lang.GenericRules{},
 	})
 	Register(&LanguageSupport{
 		Language: model.LangZig,
@@ -145,6 +156,7 @@ func init() {
 		ScannerFactory: func(_ string) Scanner {
 			return &CtagsScanner{}
 		},
+		Rules: &lang.GenericRules{},
 	})
 	Register(&LanguageSupport{
 		Language: model.LangCSharp,
@@ -152,6 +164,7 @@ func init() {
 		ScannerFactory: func(_ string) Scanner {
 			return &CtagsScanner{}
 		},
+		Rules: &lang.GenericRules{},
 	})
 	Register(&LanguageSupport{
 		Language: model.LangSwift,
@@ -159,5 +172,6 @@ func init() {
 		ScannerFactory: func(_ string) Scanner {
 			return &CtagsScanner{}
 		},
+		Rules: &lang.GenericRules{},
 	})
 }
