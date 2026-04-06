@@ -35,7 +35,7 @@ func TestIntegration_ClassDiagram(t *testing.T) {
 	}
 	root := integrationRoot(t)
 	report := integrationScan(t)
-	fa := analysis.NewFallback(root)
+	fa := analysis.NewFallback(root, nil)
 
 	input := Input{Report: report, Analyzer: fa, Root: root}
 	out, err := Render(input, Options{Type: "classes"})
@@ -51,7 +51,7 @@ func TestIntegration_InterfacesDiagram(t *testing.T) {
 	}
 	root := integrationRoot(t)
 	report := integrationScan(t)
-	fa := analysis.NewFallback(root)
+	fa := analysis.NewFallback(root, nil)
 
 	input := Input{Report: report, Analyzer: fa, Root: root}
 	out, err := Render(input, Options{Type: "interfaces"})
@@ -67,7 +67,7 @@ func TestIntegration_HexaDiagram(t *testing.T) {
 	}
 	root := integrationRoot(t)
 	report := integrationScan(t)
-	fa := analysis.NewFallback(root)
+	fa := analysis.NewFallback(root, nil)
 	classes, _ := fa.Classes(root)
 	hexaClass := clinic.ComputeHexaClassification(report.Architecture.Services, report.Architecture.Edges, classes)
 
@@ -91,7 +91,7 @@ func TestIntegration_CallgraphDiagram(t *testing.T) {
 	}
 	root := integrationRoot(t)
 	report := integrationScan(t)
-	da := analysis.CachedDeepFallback(root)
+	da := analysis.CachedDeepFallback(root, nil)
 
 	input := Input{Report: report, DeepAnalyzer: da, Root: root}
 	out, err := Render(input, Options{Type: "callgraph"})

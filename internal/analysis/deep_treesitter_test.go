@@ -132,7 +132,7 @@ func main() {
 
 func Hello() {}
 `)
-	fb := NewDeepFallback(dir)
+	fb := NewDeepFallback(dir, nil)
 	cg, err := fb.CallGraph(dir, CallGraphOpts{Entry: "main", Depth: 3})
 	if err != nil {
 		t.Fatal(err)

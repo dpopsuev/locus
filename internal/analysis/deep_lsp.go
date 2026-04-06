@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/dpopsuev/locus/internal/oculus/lsp"
 )
 
 // LSPDeepAnalyzer uses a single gopls connection for all DeepAnalyzer
@@ -12,6 +14,7 @@ import (
 type LSPDeepAnalyzer struct {
 	root    string
 	timeout time.Duration
+	pool    lsp.Pool
 }
 
 // NewLSPDeep creates a deep analyzer that will start gopls on first use.
@@ -19,9 +22,14 @@ func NewLSPDeep(root string) *LSPDeepAnalyzer {
 	return &LSPDeepAnalyzer{root: root, timeout: 30 * time.Second}
 }
 
+// NewLSPDeepWithPool creates a deep analyzer backed by a connection pool.
+func NewLSPDeepWithPool(root string, pool lsp.Pool) *LSPDeepAnalyzer {
+	return &LSPDeepAnalyzer{root: root, timeout: 30 * time.Second, pool: pool}
+}
+
 func (a *LSPDeepAnalyzer) startConn() (*lspConn, func(), error) {
-	lsp := &LSPAnalyzer{Timeout: a.timeout}
-	return lsp.startServer(a.root)
+	analyzer := &LSPAnalyzer{Timeout: a.timeout, pool: a.pool}
+	return analyzer.startServer(a.root)
 }
 
 // CallGraph uses callHierarchy/outgoingCalls recursively from all

@@ -25,6 +25,7 @@ import (
 	gitpkg "github.com/dpopsuev/locus/internal/git"
 	"github.com/dpopsuev/locus/internal/lint"
 	locusmcp "github.com/dpopsuev/locus/internal/mcp"
+	"github.com/dpopsuev/locus/internal/oculus/lsp"
 	"github.com/dpopsuev/locus/internal/protocol"
 	"github.com/dpopsuev/locus/internal/triage"
 )
@@ -146,10 +147,13 @@ Tools: scan_project, get_dependencies, get_impact, get_coupling_table,
 		s := config.NewStore()
 		defer s.Close()
 
+		pool := lsp.NewPool()
+
 		ctx, stop := signal.NotifyContext(cmd.Context(), syscall.SIGTERM, syscall.SIGINT)
 		defer stop()
+		defer pool.Shutdown(ctx) //nolint:errcheck // best-effort cleanup
 
-		srv, _ := locusmcp.NewServer(s, roots, version)
+		srv, _ := locusmcp.NewServer(s, roots, version, pool)
 		if serveFlags.transport == "http" {
 			handler := sdkmcp.NewStreamableHTTPHandler(
 				func(r *http.Request) *sdkmcp.Server { return srv },
@@ -383,9 +387,9 @@ Examples:
 
 		switch diagramFlags.diagramType {
 		case "classes", "sequence", "er":
-			in.Analyzer = analysis.NewFallback(path)
+			in.Analyzer = analysis.NewFallback(path, nil)
 		case "dataflow", "callgraph", "state":
-			in.DeepAnalyzer = analysis.NewDeepFallback(path)
+			in.DeepAnalyzer = analysis.NewDeepFallback(path, nil)
 		}
 
 		theme := diagramFlags.theme

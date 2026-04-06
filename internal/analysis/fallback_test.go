@@ -8,7 +8,7 @@ import (
 
 func TestFallback_Classes(t *testing.T) {
 	dir := setupTestRepo(t)
-	fb := NewFallback(dir)
+	fb := NewFallback(dir, nil)
 	classes, err := fb.Classes(dir)
 	if err != nil {
 		t.Fatal(err)
@@ -20,7 +20,7 @@ func TestFallback_Classes(t *testing.T) {
 
 func TestFallback_NestingDepth(t *testing.T) {
 	dir := setupTestRepo(t)
-	fb := NewFallback(dir)
+	fb := NewFallback(dir, nil)
 	results, err := fb.NestingDepth(dir)
 	if err != nil {
 		t.Fatal(err)
@@ -48,7 +48,7 @@ impl Bar for Foo {
 }
 `), 0o644)
 
-	fb := NewFallback(dir)
+	fb := NewFallback(dir, nil)
 	classes, err := fb.Classes(dir)
 	if err != nil {
 		t.Fatal(err)

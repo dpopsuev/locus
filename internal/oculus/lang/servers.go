@@ -8,6 +8,11 @@ var DefaultLSPServers = map[Language]string{
 	TypeScript: "typescript-language-server --stdio",
 	C:          "clangd",
 	Cpp:        "clangd",
+	Java:       "jdtls",
+	Kotlin:     "kotlin-language-server",
+	CSharp:     "omnisharp",
+	Swift:      "sourcekit-lsp",
+	Zig:        "zls",
 }
 
 // DefaultLSPServer returns the conventional LSP server command for a language.

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/dpopsuev/locus/internal/oculus/lang"
+	"github.com/dpopsuev/locus/internal/oculus/lsp"
 )
 
 // FallbackAnalyzer chains LSP -> tree-sitter -> regex. Each method tries
@@ -17,17 +18,23 @@ type FallbackAnalyzer struct {
 
 // NewFallback creates a FallbackAnalyzer. It checks whether an LSP server
 // is available for the detected language; if not, the LSP layer is skipped.
-func NewFallback(root string) *FallbackAnalyzer {
+// If pool is non-nil, the LSP analyzer always uses the pool (pool handles
+// availability). Pass nil for CLI/test mode.
+func NewFallback(root string, pool lsp.Pool) *FallbackAnalyzer {
 	f := &FallbackAnalyzer{
 		ts:    &TreeSitterAnalyzer{},
 		regex: &RegexAnalyzer{},
 	}
-	detected := lang.DetectLanguage(root)
-	cmd := lang.DefaultLSPServer(detected)
-	if cmd != "" {
-		bin := strings.Fields(cmd)[0]
-		if _, err := exec.LookPath(bin); err == nil {
-			f.lsp = &LSPAnalyzer{}
+	if pool != nil {
+		f.lsp = &LSPAnalyzer{pool: pool}
+	} else {
+		detected := lang.DetectLanguage(root)
+		cmd := lang.DefaultLSPServer(detected)
+		if cmd != "" {
+			bin := strings.Fields(cmd)[0]
+			if _, err := exec.LookPath(bin); err == nil {
+				f.lsp = &LSPAnalyzer{}
+			}
 		}
 	}
 	return f

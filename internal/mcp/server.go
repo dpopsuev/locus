@@ -19,6 +19,7 @@ import (
 	gitpkg "github.com/dpopsuev/locus/internal/git"
 	"github.com/dpopsuev/locus/internal/impact"
 	"github.com/dpopsuev/locus/internal/lint"
+	"github.com/dpopsuev/locus/internal/oculus/lsp"
 	"github.com/dpopsuev/locus/internal/protocol"
 	"github.com/dpopsuev/locus/internal/store"
 	"github.com/dpopsuev/locus/internal/triage"
@@ -164,8 +165,8 @@ var DiagramMinIntent = map[string]string{
 
 // --- Server ---
 
-func NewServer(s store.Store, workspaceRoots []string, version string) (*sdkmcp.Server, *triage.Registry) {
-	proto := protocol.New(s, workspaceRoots)
+func NewServer(s store.Store, workspaceRoots []string, version string, pool ...lsp.Pool) (*sdkmcp.Server, *triage.Registry) {
+	proto := protocol.New(s, workspaceRoots, pool...)
 	srv := sdkmcp.NewServer(
 		&sdkmcp.Implementation{Name: "locus", Version: version},
 		&sdkmcp.ServerOptions{
@@ -909,12 +910,13 @@ func (h *handler) enrichDiagramInput(ctx context.Context, path, diagramType stri
 	if path == "" {
 		return
 	}
+	pool := h.proto.Pool()
 	switch diagramType {
 	case DiagramClasses, DiagramSequence, DiagramER, DiagramInterfaces, DiagramHexa:
-		input.Analyzer = analysis.NewFallback(path)
+		input.Analyzer = analysis.NewFallback(path, pool)
 	}
 	if diagramType == DiagramHexa {
-		fa := analysis.NewFallback(path)
+		fa := analysis.NewFallback(path, pool)
 		classes, _ := fa.Classes(path)
 		hexaClass := clinic.ComputeHexaClassification(report.Architecture.Services, report.Architecture.Edges, classes)
 		input.HexaRoles = make(map[string]string, len(hexaClass.Components))
@@ -927,7 +929,7 @@ func (h *handler) enrichDiagramInput(ctx context.Context, path, diagramType stri
 	}
 	switch diagramType {
 	case DiagramDataflow, DiagramCallgraph, DiagramState:
-		input.DeepAnalyzer = analysis.CachedDeepFallback(path)
+		input.DeepAnalyzer = analysis.CachedDeepFallback(path, pool)
 	}
 }
 

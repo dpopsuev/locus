@@ -126,7 +126,7 @@ func TestGoASTFallbackIntegration(t *testing.T) {
 		t.Skip("not in a Go repo")
 	}
 
-	fb := analysis.NewDeepFallback(root)
+	fb := analysis.NewDeepFallback(root, nil)
 	cg, err := fb.CallGraph(root, analysis.CallGraphOpts{Entry: "ScanAndBuild", Depth: 2})
 	if err != nil {
 		t.Fatalf("fallback CallGraph: %v", err)

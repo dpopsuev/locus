@@ -58,7 +58,7 @@ func TestDogfood_RoleAwareScanReducesFalsePositives(t *testing.T) {
 	services := report.Architecture.Services
 	edges := report.Architecture.Edges
 
-	fa := analysis.NewFallback(root)
+	fa := analysis.NewFallback(root, nil)
 	classes, err := fa.Classes(root)
 	if err != nil {
 		t.Fatalf("Classes: %v", err)
@@ -121,7 +121,7 @@ func TestDogfood_AcceptedSuppressionWorks(t *testing.T) {
 	edges := report.Architecture.Edges
 	cycles := report.Cycles
 
-	fa := analysis.NewFallback(root)
+	fa := analysis.NewFallback(root, nil)
 	classes, _ := fa.Classes(root)
 	impls, _ := fa.Implements(root)
 

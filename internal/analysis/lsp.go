@@ -41,6 +41,7 @@ var (
 // semantic accuracy. Falls through to tree-sitter on timeout or error.
 type LSPAnalyzer struct {
 	Timeout time.Duration // per-request timeout; default 30s
+	pool    lsp.Pool      // optional connection pool (nil = cold-start per request)
 }
 
 func (a *LSPAnalyzer) Classes(root string) ([]ClassInfo, error) {
@@ -405,6 +406,18 @@ func (c *lspConn) documentSymbols(file, _ string) ([]docSymbol, error) {
 // --- helpers ---
 
 func (a *LSPAnalyzer) startServer(root string) (*lspConn, func(), error) {
+	// Try pool first (warm connection).
+	if a.pool != nil {
+		detected := lang.DetectLanguage(root)
+		client, err := a.pool.Get(detected, root)
+		if err == nil {
+			conn := &lspConn{Client: client}
+			release := func() { a.pool.Release(detected, root) }
+			return conn, release, nil
+		}
+	}
+
+	// Fall through to existing cold-start logic.
 	detected := lang.DetectLanguage(root)
 	cmdStr := lang.DefaultLSPServer(detected)
 	if cmdStr == "" {

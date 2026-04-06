@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/dpopsuev/locus/internal/oculus/lang"
+	"github.com/dpopsuev/locus/internal/oculus/lsp"
 )
 
 // DeepFallbackAnalyzer chains LSP -> TreeSitter -> Regex for DeepAnalyzer
@@ -21,7 +22,9 @@ type DeepFallbackAnalyzer struct {
 
 // NewDeepFallback creates a DeepFallbackAnalyzer. It checks whether
 // gopls is available; if not, the LSP layer is skipped.
-func NewDeepFallback(root string) *DeepFallbackAnalyzer {
+// If pool is non-nil, the LSP analyzer always uses the pool (pool handles
+// availability). Pass nil for CLI/test mode.
+func NewDeepFallback(root string, pool lsp.Pool) *DeepFallbackAnalyzer {
 	f := &DeepFallbackAnalyzer{
 		regex: &RegexDeepAnalyzer{},
 	}
@@ -46,13 +49,17 @@ func NewDeepFallback(root string) *DeepFallbackAnalyzer {
 	if ts, err := NewTreeSitterDeep(root); err == nil {
 		f.ts = ts
 	}
-	// LSP deep analyzer checks for gopls
-	detected := lang.DetectLanguage(root)
-	cmd := lang.DefaultLSPServer(detected)
-	if cmd != "" {
-		bin := strings.Fields(cmd)[0]
-		if _, err := exec.LookPath(bin); err == nil {
-			f.lsp = NewLSPDeep(root)
+	// LSP deep analyzer
+	if pool != nil {
+		f.lsp = NewLSPDeepWithPool(root, pool)
+	} else {
+		detected := lang.DetectLanguage(root)
+		cmd := lang.DefaultLSPServer(detected)
+		if cmd != "" {
+			bin := strings.Fields(cmd)[0]
+			if _, err := exec.LookPath(bin); err == nil {
+				f.lsp = NewLSPDeep(root)
+			}
 		}
 	}
 	return f

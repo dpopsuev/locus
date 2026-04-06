@@ -176,7 +176,7 @@ func safeClasses(root string) []analysis.ClassInfo {
 	if root == "" {
 		return nil
 	}
-	fb := analysis.NewFallback(root)
+	fb := analysis.NewFallback(root, nil)
 	classes, err := fb.Classes(root)
 	if err != nil {
 		return nil
@@ -189,7 +189,7 @@ func safeImpls(root string) []analysis.ImplEdge {
 	if root == "" {
 		return nil
 	}
-	fb := analysis.NewFallback(root)
+	fb := analysis.NewFallback(root, nil)
 	impls, err := fb.Implements(root)
 	if err != nil {
 		return nil

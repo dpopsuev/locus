@@ -23,6 +23,7 @@ import (
 	"github.com/dpopsuev/locus/internal/history"
 	"github.com/dpopsuev/locus/internal/impact"
 	"github.com/dpopsuev/locus/internal/oculus/lang"
+	"github.com/dpopsuev/locus/internal/oculus/lsp"
 	"github.com/dpopsuev/locus/internal/port"
 	"github.com/dpopsuev/locus/internal/remote"
 	"github.com/dpopsuev/locus/internal/survey"
@@ -71,11 +72,17 @@ type HealthCheckable interface {
 type Protocol struct {
 	db         ProtocolStore
 	workspaces []string
+	pool       lsp.Pool // optional LSP connection pool (nil = cold-start per request)
 }
 
-// New creates a Protocol with the given store and workspace roots.
-func New(s ProtocolStore, workspaces []string) *Protocol {
-	return &Protocol{db: s, workspaces: workspaces}
+// New creates a Protocol with the given store, workspace roots, and optional
+// LSP connection pool. Pass nil pool for CLI mode (cold-start per request).
+func New(s ProtocolStore, workspaces []string, pool ...lsp.Pool) *Protocol {
+	p := &Protocol{db: s, workspaces: workspaces}
+	if len(pool) > 0 {
+		p.pool = pool[0]
+	}
+	return p
 }
 
 // ScanOpts controls a local scan.
@@ -711,7 +718,7 @@ func (p *Protocol) GetCallees(_ context.Context, path, symbol string, cacheKey .
 	if symbol == "" {
 		return nil, ErrComponentRequired
 	}
-	da := analysis.CachedDeepFallback(path)
+	da := analysis.CachedDeepFallback(path, p.pool)
 	cg, err := da.CallGraph(path, analysis.CallGraphOpts{Depth: analysis.DefaultCallGraphDepth})
 	if err != nil {
 		return nil, fmt.Errorf("call graph: %w", err)
@@ -748,7 +755,7 @@ type CallPathReport struct {
 
 func (p *Protocol) GetCallPath(_ context.Context, path, from, to string, cacheKey ...string) (*CallPathReport, error) {
 	path = p.resolvePath(path)
-	da := analysis.CachedDeepFallback(path)
+	da := analysis.CachedDeepFallback(path, p.pool)
 	cg, err := da.CallGraph(path, analysis.CallGraphOpts{Depth: analysis.DefaultCallGraphDepth})
 	if err != nil {
 		return nil, fmt.Errorf("call graph: %w", err)
@@ -778,7 +785,7 @@ func (e callEdge) Target() string { return e.callee }
 
 func (p *Protocol) GetInterfaceMetrics(ctx context.Context, path string, cacheKey ...string) (*constraint.InterfaceMetricsReport, error) {
 	path = p.resolvePath(path)
-	fa := analysis.NewFallback(path)
+	fa := analysis.NewFallback(path, p.pool)
 	classes, err := fa.Classes(path)
 	if err != nil {
 		return nil, fmt.Errorf("classes: %w", err)
@@ -795,7 +802,7 @@ func (p *Protocol) GetSymbolBlastRadius(ctx context.Context, path, symbol string
 	if symbol == "" {
 		return nil, ErrComponentRequired
 	}
-	da := analysis.CachedDeepFallback(path)
+	da := analysis.CachedDeepFallback(path, p.pool)
 	cg, err := da.CallGraph(path, analysis.CallGraphOpts{Depth: analysis.DefaultCallGraphDepth})
 	if err != nil {
 		return nil, fmt.Errorf("call graph: %w", err)
@@ -823,7 +830,7 @@ func (p *Protocol) GetDiffIntelligence(ctx context.Context, path, since string, 
 		return nil, fmt.Errorf("git diff: %w", err)
 	}
 	// Build call graph for symbol-level analysis.
-	da := analysis.CachedDeepFallback(path)
+	da := analysis.CachedDeepFallback(path, p.pool)
 	cg, err := da.CallGraph(path, analysis.CallGraphOpts{Depth: analysis.DefaultCallGraphDepth})
 	if err != nil {
 		return nil, fmt.Errorf("call graph: %w", err)
@@ -837,7 +844,7 @@ func (p *Protocol) GetCallers(ctx context.Context, path, symbol string, cacheKey
 		return nil, ErrComponentRequired
 	}
 
-	da := analysis.CachedDeepFallback(path)
+	da := analysis.CachedDeepFallback(path, p.pool)
 	cg, err := da.CallGraph(path, analysis.CallGraphOpts{Depth: analysis.DefaultCallGraphDepth})
 	if err != nil {
 		return nil, fmt.Errorf("call graph: %w", err)
@@ -1059,7 +1066,7 @@ func renderPresetPreRefactor(b *strings.Builder, path string, report *arch.Conte
 		fmt.Fprintf(b, "- %s (churn:%d, fan-in:%d)\n", s.Component, s.Churn, s.FanIn)
 	}
 
-	da := analysis.NewFallback(path)
+	da := analysis.NewFallback(path, nil)
 	if classes, err := da.Classes(path); err == nil {
 		impls, _ := da.Implements(path)
 		imReport := constraint.ComputeInterfaceMetrics(classes, impls)
@@ -1102,7 +1109,7 @@ func (p *Protocol) renderPresetFullClinic(ctx context.Context, b *strings.Builde
 		}
 	}
 
-	da := analysis.NewFallback(path)
+	da := analysis.NewFallback(path, p.pool)
 	if classes, err := da.Classes(path); err == nil {
 		impls, _ := da.Implements(path)
 		imReport := constraint.ComputeInterfaceMetrics(classes, impls)
@@ -1115,7 +1122,7 @@ func (p *Protocol) renderPresetFullClinic(ctx context.Context, b *strings.Builde
 	}
 
 	// Code Health Clinic pillars
-	fa := analysis.NewFallback(path)
+	fa := analysis.NewFallback(path, p.pool)
 	if classes, err := fa.Classes(path); err == nil {
 		impls, _ := fa.Implements(path)
 
@@ -1142,7 +1149,7 @@ func (p *Protocol) renderPresetCodeHealth(b *strings.Builder, path string, repor
 	fmt.Fprintf(b, "# Code Health Clinic: %s\n\n", report.ModulePath)
 	fmt.Fprintf(b, "%d components, %d edges\n\n", len(report.Architecture.Services), len(report.Architecture.Edges))
 
-	fa := analysis.NewFallback(path)
+	fa := analysis.NewFallback(path, p.pool)
 	classes, _ := fa.Classes(path)
 	impls, _ := fa.Implements(path)
 
@@ -1733,7 +1740,7 @@ func (p *Protocol) GetHexaValidation(ctx context.Context, path string, cacheKey 
 	if err != nil {
 		return nil, err
 	}
-	fa := analysis.NewFallback(path)
+	fa := analysis.NewFallback(path, p.pool)
 	classes, _ := fa.Classes(path)
 	return clinic.ComputeHexaViolations(report.Architecture.Services, report.Architecture.Edges, classes), nil
 }
@@ -1744,7 +1751,7 @@ func (p *Protocol) GetSOLIDScan(ctx context.Context, path string, cacheKey ...st
 	if err != nil {
 		return nil, err
 	}
-	fa := analysis.NewFallback(path)
+	fa := analysis.NewFallback(path, p.pool)
 	classes, _ := fa.Classes(path)
 	impls, _ := fa.Implements(path)
 	hexaClass := clinic.ComputeHexaClassification(report.Architecture.Services, report.Architecture.Edges, classes)
@@ -1778,7 +1785,7 @@ func (p *Protocol) GetPatternScan(ctx context.Context, path string, cacheKey ...
 	if err != nil {
 		return nil, err
 	}
-	fa := analysis.NewFallback(path)
+	fa := analysis.NewFallback(path, p.pool)
 	classes, _ := fa.Classes(path)
 	impls, _ := fa.Implements(path)
 	hexaClass := clinic.ComputeHexaClassification(report.Architecture.Services, report.Architecture.Edges, classes)
@@ -1787,7 +1794,7 @@ func (p *Protocol) GetPatternScan(ctx context.Context, path string, cacheKey ...
 	patternReport := clinic.ComputePatternScan(report.Architecture.Services, report.Architecture.Edges, report.Cycles, classes, impls, roles, accepted)
 
 	// Enrich with call graph if available (Feature Envy move targets, God Component split suggestions).
-	da := analysis.CachedDeepFallback(path)
+	da := analysis.CachedDeepFallback(path, p.pool)
 	if cg, cgErr := da.CallGraph(path, analysis.CallGraphOpts{Depth: analysis.DefaultCallGraphDepth}); cgErr == nil && cg != nil {
 		clinic.EnrichWithCallGraph(patternReport, cg.Edges)
 	}
@@ -1802,6 +1809,11 @@ func (p *Protocol) GetPatternCatalog(filter string) *clinic.PatternCatalogReport
 // Workspaces returns the configured workspace root paths.
 func (p *Protocol) Workspaces() []string {
 	return p.workspaces
+}
+
+// Pool returns the LSP connection pool, or nil if not configured.
+func (p *Protocol) Pool() lsp.Pool {
+	return p.pool
 }
 
 // --- helpers ---
@@ -1965,6 +1977,30 @@ func (p *Protocol) Health(_ context.Context) *HealthResult {
 	r.Checks = append(r.Checks, checkGit())
 	for _, ws := range p.workspaces {
 		r.Checks = append(r.Checks, checkDir("workspace:"+ws, ws))
+	}
+
+	// Per-language LSP server availability checks.
+	for language, cmdStr := range lang.DefaultLSPServers {
+		bin := strings.Fields(cmdStr)[0]
+		if _, err := exec.LookPath(bin); err == nil {
+			r.Checks = append(r.Checks, HealthCheck{
+				Name: "lsp:" + string(language), OK: true, Detail: bin,
+			})
+		} else {
+			r.Checks = append(r.Checks, HealthCheck{
+				Name: "lsp:" + string(language), OK: true, Detail: bin + " not found (optional)",
+			})
+		}
+	}
+
+	// Pool status if available.
+	if p.pool != nil {
+		status := p.pool.Status()
+		r.Checks = append(r.Checks, HealthCheck{
+			Name:   "lsp_pool",
+			OK:     true,
+			Detail: fmt.Sprintf("%d active connection(s)", status.Active),
+		})
 	}
 
 	for i := range r.Checks {
