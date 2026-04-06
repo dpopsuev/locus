@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -21,6 +22,8 @@ import (
 	"github.com/dpopsuev/locus/internal/arch"
 	"github.com/dpopsuev/locus/internal/config"
 	"github.com/dpopsuev/locus/internal/diagram"
+	gitpkg "github.com/dpopsuev/locus/internal/git"
+	"github.com/dpopsuev/locus/internal/lint"
 	locusmcp "github.com/dpopsuev/locus/internal/mcp"
 	"github.com/dpopsuev/locus/internal/protocol"
 	"github.com/dpopsuev/locus/internal/triage"
@@ -37,6 +40,7 @@ var (
 )
 
 const (
+	formatJSON    = "json"
 	formatMermaid = "mermaid"
 
 	// Slog attribute keys.
@@ -296,7 +300,7 @@ scan the repository, and report drift (missing/extra components and edges).
 					}
 				}
 			}
-			if format != "json" && format != formatMermaid && format != "md" {
+			if format != formatJSON && format != formatMermaid && format != "md" {
 				format = formatMermaid
 			}
 		}
@@ -566,10 +570,140 @@ Examples:
 	},
 }
 
-func init() {
-	rootCmd.AddCommand(versionCmd, scanCmd, serveCmd, codographCmd, historyCmd, diffCmd, validateCmd, conventionsCmd, impactCmd, gapsCmd, healthCmd, diagramCmd, triageCmd)
+var lintFlags struct {
+	format  string
+	since   string
+	linters string
+}
 
-	scanCmd.Flags().StringVar(&scanFlags.format, "format", "json", "Output format: json, md, mermaid")
+var lintCmd = &cobra.Command{
+	Use:   "lint [path]",
+	Short: "Run architectural linters",
+	Long: `Scan a repository and run architectural linters to detect violations.
+Checks hexagonal architecture, SOLID principles, pattern smells, and symbol quality.
+
+  locus lint .
+  locus lint /path/to/repo --format json
+  locus lint . --linters hexa,solid
+  locus lint . --since HEAD~5`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		path := "."
+		if len(args) > 0 {
+			path = args[0]
+		}
+
+		proto := newProto()
+		result, err := proto.ScanProject(cmd.Context(), path, protocol.ScanOpts{
+			Intent: string(arch.IntentHealth),
+		})
+		if err != nil {
+			return err
+		}
+
+		// Load optional .locus.yaml config.
+		ds, err := config.LoadLocusConfig(path)
+		if err != nil {
+			return fmt.Errorf("config: %w", err)
+		}
+
+		// Parse --linters flag into categories.
+		var categories []lint.Category
+		if lintFlags.linters != "" {
+			for _, s := range strings.Split(lintFlags.linters, ",") {
+				s = strings.TrimSpace(s)
+				if s != "" {
+					categories = append(categories, lint.Category(s))
+				}
+			}
+		}
+
+		// Resolve changed components for incremental mode.
+		var changed []string
+		if lintFlags.since != "" {
+			files, gitErr := gitpkg.ChangedFilesSince(path, lintFlags.since)
+			if gitErr == nil {
+				changed = filesToComponents(files)
+			}
+		}
+
+		lintReport := lint.Run(result.Report, lint.RunOpts{
+			EnabledLinters:    categories,
+			DesiredState:      ds,
+			Root:              path,
+			ChangedComponents: changed,
+		})
+
+		switch lintFlags.format {
+		case formatJSON:
+			return printJSON(lintReport)
+		case "table":
+			return printLintTable(lintReport)
+		default:
+			return printLintSummary(lintReport)
+		}
+	},
+}
+
+// printLintSummary prints a concise human-readable summary.
+func printLintSummary(r *lint.Report) error {
+	fmt.Printf("Locus Lint: %d violations (score: %.1f)\n", len(r.Violations), r.Score)
+
+	if len(r.ByCategory) > 0 {
+		fmt.Println()
+		for _, cat := range []lint.Category{
+			lint.CategoryHexa, lint.CategorySOLID, lint.CategoryPattern,
+			lint.CategorySymbol, lint.CategoryLayer, lint.CategoryBudget,
+		} {
+			if n, ok := r.ByCategory[cat]; ok && n > 0 {
+				fmt.Printf("  %-10s %d\n", string(cat)+":", n)
+			}
+		}
+	}
+
+	if !r.Clean {
+		os.Exit(1)
+	}
+	return nil
+}
+
+// printLintTable prints violations as an aligned table.
+func printLintTable(r *lint.Report) error {
+	fmt.Printf("%-10s %-8s %-30s %s\n", "CATEGORY", "SEVERITY", "COMPONENT", "RULE")
+	fmt.Println(strings.Repeat("-", 80))
+	for _, v := range r.Violations {
+		fmt.Printf("%-10s %-8s %-30s %s\n", v.Category, v.Severity, v.Component, v.Rule)
+	}
+	fmt.Printf("\n%d violations, score: %.1f\n", len(r.Violations), r.Score)
+
+	if !r.Clean {
+		os.Exit(1)
+	}
+	return nil
+}
+
+// filesToComponents deduplicates file paths into component directories.
+// It strips the file basename, keeping only the directory portion.
+func filesToComponents(files []string) []string {
+	seen := make(map[string]bool, len(files))
+	var result []string
+	for _, f := range files {
+		dir := filepath.Dir(f)
+		if dir == "." {
+			continue
+		}
+		if !seen[dir] {
+			seen[dir] = true
+			result = append(result, dir)
+		}
+	}
+	return result
+}
+
+func init() {
+	rootCmd.AddCommand(versionCmd, scanCmd, serveCmd, codographCmd, historyCmd, diffCmd, validateCmd, conventionsCmd, impactCmd, gapsCmd, healthCmd, diagramCmd, triageCmd, lintCmd)
+
+	scanCmd.Flags().StringVar(&scanFlags.format, "format", formatJSON, "Output format: json, md, mermaid")
 	scanCmd.Flags().StringVar(&scanFlags.scanner, "scanner", "auto", "Scanner: auto, go, packages, rust, typescript, composite, ctags, lsp")
 	scanCmd.Flags().IntVar(&scanFlags.depth, "depth", 0, "Group namespaces by first N directory segments")
 	scanCmd.Flags().IntVar(&scanFlags.churnDays, "churn-days", 30, "Overlay file churn from last N days of git history (0 = disabled)")
@@ -585,7 +719,7 @@ func init() {
 
 	codographCmd.Flags().StringVar(&codographFlags.ref, "ref", "", "Branch or tag to clone (default: repo default branch)")
 	codographCmd.Flags().BoolVar(&codographFlags.keep, "keep", false, "Keep the cloned directory after scan")
-	codographCmd.Flags().StringVar(&codographFlags.format, "format", "json", "Output format: json, md, mermaid")
+	codographCmd.Flags().StringVar(&codographFlags.format, "format", formatJSON, "Output format: json, md, mermaid")
 	codographCmd.Flags().IntVar(&codographFlags.depth, "depth", 0, "Group namespaces by first N directory segments")
 	codographCmd.Flags().IntVar(&codographFlags.budget, "budget", 0, "Cap output to N tokens (0 = unlimited)")
 
@@ -613,11 +747,15 @@ func init() {
 
 	triageCmd.Flags().BoolVar(&triageFlags.list, "list", false, "List all registered tools grouped by category")
 	triageCmd.Flags().StringVar(&triageFlags.category, "category", "", "Show tools in a specific category")
+
+	lintCmd.Flags().StringVar(&lintFlags.format, "format", "summary", "Output format: summary, table, json")
+	lintCmd.Flags().StringVar(&lintFlags.since, "since", "", "Git ref for incremental mode (only violations in changed files)")
+	lintCmd.Flags().StringVar(&lintFlags.linters, "linters", "", "Comma-separated linter categories: hexa,solid,pattern,symbol,layer,budget")
 }
 
 func renderReport(report *arch.ContextReport, format string) error {
 	switch format {
-	case "json":
+	case formatJSON:
 		data, err := arch.RenderJSON(report)
 		if err != nil {
 			return fmt.Errorf("render JSON: %w", err)

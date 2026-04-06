@@ -7,14 +7,18 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/arch"
 	"github.com/dpopsuev/locus/internal/clinic"
+	"github.com/dpopsuev/locus/internal/config"
 	"github.com/dpopsuev/locus/internal/diagram"
+	gitpkg "github.com/dpopsuev/locus/internal/git"
 	"github.com/dpopsuev/locus/internal/impact"
+	"github.com/dpopsuev/locus/internal/lint"
 	"github.com/dpopsuev/locus/internal/protocol"
 	"github.com/dpopsuev/locus/internal/store"
 	"github.com/dpopsuev/locus/internal/triage"
@@ -247,6 +251,16 @@ func NewServer(s store.Store, workspaceRoots []string, version string) (*sdkmcp.
 		Rationale:   map[string]string{"visualization": "Generate Mermaid charts from architecture data"},
 		Priority:    1,
 	}, noOut(h.handleRenderDiagram))
+
+	triage.AddTool(reg, srv, triage.ToolMeta{
+		Name: "lint",
+		Description: "Run architectural linters. " +
+			"Checks hexagonal architecture, SOLID, pattern smells, symbol quality, layer purity, and budget constraints.",
+		Keywords:   []string{"lint", "quality", "violations", "check", "architecture", "solid", "hexa"},
+		Categories: []string{"quality", "enforcement"},
+		Rationale:  map[string]string{"quality": "Unified architectural lint pass", "enforcement": "Check all rules in one call"},
+		Priority:   1,
+	}, noOut(h.handleLint))
 
 	h.reg = reg
 	triage.AddTool(reg, srv, triage.ToolMeta{
@@ -929,6 +943,91 @@ type diagramInput struct {
 	Theme        string `json:"theme,omitempty" jsonschema:"theme: light, dark, natural"`
 	Format       string `json:"format,omitempty" jsonschema:"output: mermaid, facts, both"`
 	CacheKey     string `json:"cache_key,omitempty" jsonschema:"cache key from scan_remote"`
+}
+
+// --- Lint handler ---
+
+type lintInput struct {
+	Path     string   `json:"path" jsonschema:"required,absolute path to local repository"`
+	CacheKey string   `json:"cache_key,omitempty" jsonschema:"cache key from scan_remote"`
+	Linters  []string `json:"linters,omitempty" jsonschema:"linter categories to enable: hexa, solid, pattern, symbol, layer, budget"`
+	Since    string   `json:"since,omitempty" jsonschema:"git ref for incremental mode"`
+	Format   string   `json:"format,omitempty" jsonschema:"output format: json, summary"`
+}
+
+func (h *handler) handleLint(ctx context.Context, _ *sdkmcp.CallToolRequest, in lintInput) (*sdkmcp.CallToolResult, any, error) { //nolint:gocritic
+	path := in.Path
+	if path == "" && len(h.proto.Workspaces()) > 0 {
+		path = h.proto.Workspaces()[0]
+	}
+
+	// Resolve the scan report.
+	var report *arch.ContextReport
+	if in.CacheKey != "" {
+		r, err := h.proto.GetCachedReport(in.CacheKey)
+		if err != nil {
+			return nil, nil, err
+		}
+		report = r
+	} else {
+		result, err := h.proto.ScanProject(ctx, path, protocol.ScanOpts{
+			Intent: string(arch.IntentHealth),
+		})
+		if err != nil {
+			return nil, nil, err
+		}
+		report = result.Report
+	}
+
+	// Load optional .locus.yaml config.
+	ds, _ := config.LoadLocusConfig(path)
+
+	// Parse linter categories.
+	var categories []lint.Category
+	for _, s := range in.Linters {
+		s = strings.TrimSpace(s)
+		if s != "" {
+			categories = append(categories, lint.Category(s))
+		}
+	}
+
+	// Resolve changed components for incremental mode.
+	var changed []string
+	if in.Since != "" {
+		files, gitErr := gitpkg.ChangedFilesSince(path, in.Since)
+		if gitErr == nil {
+			changed = lintFilesToComponents(files)
+		}
+	}
+
+	lintReport := lint.Run(report, lint.RunOpts{
+		EnabledLinters:    categories,
+		DesiredState:      ds,
+		Root:              path,
+		ChangedComponents: changed,
+	})
+
+	if in.Format == FormatSummary {
+		return text(lintReport.Summary), nil, nil
+	}
+	return jsonResult(lintReport)
+}
+
+// lintFilesToComponents deduplicates file paths into component directories.
+func lintFilesToComponents(files []string) []string {
+	seen := make(map[string]bool, len(files))
+	var result []string
+	for _, f := range files {
+		dir := filepath.Dir(f)
+		if dir == "." {
+			continue
+		}
+		if !seen[dir] {
+			seen[dir] = true
+			result = append(result, dir)
+		}
+	}
+	return result
 }
 
 // --- Triage handler ---
