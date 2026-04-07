@@ -15,11 +15,11 @@ import (
 	"golang.org/x/mod/modfile"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/dpopsuev/locus/internal/analysis"
 	archanchors "github.com/dpopsuev/locus/internal/arch/anchors"
 	archgit "github.com/dpopsuev/locus/internal/arch/git"
 	"github.com/dpopsuev/locus/internal/graph"
 	"github.com/dpopsuev/locus/internal/model"
+	"github.com/dpopsuev/locus/internal/oculus"
 	olang "github.com/dpopsuev/locus/internal/oculus/lang"
 	"github.com/dpopsuev/locus/internal/survey"
 )
@@ -597,7 +597,7 @@ func applyLOC(root string, proj *model.Project, modPath string, m *ArchModel) {
 // applyNestingDepth runs tree-sitter nesting analysis and populates
 // MaxNesting and AvgNesting on each ArchService.
 func applyNestingDepth(root, _ string, m *ArchModel) {
-	ts := &analysis.TreeSitterAnalyzer{}
+	ts := &oculus.TreeSitterAnalyzer{}
 	results, err := ts.NestingDepth(root)
 	if err != nil || len(results) == 0 {
 		return

@@ -10,10 +10,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/arch"
 	"github.com/dpopsuev/locus/internal/clinic/hexa"
 	"github.com/dpopsuev/locus/internal/graph"
+	"github.com/dpopsuev/locus/internal/oculus"
 	"github.com/dpopsuev/locus/internal/port"
 )
 
@@ -212,7 +212,7 @@ const (
 //   - 1-2 implementors → warning
 //   - 3-5 implementors → error
 //   - 6+  implementors → critical
-func ComputeISPViolations(classes []analysis.ClassInfo, impls []analysis.ImplEdge, accepted []port.AcceptedViolation) []SOLIDViolation {
+func ComputeISPViolations(classes []oculus.ClassInfo, impls []oculus.ImplEdge, accepted []port.AcceptedViolation) []SOLIDViolation {
 	// Build implementor count per interface.
 	implCount := make(map[string]int)
 	for _, edge := range impls {
@@ -474,8 +474,8 @@ func ComputeDIPViolations(
 func ComputeSOLIDScan(
 	services []arch.ArchService,
 	edges []arch.ArchEdge,
-	classes []analysis.ClassInfo,
-	impls []analysis.ImplEdge,
+	classes []oculus.ClassInfo,
+	impls []oculus.ImplEdge,
 	hexaClassification *hexa.HexaClassificationReport,
 	root string,
 	roles map[string]hexa.HexaRole,

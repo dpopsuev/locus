@@ -1,9 +1,9 @@
 package core
 
 import (
-	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/arch"
 	"github.com/dpopsuev/locus/internal/history"
+	"github.com/dpopsuev/locus/internal/oculus"
 )
 
 // Options controls which diagram is rendered and how it is scoped.
@@ -23,8 +23,8 @@ type Options struct {
 type Input struct {
 	Report        *arch.ContextReport
 	History       []history.EntrySummary
-	Analyzer      analysis.TypeAnalyzer
-	DeepAnalyzer  analysis.DeepAnalyzer
+	Analyzer      oculus.TypeAnalyzer
+	DeepAnalyzer  oculus.DeepAnalyzer
 	Root          string // repository root path (needed by Tier 2/3 renderers)
 	ResolvedTheme *ResolvedTheme
 	HexaRoles     map[string]string // component name → hexa role (domain, port, adapter, infra, app, entrypoint)

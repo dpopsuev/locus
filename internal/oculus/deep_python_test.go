@@ -1,11 +1,11 @@
-package analysis_test
+package oculus_test
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/dpopsuev/locus/internal/analysis"
+	"github.com/dpopsuev/locus/internal/oculus"
 )
 
 func TestPythonDeepCallGraph(t *testing.T) {
@@ -40,16 +40,16 @@ def send_result(result):
 		os.WriteFile(p, []byte(content), 0o644)
 	}
 
-	a := analysis.NewPythonDeep(dir)
+	a := oculus.NewPythonDeep(dir)
 	if a == nil {
 		t.Fatal("expected PythonDeepAnalyzer for Python project")
 	}
 
-	cg, err := a.CallGraph(dir, analysis.CallGraphOpts{Entry: "main", Depth: 5})
+	cg, err := a.CallGraph(dir, oculus.CallGraphOpts{Entry: "main", Depth: 5})
 	if err != nil {
 		t.Fatalf("CallGraph: %v", err)
 	}
-	if cg.Layer != analysis.LayerPython {
+	if cg.Layer != oculus.LayerPython {
 		t.Errorf("layer = %q, want python", cg.Layer)
 	}
 	if len(cg.Nodes) == 0 {
@@ -76,7 +76,7 @@ func TestPythonDeep_NonPythonRepo(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module test\n"), 0o644)
 
-	a := analysis.NewPythonDeep(dir)
+	a := oculus.NewPythonDeep(dir)
 	if a != nil {
 		t.Error("expected nil for non-Python repo")
 	}

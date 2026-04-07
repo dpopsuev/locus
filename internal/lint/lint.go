@@ -8,7 +8,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/arch"
 	"github.com/dpopsuev/locus/internal/clinic"
 	clinichexa "github.com/dpopsuev/locus/internal/clinic/hexa"
@@ -16,6 +15,7 @@ import (
 	clinicsolid "github.com/dpopsuev/locus/internal/clinic/solid"
 	"github.com/dpopsuev/locus/internal/constraint"
 	"github.com/dpopsuev/locus/internal/graph"
+	"github.com/dpopsuev/locus/internal/oculus"
 	"github.com/dpopsuev/locus/internal/oculus/lang"
 	"github.com/dpopsuev/locus/internal/port"
 	"github.com/dpopsuev/locus/internal/survey"
@@ -175,11 +175,11 @@ func resolveEnabled(linters []Category) map[Category]bool {
 
 // safeClasses obtains class analysis without panicking.
 // Returns nil if root is empty or analysis fails.
-func safeClasses(root string) []analysis.ClassInfo {
+func safeClasses(root string) []oculus.ClassInfo {
 	if root == "" {
 		return nil
 	}
-	fb := analysis.NewFallback(root, nil)
+	fb := oculus.NewFallback(root, nil)
 	classes, err := fb.Classes(root)
 	if err != nil {
 		return nil
@@ -188,11 +188,11 @@ func safeClasses(root string) []analysis.ClassInfo {
 }
 
 // safeImpls obtains implementation edges without panicking.
-func safeImpls(root string) []analysis.ImplEdge {
+func safeImpls(root string) []oculus.ImplEdge {
 	if root == "" {
 		return nil
 	}
-	fb := analysis.NewFallback(root, nil)
+	fb := oculus.NewFallback(root, nil)
 	impls, err := fb.Implements(root)
 	if err != nil {
 		return nil

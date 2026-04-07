@@ -7,13 +7,13 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/arch"
 	"github.com/dpopsuev/locus/internal/clinic"
 	clinichexa "github.com/dpopsuev/locus/internal/clinic/hexa"
 	clinicnaming "github.com/dpopsuev/locus/internal/clinic/naming"
 	clinicsolid "github.com/dpopsuev/locus/internal/clinic/solid"
 	"github.com/dpopsuev/locus/internal/constraint"
+	"github.com/dpopsuev/locus/internal/oculus"
 	"github.com/dpopsuev/locus/internal/oculus/lang"
 	"github.com/dpopsuev/locus/internal/oculus/lsp"
 	"github.com/dpopsuev/locus/internal/port"
@@ -164,7 +164,7 @@ func preRefactor(b *strings.Builder, path string, report *arch.ContextReport) {
 		fmt.Fprintf(b, "- %s (churn:%d, fan-in:%d)\n", s.Component, s.Churn, s.FanIn)
 	}
 
-	da := analysis.NewFallback(path, nil)
+	da := oculus.NewFallback(path, nil)
 	if classes, err := da.Classes(path); err == nil {
 		impls, _ := da.Implements(path)
 		imReport := constraint.ComputeInterfaceMetrics(classes, impls)
@@ -207,7 +207,7 @@ func fullClinic(ctx context.Context, b *strings.Builder, path string, report *ar
 		}
 	}
 
-	fa := analysis.NewFallback(path, deps.Pool)
+	fa := oculus.NewFallback(path, deps.Pool)
 	if classes, err := fa.Classes(path); err == nil {
 		impls, _ := fa.Implements(path)
 		imReport := constraint.ComputeInterfaceMetrics(classes, impls)
@@ -246,7 +246,7 @@ func codeHealth(b *strings.Builder, path string, report *arch.ContextReport, dep
 	fmt.Fprintf(b, "# Code Health Clinic: %s\n\n", report.ModulePath)
 	fmt.Fprintf(b, "%d components, %d edges\n\n", len(report.Architecture.Services), len(report.Architecture.Edges))
 
-	fa := analysis.NewFallback(path, deps.Pool)
+	fa := oculus.NewFallback(path, deps.Pool)
 	classes, _ := fa.Classes(path)
 	impls, _ := fa.Implements(path)
 

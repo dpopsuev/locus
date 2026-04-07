@@ -18,7 +18,6 @@ import (
 
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/arch"
 	"github.com/dpopsuev/locus/internal/config"
 	"github.com/dpopsuev/locus/internal/diagram"
@@ -26,6 +25,7 @@ import (
 	gitpkg "github.com/dpopsuev/locus/internal/git"
 	"github.com/dpopsuev/locus/internal/lint"
 	locusmcp "github.com/dpopsuev/locus/internal/mcp"
+	"github.com/dpopsuev/locus/internal/oculus"
 	"github.com/dpopsuev/locus/internal/oculus/lsp"
 	"github.com/dpopsuev/locus/internal/protocol"
 	"github.com/dpopsuev/locus/internal/triage"
@@ -388,9 +388,9 @@ Examples:
 
 		switch diagramFlags.diagramType {
 		case "classes", "sequence", "er":
-			in.Analyzer = analysis.NewFallback(path, nil)
+			in.Analyzer = oculus.NewFallback(path, nil)
 		case "dataflow", "callgraph", "state":
-			in.DeepAnalyzer = analysis.NewDeepFallback(path, nil)
+			in.DeepAnalyzer = oculus.NewDeepFallback(path, nil)
 		}
 
 		theme := diagramFlags.theme

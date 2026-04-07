@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/diagram/core"
+	"github.com/dpopsuev/locus/internal/oculus"
 )
 
 // CallGraph generates a Mermaid flowchart TB with function nodes
@@ -15,7 +15,7 @@ func CallGraph(in core.Input, opts core.Options) (string, error) {
 		return "", core.ErrDeepAnalyzerRequired
 	}
 
-	cgOpts := analysis.CallGraphOpts{
+	cgOpts := oculus.CallGraphOpts{
 		Entry:        opts.Entry,
 		Depth:        opts.Depth,
 		ExportedOnly: opts.ExportedOnly,
@@ -37,7 +37,7 @@ func CallGraph(in core.Input, opts core.Options) (string, error) {
 	b.WriteString("flowchart TB\n")
 
 	// Group nodes by package
-	pkgNodes := make(map[string][]analysis.FuncNode)
+	pkgNodes := make(map[string][]oculus.FuncNode)
 	for _, n := range cg.Nodes {
 		pkgNodes[n.Package] = append(pkgNodes[n.Package], n)
 	}

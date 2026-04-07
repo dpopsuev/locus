@@ -3,7 +3,7 @@ package clinic
 import (
 	"testing"
 
-	"github.com/dpopsuev/locus/internal/analysis"
+	"github.com/dpopsuev/locus/internal/oculus"
 )
 
 func TestEnrichFeatureEnvy_WithTargets(t *testing.T) {
@@ -17,7 +17,7 @@ func TestEnrichFeatureEnvy_WithTargets(t *testing.T) {
 		},
 	}
 
-	callEdges := []analysis.CallEdge{
+	callEdges := []oculus.CallEdge{
 		{Caller: "Process", CallerPkg: "pkg/handler", Callee: "Save", CalleePkg: "pkg/repo", CrossPkg: true},
 		{Caller: "Process", CallerPkg: "pkg/handler", Callee: "Validate", CalleePkg: "pkg/repo", CrossPkg: true},
 		{Caller: "Process", CallerPkg: "pkg/handler", Callee: "Log", CalleePkg: "pkg/util", CrossPkg: true},
@@ -71,7 +71,7 @@ func TestEnrichFeatureEnvy_NoFeatureEnvy(t *testing.T) {
 	}
 
 	// No god_component symbols in call edges → SplitSuggestion stays nil.
-	callEdges := []analysis.CallEdge{
+	callEdges := []oculus.CallEdge{
 		{Caller: "X", CallerPkg: "other", Callee: "Y", CalleePkg: "other"},
 	}
 
@@ -102,7 +102,7 @@ func TestExtractEnvyTarget(t *testing.T) {
 func TestSuggestSplit_TwoClusters(t *testing.T) {
 	// 6 symbols: A1↔A2↔A3 (cluster A), B1↔B2↔B3 (cluster B).
 	symbols := []string{"A1", "A2", "A3", "B1", "B2", "B3"}
-	callEdges := []analysis.CallEdge{
+	callEdges := []oculus.CallEdge{
 		{Caller: "A1", Callee: "A2", CallerPkg: "pkg", CalleePkg: "pkg"},
 		{Caller: "A2", Callee: "A3", CallerPkg: "pkg", CalleePkg: "pkg"},
 		{Caller: "B1", Callee: "B2", CallerPkg: "pkg", CalleePkg: "pkg"},
@@ -120,7 +120,7 @@ func TestSuggestSplit_TwoClusters(t *testing.T) {
 
 func TestSuggestSplit_SingleCluster(t *testing.T) {
 	symbols := []string{"A", "B", "C", "D"}
-	callEdges := []analysis.CallEdge{
+	callEdges := []oculus.CallEdge{
 		{Caller: "A", Callee: "B", CallerPkg: "pkg", CalleePkg: "pkg"},
 		{Caller: "B", Callee: "C", CallerPkg: "pkg", CalleePkg: "pkg"},
 		{Caller: "C", Callee: "D", CallerPkg: "pkg", CalleePkg: "pkg"},

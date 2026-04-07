@@ -5,14 +5,14 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/arch"
 	"github.com/dpopsuev/locus/internal/graph"
 	"github.com/dpopsuev/locus/internal/model"
+	"github.com/dpopsuev/locus/internal/oculus"
 	"github.com/dpopsuev/locus/internal/port"
 )
 
-// ClassKindInterface is the Kind value for interfaces in analysis.ClassInfo.
+// ClassKindInterface is the Kind value for interfaces in oculus.ClassInfo.
 const ClassKindInterface = "interface"
 
 // HexaRole classifies a component's hexagonal architecture role.
@@ -89,7 +89,7 @@ type HexaValidationReport struct {
 func ComputeHexaClassification(
 	services []arch.ArchService,
 	edges []arch.ArchEdge,
-	classes []analysis.ClassInfo,
+	classes []oculus.ClassInfo,
 ) *HexaClassificationReport {
 	// Build structural signals from the graph.
 	hasExternalEdge := make(map[string]bool)
@@ -103,7 +103,7 @@ func ComputeHexaClassification(
 	fanOut := graph.FanOut(edges)
 	totalComponents := len(services)
 
-	// Build per-package interface and total type counts from class analysis.
+	// Build per-package interface and total type counts from class oculus.
 	ifaceCounts := make(map[string]int)
 	totalCounts := make(map[string]int)
 	for _, c := range classes {
@@ -282,7 +282,7 @@ func RoleMultiplier(role HexaRole) float64 {
 func ComputeHexaViolations(
 	services []arch.ArchService,
 	edges []arch.ArchEdge,
-	classes []analysis.ClassInfo,
+	classes []oculus.ClassInfo,
 ) *HexaValidationReport {
 	classification := ComputeHexaClassification(services, edges, classes)
 

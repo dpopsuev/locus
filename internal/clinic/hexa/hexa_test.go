@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/arch"
 	"github.com/dpopsuev/locus/internal/model"
+	"github.com/dpopsuev/locus/internal/oculus"
 )
 
 func TestComputeHexaClassification_BasicRoles(t *testing.T) {
@@ -61,11 +61,11 @@ func TestComputeHexaClassification_PortDetection(t *testing.T) {
 }
 
 func TestComputeHexaClassification_PortFallbackFromClasses(t *testing.T) {
-	// When Symbol.Kind is not available, fall back to class analysis.
+	// When Symbol.Kind is not available, fall back to class oculus.
 	services := []arch.ArchService{
 		{Name: "internal/ports", Package: "github.com/example/app/internal/ports"},
 	}
-	classes := []analysis.ClassInfo{
+	classes := []oculus.ClassInfo{
 		{Name: "UserRepo", Package: "github.com/example/app/internal/ports", Kind: "interface"},
 		{Name: "EventBus", Package: "github.com/example/app/internal/ports", Kind: "interface"},
 		{Name: "Config", Package: "github.com/example/app/internal/ports", Kind: "struct"},

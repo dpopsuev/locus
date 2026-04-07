@@ -6,8 +6,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/graph"
+	"github.com/dpopsuev/locus/internal/oculus"
 )
 
 // Pattern IDs used by enrichment.
@@ -43,7 +43,7 @@ type SplitSuggestion struct {
 // EnrichWithCallGraph post-processes a PatternScanReport to add per-symbol
 // move targets for Feature Envy and split suggestions for God Component.
 // No-op if callEdges is nil or empty.
-func EnrichWithCallGraph(report *PatternScanReport, callEdges []analysis.CallEdge) {
+func EnrichWithCallGraph(report *PatternScanReport, callEdges []oculus.CallEdge) {
 	if len(callEdges) == 0 || report == nil {
 		return
 	}
@@ -92,7 +92,7 @@ func extractEnvyTarget(evidence []string) string {
 }
 
 // enrichFeatureEnvy identifies specific symbols that should be moved.
-func enrichFeatureEnvy(component, targetPkg string, callEdges []analysis.CallEdge) []MoveTarget {
+func enrichFeatureEnvy(component, targetPkg string, callEdges []oculus.CallEdge) []MoveTarget {
 	type symbolStats struct {
 		total      int
 		toTarget   int
@@ -145,7 +145,7 @@ func enrichFeatureEnvy(component, targetPkg string, callEdges []analysis.CallEdg
 // SuggestSplit analyzes intra-component symbol coupling to suggest
 // concrete file groupings for extracting sub-packages from a God Component.
 // Returns nil if no meaningful split is possible.
-func SuggestSplit(component string, symbols []string, callEdges []analysis.CallEdge) *SplitSuggestion {
+func SuggestSplit(component string, symbols []string, callEdges []oculus.CallEdge) *SplitSuggestion {
 	if len(symbols) < 4 {
 		return nil
 	}

@@ -5,12 +5,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/arch"
 	"github.com/dpopsuev/locus/internal/diagram/core"
 	"github.com/dpopsuev/locus/internal/graph"
 	"github.com/dpopsuev/locus/internal/history"
 	"github.com/dpopsuev/locus/internal/model"
+	"github.com/dpopsuev/locus/internal/oculus"
 )
 
 func testReport() *arch.ContextReport {
@@ -226,14 +226,14 @@ func TestTypes(t *testing.T) {
 
 type mockDeepAnalyzer struct{}
 
-func (m *mockDeepAnalyzer) CallGraph(_ string, _ analysis.CallGraphOpts) (*analysis.CallGraph, error) {
-	return &analysis.CallGraph{
-		Nodes: []analysis.FuncNode{
+func (m *mockDeepAnalyzer) CallGraph(_ string, _ oculus.CallGraphOpts) (*oculus.CallGraph, error) {
+	return &oculus.CallGraph{
+		Nodes: []oculus.FuncNode{
 			{Name: "main", Package: "cmd/app", Line: 10},
 			{Name: "Run", Package: "internal/core", Line: 15},
 			{Name: "Get", Package: "internal/store", Line: 20},
 		},
-		Edges: []analysis.CallEdge{
+		Edges: []oculus.CallEdge{
 			{Caller: "main", Callee: "Run", CallerPkg: "cmd/app", CalleePkg: "internal/core", CrossPkg: true},
 			{Caller: "Run", Callee: "Get", CallerPkg: "internal/core", CalleePkg: "internal/store", CrossPkg: true},
 		},
@@ -241,31 +241,31 @@ func (m *mockDeepAnalyzer) CallGraph(_ string, _ analysis.CallGraphOpts) (*analy
 	}, nil
 }
 
-func (m *mockDeepAnalyzer) DataFlowTrace(_, _ string, _ int) (*analysis.DataFlow, error) {
-	return &analysis.DataFlow{
-		Nodes: []analysis.DataFlowNode{
+func (m *mockDeepAnalyzer) DataFlowTrace(_, _ string, _ int) (*oculus.DataFlow, error) {
+	return &oculus.DataFlow{
+		Nodes: []oculus.DataFlowNode{
 			{Name: "main", Kind: "entry"},
 			{Name: "HandleRequest", Kind: "process", Pkg: "internal/api"},
 			{Name: "SQL Database", Kind: "data_store"},
 		},
-		Edges: []analysis.DataFlowEdge{
+		Edges: []oculus.DataFlowEdge{
 			{From: "main", To: "HandleRequest"},
 			{From: "HandleRequest", To: "SQL Database", Label: "Query"},
 		},
-		Boundaries: []analysis.TrustBoundary{
+		Boundaries: []oculus.TrustBoundary{
 			{Name: "Auth Boundary", Nodes: []string{"HandleRequest"}},
 		},
 		Layer: "mock",
 	}, nil
 }
 
-func (m *mockDeepAnalyzer) DetectStateMachines(_ string) ([]analysis.StateMachine, error) {
-	return []analysis.StateMachine{
+func (m *mockDeepAnalyzer) DetectStateMachines(_ string) ([]oculus.StateMachine, error) {
+	return []oculus.StateMachine{
 		{
 			Name:    "OrderStatus",
 			Package: "internal/order",
 			States:  []string{"Pending", "Processing", "Shipped", "Delivered"},
-			Transitions: []analysis.StateTransition{
+			Transitions: []oculus.StateTransition{
 				{From: "Pending", To: "Processing", Trigger: "confirm"},
 				{From: "Processing", To: "Shipped", Trigger: "ship"},
 				{From: "Shipped", To: "Delivered", Trigger: "deliver"},

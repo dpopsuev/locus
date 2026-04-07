@@ -4,34 +4,34 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/diagram/core"
+	"github.com/dpopsuev/locus/internal/oculus"
 )
 
 func TestRenderInterfaces_WithImplementors(t *testing.T) {
 	mock := &mockAnalyzer{
-		classes: []analysis.ClassInfo{
+		classes: []oculus.ClassInfo{
 			{Name: "Reader", Package: "io", Kind: "interface", Exported: true,
-				Methods: []analysis.MethodInfo{
+				Methods: []oculus.MethodInfo{
 					{Name: "Read", Signature: "Read(p []byte) (int, error)", Exported: true},
 				},
 			},
 			{Name: "FileReader", Package: "io", Kind: "struct", Exported: true,
-				Fields: []analysis.FieldInfo{
+				Fields: []oculus.FieldInfo{
 					{Name: "path", Type: "string", Exported: false},
 				},
-				Methods: []analysis.MethodInfo{
+				Methods: []oculus.MethodInfo{
 					{Name: "Read", Signature: "Read(p []byte) (int, error)", Exported: true},
 				},
 			},
 			{Name: "BufReader", Package: "io", Kind: "struct", Exported: true,
-				Methods: []analysis.MethodInfo{
+				Methods: []oculus.MethodInfo{
 					{Name: "Read", Signature: "Read(p []byte) (int, error)", Exported: true},
 				},
 			},
 			{Name: "Unrelated", Package: "io", Kind: "struct", Exported: true},
 		},
-		impls: []analysis.ImplEdge{
+		impls: []oculus.ImplEdge{
 			{From: "FileReader", To: "Reader", Kind: "implements"},
 			{From: "BufReader", To: "Reader", Kind: "implements"},
 		},
@@ -74,14 +74,14 @@ func TestRenderInterfaces_WithImplementors(t *testing.T) {
 
 func TestRenderInterfaces_OrphanInterface(t *testing.T) {
 	mock := &mockAnalyzer{
-		classes: []analysis.ClassInfo{
+		classes: []oculus.ClassInfo{
 			{Name: "Stringer", Package: "fmt", Kind: "interface", Exported: true,
-				Methods: []analysis.MethodInfo{
+				Methods: []oculus.MethodInfo{
 					{Name: "String", Signature: "String() string", Exported: true},
 				},
 			},
 		},
-		impls: []analysis.ImplEdge{},
+		impls: []oculus.ImplEdge{},
 	}
 
 	in := core.Input{Analyzer: mock, Root: "/tmp/test"}
@@ -103,24 +103,24 @@ func TestRenderInterfaces_OrphanInterface(t *testing.T) {
 
 func TestRenderInterfaces_ScopeFiltering(t *testing.T) {
 	mock := &mockAnalyzer{
-		classes: []analysis.ClassInfo{
+		classes: []oculus.ClassInfo{
 			{Name: "Writer", Package: "io", Kind: "interface", Exported: true,
-				Methods: []analysis.MethodInfo{
+				Methods: []oculus.MethodInfo{
 					{Name: "Write", Signature: "Write(p []byte) (int, error)", Exported: true},
 				},
 			},
 			{Name: "Logger", Package: "log", Kind: "interface", Exported: true,
-				Methods: []analysis.MethodInfo{
+				Methods: []oculus.MethodInfo{
 					{Name: "Log", Signature: "Log(msg string)", Exported: true},
 				},
 			},
 			{Name: "FileWriter", Package: "io", Kind: "struct", Exported: true,
-				Methods: []analysis.MethodInfo{
+				Methods: []oculus.MethodInfo{
 					{Name: "Write", Signature: "Write(p []byte) (int, error)", Exported: true},
 				},
 			},
 		},
-		impls: []analysis.ImplEdge{
+		impls: []oculus.ImplEdge{
 			{From: "FileWriter", To: "Writer", Kind: "implements"},
 		},
 	}
@@ -144,10 +144,10 @@ func TestRenderInterfaces_ScopeFiltering(t *testing.T) {
 
 func TestRenderInterfaces_EmptyInput(t *testing.T) {
 	mock := &mockAnalyzer{
-		classes: []analysis.ClassInfo{
+		classes: []oculus.ClassInfo{
 			{Name: "Foo", Package: "bar", Kind: "struct", Exported: true},
 		},
-		impls: []analysis.ImplEdge{},
+		impls: []oculus.ImplEdge{},
 	}
 
 	in := core.Input{Analyzer: mock, Root: "/tmp/test"}

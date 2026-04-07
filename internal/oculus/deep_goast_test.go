@@ -1,11 +1,11 @@
-package analysis_test
+package oculus_test
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/dpopsuev/locus/internal/analysis"
+	"github.com/dpopsuev/locus/internal/oculus"
 )
 
 func TestGoASTCallGraph_OnLocus(t *testing.T) {
@@ -17,12 +17,12 @@ func TestGoASTCallGraph_OnLocus(t *testing.T) {
 		t.Skip("not in a Go repo")
 	}
 
-	a := analysis.NewGoASTDeep(root)
+	a := oculus.NewGoASTDeep(root)
 	if a == nil {
 		t.Fatal("expected GoASTDeepAnalyzer for Go repo")
 	}
 
-	cg, err := a.CallGraph(root, analysis.CallGraphOpts{
+	cg, err := a.CallGraph(root, oculus.CallGraphOpts{
 		ExportedOnly: true,
 		Depth:        3,
 	})
@@ -35,7 +35,7 @@ func TestGoASTCallGraph_OnLocus(t *testing.T) {
 	if len(cg.Edges) == 0 {
 		t.Error("expected at least one edge")
 	}
-	if cg.Layer != analysis.LayerGoAST {
+	if cg.Layer != oculus.LayerGoAST {
 		t.Errorf("layer = %q, want goast", cg.Layer)
 	}
 	t.Logf("GoAST CallGraph: %d nodes, %d edges", len(cg.Nodes), len(cg.Edges))
@@ -50,12 +50,12 @@ func TestGoASTCallGraph_WithEntry(t *testing.T) {
 		t.Skip("not in a Go repo")
 	}
 
-	a := analysis.NewGoASTDeep(root)
+	a := oculus.NewGoASTDeep(root)
 	if a == nil {
 		t.Fatal("expected GoASTDeepAnalyzer")
 	}
 
-	cg, err := a.CallGraph(root, analysis.CallGraphOpts{
+	cg, err := a.CallGraph(root, oculus.CallGraphOpts{
 		Entry: "ScanAndBuild",
 		Depth: 2,
 	})
@@ -89,7 +89,7 @@ func TestGoASTDataFlowTrace(t *testing.T) {
 		t.Skip("not in a Go repo")
 	}
 
-	a := analysis.NewGoASTDeep(root)
+	a := oculus.NewGoASTDeep(root)
 	if a == nil {
 		t.Fatal("expected GoASTDeepAnalyzer")
 	}
@@ -101,7 +101,7 @@ func TestGoASTDataFlowTrace(t *testing.T) {
 	if len(df.Nodes) == 0 {
 		t.Error("expected at least one node")
 	}
-	if df.Layer != analysis.LayerGoAST {
+	if df.Layer != oculus.LayerGoAST {
 		t.Errorf("layer = %q, want goast", df.Layer)
 	}
 	t.Logf("DataFlowTrace: %d nodes, %d edges", len(df.Nodes), len(df.Edges))
@@ -111,7 +111,7 @@ func TestGoASTDeep_NonGoRepo(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "pyproject.toml"), []byte("[project]\n"), 0o644)
 
-	a := analysis.NewGoASTDeep(dir)
+	a := oculus.NewGoASTDeep(dir)
 	if a != nil {
 		t.Error("expected nil for non-Go repo")
 	}
@@ -126,8 +126,8 @@ func TestGoASTFallbackIntegration(t *testing.T) {
 		t.Skip("not in a Go repo")
 	}
 
-	fb := analysis.NewDeepFallback(root, nil)
-	cg, err := fb.CallGraph(root, analysis.CallGraphOpts{Entry: "ScanAndBuild", Depth: 2})
+	fb := oculus.NewDeepFallback(root, nil)
+	cg, err := fb.CallGraph(root, oculus.CallGraphOpts{Entry: "ScanAndBuild", Depth: 2})
 	if err != nil {
 		t.Fatalf("fallback CallGraph: %v", err)
 	}

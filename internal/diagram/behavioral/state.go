@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/diagram/core"
+	"github.com/dpopsuev/locus/internal/oculus"
 )
 
 // State generates a Mermaid stateDiagram-v2 from detected state
@@ -26,7 +26,7 @@ func State(in core.Input, opts core.Options) (string, error) {
 
 	// If scope is set, filter to matching machines
 	if opts.Scope != "" {
-		var filtered []analysis.StateMachine
+		var filtered []oculus.StateMachine
 		for _, m := range machines {
 			if strings.Contains(m.Name, opts.Scope) || strings.Contains(m.Package, opts.Scope) {
 				filtered = append(filtered, m)

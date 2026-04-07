@@ -1,4 +1,4 @@
-package analysis
+package oculus
 
 import (
 	"go/ast"

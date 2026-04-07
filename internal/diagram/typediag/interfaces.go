@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/diagram/core"
+	"github.com/dpopsuev/locus/internal/oculus"
 )
 
 // Interfaces produces a Mermaid classDiagram showing only interfaces
@@ -49,8 +49,8 @@ func Interfaces(in core.Input, opts core.Options) (string, error) {
 	return b.String(), nil
 }
 
-func filterImplEdges(impls []analysis.ImplEdge) []analysis.ImplEdge {
-	var implEdges []analysis.ImplEdge
+func filterImplEdges(impls []oculus.ImplEdge) []oculus.ImplEdge {
+	var implEdges []oculus.ImplEdge
 	for _, e := range impls {
 		if e.Kind == "implements" {
 			implEdges = append(implEdges, e)
@@ -59,9 +59,9 @@ func filterImplEdges(impls []analysis.ImplEdge) []analysis.ImplEdge {
 	return implEdges
 }
 
-func collectInterfaces(classes []analysis.ClassInfo) (interfaces, classByName map[string]analysis.ClassInfo) {
-	interfaces = make(map[string]analysis.ClassInfo)
-	classByName = make(map[string]analysis.ClassInfo)
+func collectInterfaces(classes []oculus.ClassInfo) (interfaces, classByName map[string]oculus.ClassInfo) {
+	interfaces = make(map[string]oculus.ClassInfo)
+	classByName = make(map[string]oculus.ClassInfo)
 
 	for _, c := range classes {
 		classByName[c.Name] = c
@@ -72,8 +72,8 @@ func collectInterfaces(classes []analysis.ClassInfo) (interfaces, classByName ma
 	return interfaces, classByName
 }
 
-func collectImplementors(implEdges []analysis.ImplEdge, interfaces, classByName map[string]analysis.ClassInfo) map[string]analysis.ClassInfo {
-	implementors := make(map[string]analysis.ClassInfo)
+func collectImplementors(implEdges []oculus.ImplEdge, interfaces, classByName map[string]oculus.ClassInfo) map[string]oculus.ClassInfo {
+	implementors := make(map[string]oculus.ClassInfo)
 	for _, e := range implEdges {
 		if _, isIface := interfaces[e.To]; !isIface {
 			continue
@@ -85,7 +85,7 @@ func collectImplementors(implEdges []analysis.ImplEdge, interfaces, classByName 
 	return implementors
 }
 
-func renderInterfaceClasses(b *strings.Builder, classes []analysis.ClassInfo, interfaces map[string]analysis.ClassInfo) {
+func renderInterfaceClasses(b *strings.Builder, classes []oculus.ClassInfo, interfaces map[string]oculus.ClassInfo) {
 	for _, c := range classes {
 		if _, ok := interfaces[c.Name]; !ok {
 			continue
@@ -94,7 +94,7 @@ func renderInterfaceClasses(b *strings.Builder, classes []analysis.ClassInfo, in
 	}
 }
 
-func renderImplementorClasses(b *strings.Builder, classes []analysis.ClassInfo, implementors map[string]analysis.ClassInfo) {
+func renderImplementorClasses(b *strings.Builder, classes []oculus.ClassInfo, implementors map[string]oculus.ClassInfo) {
 	for _, c := range classes {
 		if _, ok := implementors[c.Name]; !ok {
 			continue
@@ -103,7 +103,7 @@ func renderImplementorClasses(b *strings.Builder, classes []analysis.ClassInfo, 
 	}
 }
 
-func renderImplEdges(b *strings.Builder, implEdges []analysis.ImplEdge, interfaces, implementors map[string]analysis.ClassInfo, scope string) {
+func renderImplEdges(b *strings.Builder, implEdges []oculus.ImplEdge, interfaces, implementors map[string]oculus.ClassInfo, scope string) {
 	declared := make(map[string]bool, len(interfaces)+len(implementors))
 	for name := range interfaces {
 		declared[name] = true
@@ -124,7 +124,7 @@ func renderImplEdges(b *strings.Builder, implEdges []analysis.ImplEdge, interfac
 }
 
 // renderClassBlock writes a single class/interface block to the builder.
-func renderClassBlock(b *strings.Builder, c analysis.ClassInfo) {
+func renderClassBlock(b *strings.Builder, c oculus.ClassInfo) {
 	id := core.MermaidID(c.Name)
 	fmt.Fprintf(b, "    class %s {\n", id)
 	if c.Kind == kindInterface {

@@ -1,11 +1,11 @@
-package analysis_test
+package oculus_test
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/dpopsuev/locus/internal/analysis"
+	"github.com/dpopsuev/locus/internal/oculus"
 )
 
 func TestTypeScriptDeepCallGraph(t *testing.T) {
@@ -44,16 +44,16 @@ function sendResult(result: number[]) {
 		os.WriteFile(p, []byte(content), 0o644)
 	}
 
-	a := analysis.NewTypeScriptDeep(dir)
+	a := oculus.NewTypeScriptDeep(dir)
 	if a == nil {
 		t.Fatal("expected TypeScriptDeepAnalyzer for TS project")
 	}
 
-	cg, err := a.CallGraph(dir, analysis.CallGraphOpts{Entry: "main", Depth: 5})
+	cg, err := a.CallGraph(dir, oculus.CallGraphOpts{Entry: "main", Depth: 5})
 	if err != nil {
 		t.Fatalf("CallGraph: %v", err)
 	}
-	if cg.Layer != analysis.LayerTypeScript {
+	if cg.Layer != oculus.LayerTypeScript {
 		t.Errorf("layer = %q, want typescript", cg.Layer)
 	}
 	if len(cg.Nodes) == 0 {
@@ -97,12 +97,12 @@ const formatName = (name: string) => {
 		os.WriteFile(p, []byte(content), 0o644)
 	}
 
-	a := analysis.NewTypeScriptDeep(dir)
+	a := oculus.NewTypeScriptDeep(dir)
 	if a == nil {
 		t.Fatal("expected TypeScriptDeepAnalyzer")
 	}
 
-	cg, err := a.CallGraph(dir, analysis.CallGraphOpts{Entry: "greet", Depth: 3})
+	cg, err := a.CallGraph(dir, oculus.CallGraphOpts{Entry: "greet", Depth: 3})
 	if err != nil {
 		t.Fatalf("CallGraph: %v", err)
 	}
@@ -123,7 +123,7 @@ func TestTypeScriptDeep_NonTSRepo(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module test\n"), 0o644)
 
-	a := analysis.NewTypeScriptDeep(dir)
+	a := oculus.NewTypeScriptDeep(dir)
 	if a != nil {
 		t.Error("expected nil for non-TS repo")
 	}

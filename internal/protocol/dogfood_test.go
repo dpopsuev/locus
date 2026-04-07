@@ -5,12 +5,12 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/arch"
 	"github.com/dpopsuev/locus/internal/clinic"
 	clinichexa "github.com/dpopsuev/locus/internal/clinic/hexa"
 	clinicsolid "github.com/dpopsuev/locus/internal/clinic/solid"
 	"github.com/dpopsuev/locus/internal/impact"
+	"github.com/dpopsuev/locus/internal/oculus"
 	"github.com/dpopsuev/locus/internal/port"
 )
 
@@ -60,7 +60,7 @@ func TestDogfood_RoleAwareScanReducesFalsePositives(t *testing.T) {
 	services := report.Architecture.Services
 	edges := report.Architecture.Edges
 
-	fa := analysis.NewFallback(root, nil)
+	fa := oculus.NewFallback(root, nil)
 	classes, err := fa.Classes(root)
 	if err != nil {
 		t.Fatalf("Classes: %v", err)
@@ -123,7 +123,7 @@ func TestDogfood_AcceptedSuppressionWorks(t *testing.T) {
 	edges := report.Architecture.Edges
 	cycles := report.Cycles
 
-	fa := analysis.NewFallback(root, nil)
+	fa := oculus.NewFallback(root, nil)
 	classes, _ := fa.Classes(root)
 	impls, _ := fa.Implements(root)
 

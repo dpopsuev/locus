@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/dpopsuev/locus/internal/analysis"
+	"github.com/dpopsuev/locus/internal/oculus"
 )
 
 func TestComputeSymbolBlastRadius_SimpleChain(t *testing.T) {
 	// A calls B, B calls C. Blast of C should show B as direct, A as transitive.
-	edges := []analysis.CallEdge{
+	edges := []oculus.CallEdge{
 		{Caller: "A", Callee: "B", CallerPkg: "pkg/a", CalleePkg: "pkg/b"},
 		{Caller: "B", Callee: "C", CallerPkg: "pkg/b", CalleePkg: "pkg/c"},
 	}
@@ -35,7 +35,7 @@ func TestComputeSymbolBlastRadius_SimpleChain(t *testing.T) {
 
 func TestComputeSymbolBlastRadius_FanIn(t *testing.T) {
 	// A and B both call C. Blast of C should show both as direct callers.
-	edges := []analysis.CallEdge{
+	edges := []oculus.CallEdge{
 		{Caller: "A", Callee: "C", CallerPkg: "pkg/a", CalleePkg: "pkg/c"},
 		{Caller: "B", Callee: "C", CallerPkg: "pkg/b", CalleePkg: "pkg/c"},
 	}
@@ -59,7 +59,7 @@ func TestComputeSymbolBlastRadius_FanIn(t *testing.T) {
 
 func TestComputeSymbolBlastRadius_NoCallers(t *testing.T) {
 	// Orphan symbol with no callers.
-	edges := []analysis.CallEdge{
+	edges := []oculus.CallEdge{
 		{Caller: "X", Callee: "Y", CallerPkg: "pkg/x", CalleePkg: "pkg/y"},
 	}
 
@@ -84,7 +84,7 @@ func TestComputeSymbolBlastRadius_NoCallers(t *testing.T) {
 
 func TestComputeSymbolBlastRadius_CrossPackage(t *testing.T) {
 	// Callers in different packages: verify all packages collected.
-	edges := []analysis.CallEdge{
+	edges := []oculus.CallEdge{
 		{Caller: "A", Callee: "Target", CallerPkg: "alpha", CalleePkg: "core"},
 		{Caller: "B", Callee: "Target", CallerPkg: "beta", CalleePkg: "core"},
 		{Caller: "C", Callee: "Target", CallerPkg: "gamma", CalleePkg: "core"},
@@ -114,7 +114,7 @@ func TestComputeSymbolBlastRadius_CrossPackage(t *testing.T) {
 
 func TestComputeSymbolBlastRadius_Cycle(t *testing.T) {
 	// A calls B, B calls A. Blast of A should terminate without infinite loop.
-	edges := []analysis.CallEdge{
+	edges := []oculus.CallEdge{
 		{Caller: "A", Callee: "B", CallerPkg: "pkg/a", CalleePkg: "pkg/b"},
 		{Caller: "B", Callee: "A", CallerPkg: "pkg/b", CalleePkg: "pkg/a"},
 	}
@@ -156,9 +156,9 @@ func TestComputeSymbolBlastRadius_RiskLevels(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Build edges: tt.affected different callers from different packages.
-			var edges []analysis.CallEdge
+			var edges []oculus.CallEdge
 			for i := 0; i < tt.affected; i++ {
-				edges = append(edges, analysis.CallEdge{
+				edges = append(edges, oculus.CallEdge{
 					Caller:    fmt.Sprintf("Caller%d", i),
 					Callee:    "Target",
 					CallerPkg: fmt.Sprintf("pkg%d", i),

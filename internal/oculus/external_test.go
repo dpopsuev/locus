@@ -1,13 +1,13 @@
-package analysis_test
+package oculus_test
 
 import (
 	"testing"
 
-	"github.com/dpopsuev/locus/internal/analysis"
+	"github.com/dpopsuev/locus/internal/oculus"
 )
 
 func TestNewFallback_External(t *testing.T) {
-	fa := analysis.NewFallback(t.TempDir(), nil)
+	fa := oculus.NewFallback(t.TempDir(), nil)
 	if fa == nil {
 		t.Fatal("nil fallback analyzer")
 	}

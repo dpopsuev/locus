@@ -4,48 +4,48 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/diagram/core"
+	"github.com/dpopsuev/locus/internal/oculus"
 )
 
 type mockAnalyzer struct {
-	classes []analysis.ClassInfo
-	impls   []analysis.ImplEdge
-	refs    []analysis.FieldRef
-	calls   []analysis.Call
-	entries []analysis.EntryPoint
-	nesting []analysis.NestingResult
+	classes []oculus.ClassInfo
+	impls   []oculus.ImplEdge
+	refs    []oculus.FieldRef
+	calls   []oculus.Call
+	entries []oculus.EntryPoint
+	nesting []oculus.NestingResult
 }
 
-func (m *mockAnalyzer) Classes(root string) ([]analysis.ClassInfo, error)   { return m.classes, nil }
-func (m *mockAnalyzer) Implements(root string) ([]analysis.ImplEdge, error) { return m.impls, nil }
-func (m *mockAnalyzer) FieldRefs(root string) ([]analysis.FieldRef, error)  { return m.refs, nil }
-func (m *mockAnalyzer) CallChain(root, entry string, depth int) ([]analysis.Call, error) {
+func (m *mockAnalyzer) Classes(root string) ([]oculus.ClassInfo, error)   { return m.classes, nil }
+func (m *mockAnalyzer) Implements(root string) ([]oculus.ImplEdge, error) { return m.impls, nil }
+func (m *mockAnalyzer) FieldRefs(root string) ([]oculus.FieldRef, error)  { return m.refs, nil }
+func (m *mockAnalyzer) CallChain(root, entry string, depth int) ([]oculus.Call, error) {
 	return m.calls, nil
 }
-func (m *mockAnalyzer) EntryPoints(root string) ([]analysis.EntryPoint, error) { return m.entries, nil }
-func (m *mockAnalyzer) NestingDepth(root string) ([]analysis.NestingResult, error) {
+func (m *mockAnalyzer) EntryPoints(root string) ([]oculus.EntryPoint, error) { return m.entries, nil }
+func (m *mockAnalyzer) NestingDepth(root string) ([]oculus.NestingResult, error) {
 	return m.nesting, nil
 }
 
 func TestRenderClasses(t *testing.T) {
 	mock := &mockAnalyzer{
-		classes: []analysis.ClassInfo{
+		classes: []oculus.ClassInfo{
 			{Name: "Server", Package: "main", Kind: "struct", Exported: true,
-				Fields: []analysis.FieldInfo{
+				Fields: []oculus.FieldInfo{
 					{Name: "Addr", Type: "string", Exported: true},
 				},
-				Methods: []analysis.MethodInfo{
+				Methods: []oculus.MethodInfo{
 					{Name: "Start", Signature: "Start()", Exported: true},
 				},
 			},
 			{Name: "Handler", Package: "main", Kind: "interface", Exported: true,
-				Methods: []analysis.MethodInfo{
+				Methods: []oculus.MethodInfo{
 					{Name: "Handle", Signature: "Handle(req Request)", Exported: true},
 				},
 			},
 		},
-		impls: []analysis.ImplEdge{
+		impls: []oculus.ImplEdge{
 			{From: "Server", To: "Handler", Kind: "implements"},
 		},
 	}
@@ -72,11 +72,11 @@ func TestRenderClasses(t *testing.T) {
 
 func TestRenderSequence(t *testing.T) {
 	mock := &mockAnalyzer{
-		calls: []analysis.Call{
+		calls: []oculus.Call{
 			{Caller: "main", Callee: "Start", Package: "cmd"},
 			{Caller: "Start", Callee: "Listen", Package: "net"},
 		},
-		entries: []analysis.EntryPoint{
+		entries: []oculus.EntryPoint{
 			{Name: "main", Kind: "main"},
 		},
 	}
@@ -100,20 +100,20 @@ func TestRenderSequence(t *testing.T) {
 
 func TestRenderER(t *testing.T) {
 	mock := &mockAnalyzer{
-		classes: []analysis.ClassInfo{
+		classes: []oculus.ClassInfo{
 			{Name: "User", Package: "models", Kind: "struct",
-				Fields: []analysis.FieldInfo{
+				Fields: []oculus.FieldInfo{
 					{Name: "ID", Type: "int"},
 					{Name: "Profile", Type: "*Profile"},
 				},
 			},
 			{Name: "Profile", Package: "models", Kind: "struct",
-				Fields: []analysis.FieldInfo{
+				Fields: []oculus.FieldInfo{
 					{Name: "Bio", Type: "string"},
 				},
 			},
 		},
-		refs: []analysis.FieldRef{
+		refs: []oculus.FieldRef{
 			{Owner: "User", Field: "Profile", RefType: "Profile"},
 		},
 	}
@@ -140,10 +140,10 @@ func TestRenderER(t *testing.T) {
 
 func TestRenderSequence_AutoEntry(t *testing.T) {
 	mock := &mockAnalyzer{
-		entries: []analysis.EntryPoint{
+		entries: []oculus.EntryPoint{
 			{Name: "main", Kind: "main"},
 		},
-		calls: []analysis.Call{
+		calls: []oculus.Call{
 			{Caller: "main", Callee: "run"},
 		},
 	}

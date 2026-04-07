@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/arch"
 	"github.com/dpopsuev/locus/internal/graph"
 	"github.com/dpopsuev/locus/internal/model"
+	"github.com/dpopsuev/locus/internal/oculus"
 	"github.com/dpopsuev/locus/internal/port"
 )
 
@@ -208,16 +208,16 @@ func TestComputePatternScan_Strategy(t *testing.T) {
 	services := []arch.ArchService{
 		{Name: "pkg/sorter", Package: "example.com/pkg/sorter", LOC: 80},
 	}
-	classes := []analysis.ClassInfo{
+	classes := []oculus.ClassInfo{
 		{
 			Name: "Sorter", Package: "example.com/pkg/sorter", Kind: "interface",
-			Methods:  []analysis.MethodInfo{{Name: "Sort", Signature: "Sort([]int)", Exported: true}},
+			Methods:  []oculus.MethodInfo{{Name: "Sort", Signature: "Sort([]int)", Exported: true}},
 			Exported: true,
 		},
 		{Name: "QuickSort", Package: "example.com/pkg/sorter", Kind: "struct", Exported: true},
 		{Name: "MergeSort", Package: "example.com/pkg/sorter", Kind: "struct", Exported: true},
 	}
-	impls := []analysis.ImplEdge{
+	impls := []oculus.ImplEdge{
 		{From: "QuickSort", To: "Sorter", Kind: "implements"},
 		{From: "MergeSort", To: "Sorter", Kind: "implements"},
 	}
@@ -518,12 +518,12 @@ func TestStateMachineCandidate(t *testing.T) {
 			Symbols: makeSymbols(8), // 8 symbols > threshold 5
 		},
 	}
-	classes := []analysis.ClassInfo{
+	classes := []oculus.ClassInfo{
 		{
 			Name:    "Workflow",
 			Package: "example.com/pkg/workflow",
 			Kind:    "struct",
-			Fields: []analysis.FieldInfo{
+			Fields: []oculus.FieldInfo{
 				{Name: "State", Type: "WorkflowState", Exported: true},
 				{Name: "Name", Type: "string", Exported: true},
 			},
@@ -563,12 +563,12 @@ func TestStateMachineCandidate_NoStateField(t *testing.T) {
 			Symbols: makeSymbols(10),
 		},
 	}
-	classes := []analysis.ClassInfo{
+	classes := []oculus.ClassInfo{
 		{
 			Name:    "Helper",
 			Package: "example.com/pkg/util",
 			Kind:    "struct",
-			Fields: []analysis.FieldInfo{
+			Fields: []oculus.FieldInfo{
 				{Name: "Name", Type: "string", Exported: true},
 				{Name: "Value", Type: "int", Exported: true},
 			},
@@ -626,16 +626,16 @@ func TestMissingPattern_WithPattern(t *testing.T) {
 			Churn:   15,
 		},
 	}
-	classes := []analysis.ClassInfo{
+	classes := []oculus.ClassInfo{
 		{
 			Name: "Sorter", Package: "example.com/pkg/sorter", Kind: "interface",
-			Methods:  []analysis.MethodInfo{{Name: "Sort", Signature: "Sort([]int)", Exported: true}},
+			Methods:  []oculus.MethodInfo{{Name: "Sort", Signature: "Sort([]int)", Exported: true}},
 			Exported: true,
 		},
 		{Name: "QuickSort", Package: "example.com/pkg/sorter", Kind: "struct", Exported: true},
 		{Name: "MergeSort", Package: "example.com/pkg/sorter", Kind: "struct", Exported: true},
 	}
-	impls := []analysis.ImplEdge{
+	impls := []oculus.ImplEdge{
 		{From: "QuickSort", To: "Sorter", Kind: "implements"},
 		{From: "MergeSort", To: "Sorter", Kind: "implements"},
 	}

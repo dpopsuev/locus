@@ -13,7 +13,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/arch"
 	archgit "github.com/dpopsuev/locus/internal/arch/git"
 	"github.com/dpopsuev/locus/internal/clinic"
@@ -26,6 +25,7 @@ import (
 	"github.com/dpopsuev/locus/internal/graph"
 	"github.com/dpopsuev/locus/internal/history"
 	"github.com/dpopsuev/locus/internal/impact"
+	"github.com/dpopsuev/locus/internal/oculus"
 	"github.com/dpopsuev/locus/internal/oculus/lang"
 	"github.com/dpopsuev/locus/internal/oculus/lsp"
 	"github.com/dpopsuev/locus/internal/port"
@@ -351,7 +351,7 @@ func (p *Protocol) GetViolations(ctx context.Context, path string, layers []stri
 	}, nil
 }
 
-// inferLayerOrder derives a layer ordering from import depth analysis.
+// inferLayerOrder derives a layer ordering from import depth oculus.
 // Components at depth 0 (no imports) are the bottom layer; higher depth = higher layer.
 func inferLayerOrder(report *arch.ContextReport) []string {
 	depths := report.ImportDepth
@@ -723,8 +723,8 @@ func (p *Protocol) GetCallees(_ context.Context, path, symbol string, cacheKey .
 	if symbol == "" {
 		return nil, ErrComponentRequired
 	}
-	da := analysis.CachedDeepFallback(path, p.pool)
-	cg, err := da.CallGraph(path, analysis.CallGraphOpts{Depth: analysis.DefaultCallGraphDepth})
+	da := oculus.CachedDeepFallback(path, p.pool)
+	cg, err := da.CallGraph(path, oculus.CallGraphOpts{Depth: oculus.DefaultCallGraphDepth})
 	if err != nil {
 		return nil, fmt.Errorf("call graph: %w", err)
 	}
@@ -760,8 +760,8 @@ type CallPathReport struct {
 
 func (p *Protocol) GetCallPath(_ context.Context, path, from, to string, cacheKey ...string) (*CallPathReport, error) {
 	path = p.resolvePath(path)
-	da := analysis.CachedDeepFallback(path, p.pool)
-	cg, err := da.CallGraph(path, analysis.CallGraphOpts{Depth: analysis.DefaultCallGraphDepth})
+	da := oculus.CachedDeepFallback(path, p.pool)
+	cg, err := da.CallGraph(path, oculus.CallGraphOpts{Depth: oculus.DefaultCallGraphDepth})
 	if err != nil {
 		return nil, fmt.Errorf("call graph: %w", err)
 	}
@@ -790,7 +790,7 @@ func (e callEdge) Target() string { return e.callee }
 
 func (p *Protocol) GetInterfaceMetrics(ctx context.Context, path string, cacheKey ...string) (*constraint.InterfaceMetricsReport, error) {
 	path = p.resolvePath(path)
-	fa := analysis.NewFallback(path, p.pool)
+	fa := oculus.NewFallback(path, p.pool)
 	classes, err := fa.Classes(path)
 	if err != nil {
 		return nil, fmt.Errorf("classes: %w", err)
@@ -807,8 +807,8 @@ func (p *Protocol) GetSymbolBlastRadius(ctx context.Context, path, symbol string
 	if symbol == "" {
 		return nil, ErrComponentRequired
 	}
-	da := analysis.CachedDeepFallback(path, p.pool)
-	cg, err := da.CallGraph(path, analysis.CallGraphOpts{Depth: analysis.DefaultCallGraphDepth})
+	da := oculus.CachedDeepFallback(path, p.pool)
+	cg, err := da.CallGraph(path, oculus.CallGraphOpts{Depth: oculus.DefaultCallGraphDepth})
 	if err != nil {
 		return nil, fmt.Errorf("call graph: %w", err)
 	}
@@ -834,9 +834,9 @@ func (p *Protocol) GetDiffIntelligence(ctx context.Context, path, since string, 
 	if err != nil {
 		return nil, fmt.Errorf("git diff: %w", err)
 	}
-	// Build call graph for symbol-level analysis.
-	da := analysis.CachedDeepFallback(path, p.pool)
-	cg, err := da.CallGraph(path, analysis.CallGraphOpts{Depth: analysis.DefaultCallGraphDepth})
+	// Build call graph for symbol-level oculus.
+	da := oculus.CachedDeepFallback(path, p.pool)
+	cg, err := da.CallGraph(path, oculus.CallGraphOpts{Depth: oculus.DefaultCallGraphDepth})
 	if err != nil {
 		return nil, fmt.Errorf("call graph: %w", err)
 	}
@@ -849,8 +849,8 @@ func (p *Protocol) GetCallers(ctx context.Context, path, symbol string, cacheKey
 		return nil, ErrComponentRequired
 	}
 
-	da := analysis.CachedDeepFallback(path, p.pool)
-	cg, err := da.CallGraph(path, analysis.CallGraphOpts{Depth: analysis.DefaultCallGraphDepth})
+	da := oculus.CachedDeepFallback(path, p.pool)
+	cg, err := da.CallGraph(path, oculus.CallGraphOpts{Depth: oculus.DefaultCallGraphDepth})
 	if err != nil {
 		return nil, fmt.Errorf("call graph: %w", err)
 	}
@@ -1380,9 +1380,9 @@ func (p *Protocol) GetSkills(ctx context.Context, path string) ([]cursor.Skill, 
 	return cursor.ReadSkills(path)
 }
 
-func (p *Protocol) GetConventions(ctx context.Context, path string) (*analysis.ConventionReport, error) {
+func (p *Protocol) GetConventions(ctx context.Context, path string) (*oculus.ConventionReport, error) {
 	path = p.resolvePath(path)
-	return analysis.DetectConventions(path)
+	return oculus.DetectConventions(path)
 }
 
 func (p *Protocol) GetImpact(ctx context.Context, path, component string, cacheKey ...string) (*impact.ImpactResult, error) {
@@ -1535,7 +1535,7 @@ func (p *Protocol) GetHexaValidation(ctx context.Context, path string, cacheKey 
 	if err != nil {
 		return nil, err
 	}
-	fa := analysis.NewFallback(path, p.pool)
+	fa := oculus.NewFallback(path, p.pool)
 	classes, _ := fa.Classes(path)
 	return clinichexa.ComputeHexaViolations(report.Architecture.Services, report.Architecture.Edges, classes), nil
 }
@@ -1546,7 +1546,7 @@ func (p *Protocol) GetSOLIDScan(ctx context.Context, path string, cacheKey ...st
 	if err != nil {
 		return nil, err
 	}
-	fa := analysis.NewFallback(path, p.pool)
+	fa := oculus.NewFallback(path, p.pool)
 	classes, _ := fa.Classes(path)
 	impls, _ := fa.Implements(path)
 	hexaClass := clinichexa.ComputeHexaClassification(report.Architecture.Services, report.Architecture.Edges, classes)
@@ -1580,7 +1580,7 @@ func (p *Protocol) GetPatternScan(ctx context.Context, path string, cacheKey ...
 	if err != nil {
 		return nil, err
 	}
-	fa := analysis.NewFallback(path, p.pool)
+	fa := oculus.NewFallback(path, p.pool)
 	classes, _ := fa.Classes(path)
 	impls, _ := fa.Implements(path)
 	hexaClass := clinichexa.ComputeHexaClassification(report.Architecture.Services, report.Architecture.Edges, classes)
@@ -1589,8 +1589,8 @@ func (p *Protocol) GetPatternScan(ctx context.Context, path string, cacheKey ...
 	patternReport := clinic.ComputePatternScan(report.Architecture.Services, report.Architecture.Edges, report.Cycles, classes, impls, roles, accepted)
 
 	// Enrich with call graph if available (Feature Envy move targets, God Component split suggestions).
-	da := analysis.CachedDeepFallback(path, p.pool)
-	if cg, cgErr := da.CallGraph(path, analysis.CallGraphOpts{Depth: analysis.DefaultCallGraphDepth}); cgErr == nil && cg != nil {
+	da := oculus.CachedDeepFallback(path, p.pool)
+	if cg, cgErr := da.CallGraph(path, oculus.CallGraphOpts{Depth: oculus.DefaultCallGraphDepth}); cgErr == nil && cg != nil {
 		clinic.EnrichWithCallGraph(patternReport, cg.Edges)
 	}
 

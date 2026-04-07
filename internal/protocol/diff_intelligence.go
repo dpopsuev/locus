@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/dpopsuev/locus/internal/analysis"
+	"github.com/dpopsuev/locus/internal/oculus"
 	"github.com/dpopsuev/locus/internal/port"
 )
 
@@ -32,7 +32,7 @@ type DiffIntelligenceReport struct {
 // ComputeDiffIntelligence maps changed files to packages, then identifies symbols
 // in those packages that have callers in the call graph. Pure function: accepts
 // data, returns report.
-func ComputeDiffIntelligence(changedFiles []string, modulePath string, graph *analysis.CallGraph) *DiffIntelligenceReport {
+func ComputeDiffIntelligence(changedFiles []string, modulePath string, graph *oculus.CallGraph) *DiffIntelligenceReport {
 	report := &DiffIntelligenceReport{
 		ChangedFiles: changedFiles,
 	}

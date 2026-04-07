@@ -5,9 +5,9 @@ import (
 
 	"github.com/dpopsuev/locus/internal/clinic/hexa"
 
-	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/arch"
 	"github.com/dpopsuev/locus/internal/model"
+	"github.com/dpopsuev/locus/internal/oculus"
 	"github.com/dpopsuev/locus/internal/port"
 )
 
@@ -107,11 +107,11 @@ func TestComputeSRPViolations_DomainDiversity(t *testing.T) {
 }
 
 func TestComputeISPViolations_FatInterface(t *testing.T) {
-	methods := make([]analysis.MethodInfo, 9)
+	methods := make([]oculus.MethodInfo, 9)
 	for i := range methods {
-		methods[i] = analysis.MethodInfo{Name: "Method" + string(rune('A'+i)), Exported: true}
+		methods[i] = oculus.MethodInfo{Name: "Method" + string(rune('A'+i)), Exported: true}
 	}
-	classes := []analysis.ClassInfo{
+	classes := []oculus.ClassInfo{
 		{Name: "BigInterface", Package: "pkg", Kind: "interface", Methods: methods},
 	}
 
@@ -131,11 +131,11 @@ func TestComputeISPViolations_FatInterface(t *testing.T) {
 }
 
 func TestComputeISPViolations_WarningThreshold(t *testing.T) {
-	methods := make([]analysis.MethodInfo, 6)
+	methods := make([]oculus.MethodInfo, 6)
 	for i := range methods {
-		methods[i] = analysis.MethodInfo{Name: "Method" + string(rune('A'+i)), Exported: true}
+		methods[i] = oculus.MethodInfo{Name: "Method" + string(rune('A'+i)), Exported: true}
 	}
-	classes := []analysis.ClassInfo{
+	classes := []oculus.ClassInfo{
 		{Name: "MediumInterface", Package: "pkg", Kind: "interface", Methods: methods},
 	}
 
@@ -152,11 +152,11 @@ func TestComputeISPViolations_WarningThreshold(t *testing.T) {
 }
 
 func TestComputeISPViolations_SmallInterface(t *testing.T) {
-	methods := make([]analysis.MethodInfo, 3)
+	methods := make([]oculus.MethodInfo, 3)
 	for i := range methods {
-		methods[i] = analysis.MethodInfo{Name: "Method" + string(rune('A'+i)), Exported: true}
+		methods[i] = oculus.MethodInfo{Name: "Method" + string(rune('A'+i)), Exported: true}
 	}
-	classes := []analysis.ClassInfo{
+	classes := []oculus.ClassInfo{
 		{Name: "SmallInterface", Package: "pkg", Kind: "interface", Methods: methods},
 	}
 
@@ -170,16 +170,16 @@ func TestComputeISPViolations_SmallInterface(t *testing.T) {
 func TestComputeISPViolations_ImplementorNotFlagged(t *testing.T) {
 	// BUG-19: implementor sub-check removed — Go compiler enforces interface satisfaction.
 	// Only fat interfaces (>5 methods) should be flagged, not implementors.
-	ifaceMethods := make([]analysis.MethodInfo, 4)
+	ifaceMethods := make([]oculus.MethodInfo, 4)
 	for i := range ifaceMethods {
-		ifaceMethods[i] = analysis.MethodInfo{Name: "Method" + string(rune('A'+i)), Exported: true}
+		ifaceMethods[i] = oculus.MethodInfo{Name: "Method" + string(rune('A'+i)), Exported: true}
 	}
 
-	classes := []analysis.ClassInfo{
+	classes := []oculus.ClassInfo{
 		{Name: "MyInterface", Package: "pkg", Kind: "interface", Methods: ifaceMethods},
-		{Name: "PartialImpl", Package: "pkg", Kind: "struct", Methods: make([]analysis.MethodInfo, 2)},
+		{Name: "PartialImpl", Package: "pkg", Kind: "struct", Methods: make([]oculus.MethodInfo, 2)},
 	}
-	impls := []analysis.ImplEdge{
+	impls := []oculus.ImplEdge{
 		{From: "PartialImpl", To: "MyInterface", Kind: "implements"},
 	}
 
@@ -277,11 +277,11 @@ func TestComputeSOLIDScan_Score(t *testing.T) {
 		edges[i] = arch.ArchEdge{From: "internal/big", To: "internal/dep" + string(rune('a'+i))}
 	}
 
-	methods := make([]analysis.MethodInfo, 9)
+	methods := make([]oculus.MethodInfo, 9)
 	for i := range methods {
-		methods[i] = analysis.MethodInfo{Name: "M" + string(rune('A'+i)), Exported: true}
+		methods[i] = oculus.MethodInfo{Name: "M" + string(rune('A'+i)), Exported: true}
 	}
-	classes := []analysis.ClassInfo{
+	classes := []oculus.ClassInfo{
 		{Name: "FatIface", Package: "pkg", Kind: "interface", Methods: methods},
 	}
 
@@ -312,8 +312,8 @@ func TestComputeSOLIDScan_PerfectScore(t *testing.T) {
 	edges := []arch.ArchEdge{
 		{From: "internal/clean", To: "internal/a"},
 	}
-	classes := []analysis.ClassInfo{
-		{Name: "SmallIface", Package: "pkg", Kind: "interface", Methods: make([]analysis.MethodInfo, 2)},
+	classes := []oculus.ClassInfo{
+		{Name: "SmallIface", Package: "pkg", Kind: "interface", Methods: make([]oculus.MethodInfo, 2)},
 	}
 
 	report := ComputeSOLIDScan(services, edges, classes, nil, nil, "", nil, nil)
@@ -329,10 +329,10 @@ func TestComputeSOLIDScan_PerfectScore(t *testing.T) {
 func TestComputeSOLIDScan_ScoreFloor(t *testing.T) {
 	// 21+ violations should floor at 0.
 	services := make([]arch.ArchService, 0)
-	classes := make([]analysis.ClassInfo, 0, 25)
+	classes := make([]oculus.ClassInfo, 0, 25)
 	for i := range 25 {
-		methods := make([]analysis.MethodInfo, 10)
-		classes = append(classes, analysis.ClassInfo{
+		methods := make([]oculus.MethodInfo, 10)
+		classes = append(classes, oculus.ClassInfo{
 			Name:    "Iface" + string(rune('A'+i)),
 			Package: "pkg",
 			Kind:    "interface",
@@ -349,9 +349,9 @@ func TestComputeSOLIDScan_ScoreFloor(t *testing.T) {
 
 func TestComputeSOLIDScan_SortOrder(t *testing.T) {
 	// Mix of error and warning violations — errors should come first.
-	methods9 := make([]analysis.MethodInfo, 9)
-	methods6 := make([]analysis.MethodInfo, 6)
-	classes := []analysis.ClassInfo{
+	methods9 := make([]oculus.MethodInfo, 9)
+	methods6 := make([]oculus.MethodInfo, 6)
+	classes := []oculus.ClassInfo{
 		{Name: "ZWarning", Package: "pkg", Kind: "interface", Methods: methods6},
 		{Name: "AError", Package: "pkg", Kind: "interface", Methods: methods9},
 	}
@@ -398,14 +398,14 @@ func TestExtractDomain(t *testing.T) {
 
 func TestISPSeverity_FewImplementors(t *testing.T) {
 	// Fat interface (9 methods, base=error) with 2 implementors → warning.
-	methods := make([]analysis.MethodInfo, 9)
+	methods := make([]oculus.MethodInfo, 9)
 	for i := range methods {
-		methods[i] = analysis.MethodInfo{Name: "Method" + string(rune('A'+i)), Exported: true}
+		methods[i] = oculus.MethodInfo{Name: "Method" + string(rune('A'+i)), Exported: true}
 	}
-	classes := []analysis.ClassInfo{
+	classes := []oculus.ClassInfo{
 		{Name: "BigIface", Package: "pkg", Kind: "interface", Methods: methods},
 	}
-	impls := []analysis.ImplEdge{
+	impls := []oculus.ImplEdge{
 		{From: "ImplA", To: "BigIface", Kind: "implements"},
 		{From: "ImplB", To: "BigIface", Kind: "implements"},
 	}
@@ -426,16 +426,16 @@ func TestISPSeverity_FewImplementors(t *testing.T) {
 
 func TestISPSeverity_ManyImplementors(t *testing.T) {
 	// Fat interface (9 methods) with 6+ implementors → critical.
-	methods := make([]analysis.MethodInfo, 9)
+	methods := make([]oculus.MethodInfo, 9)
 	for i := range methods {
-		methods[i] = analysis.MethodInfo{Name: "Method" + string(rune('A'+i)), Exported: true}
+		methods[i] = oculus.MethodInfo{Name: "Method" + string(rune('A'+i)), Exported: true}
 	}
-	classes := []analysis.ClassInfo{
+	classes := []oculus.ClassInfo{
 		{Name: "WideIface", Package: "pkg", Kind: "interface", Methods: methods},
 	}
-	impls := make([]analysis.ImplEdge, 7)
+	impls := make([]oculus.ImplEdge, 7)
 	for i := range impls {
-		impls[i] = analysis.ImplEdge{
+		impls[i] = oculus.ImplEdge{
 			From: "Impl" + string(rune('A'+i)),
 			To:   "WideIface",
 			Kind: "implements",

@@ -3,24 +3,24 @@ package constraint
 import (
 	"testing"
 
-	"github.com/dpopsuev/locus/internal/analysis"
+	"github.com/dpopsuev/locus/internal/oculus"
 )
 
 func TestComputeInterfaceMetrics_Basic(t *testing.T) {
-	classes := []analysis.ClassInfo{
-		{Name: "Reader", Package: "io", Kind: "interface", Methods: []analysis.MethodInfo{
+	classes := []oculus.ClassInfo{
+		{Name: "Reader", Package: "io", Kind: "interface", Methods: []oculus.MethodInfo{
 			{Name: "Read", Signature: "Read(p []byte) (int, error)", Exported: true},
 		}},
-		{Name: "Writer", Package: "io", Kind: "interface", Methods: []analysis.MethodInfo{
+		{Name: "Writer", Package: "io", Kind: "interface", Methods: []oculus.MethodInfo{
 			{Name: "Write", Signature: "Write(p []byte) (int, error)", Exported: true},
 		}},
-		{Name: "Closer", Package: "io", Kind: "interface", Methods: []analysis.MethodInfo{
+		{Name: "Closer", Package: "io", Kind: "interface", Methods: []oculus.MethodInfo{
 			{Name: "Close", Signature: "Close() error", Exported: true},
 		}},
 		{Name: "MyStruct", Package: "pkg", Kind: "struct"},
 		{Name: "OtherStruct", Package: "pkg", Kind: "struct"},
 	}
-	impls := []analysis.ImplEdge{
+	impls := []oculus.ImplEdge{
 		{From: "MyStruct", To: "Reader", Kind: "implements"},
 		{From: "MyStruct", To: "Writer", Kind: "implements"},
 		{From: "OtherStruct", To: "Reader", Kind: "implements"},
@@ -95,11 +95,11 @@ func TestComputeInterfaceMetrics_Empty(t *testing.T) {
 }
 
 func TestComputeInterfaceMetrics_LargestInterface(t *testing.T) {
-	classes := []analysis.ClassInfo{
-		{Name: "Small", Package: "pkg", Kind: "interface", Methods: []analysis.MethodInfo{
+	classes := []oculus.ClassInfo{
+		{Name: "Small", Package: "pkg", Kind: "interface", Methods: []oculus.MethodInfo{
 			{Name: "A", Signature: "A()", Exported: true},
 		}},
-		{Name: "Large", Package: "pkg", Kind: "interface", Methods: []analysis.MethodInfo{
+		{Name: "Large", Package: "pkg", Kind: "interface", Methods: []oculus.MethodInfo{
 			{Name: "A", Signature: "A()", Exported: true},
 			{Name: "B", Signature: "B()", Exported: true},
 			{Name: "C", Signature: "C()", Exported: true},
@@ -121,12 +121,12 @@ func TestComputeInterfaceMetrics_LargestInterface(t *testing.T) {
 }
 
 func TestComputeInterfaceMetrics_AllImplemented(t *testing.T) {
-	classes := []analysis.ClassInfo{
-		{Name: "Doer", Package: "pkg", Kind: "interface", Methods: []analysis.MethodInfo{
+	classes := []oculus.ClassInfo{
+		{Name: "Doer", Package: "pkg", Kind: "interface", Methods: []oculus.MethodInfo{
 			{Name: "Do", Signature: "Do()", Exported: true},
 		}},
 	}
-	impls := []analysis.ImplEdge{
+	impls := []oculus.ImplEdge{
 		{From: "Worker", To: "Doer", Kind: "implements"},
 	}
 

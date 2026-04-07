@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/diagram/core"
+	"github.com/dpopsuev/locus/internal/oculus"
 )
 
 // ER produces a Mermaid erDiagram showing type relationships
@@ -24,7 +24,7 @@ func ER(in core.Input, opts core.Options) (string, error) {
 		classes = filterClassesByPkg(classes, opts.Scope)
 	}
 
-	var entities []analysis.ClassInfo
+	var entities []oculus.ClassInfo
 	entitySet := make(map[string]bool)
 	for _, c := range classes {
 		if c.Kind == "struct" || c.Kind == "class" {

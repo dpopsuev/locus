@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/diagram/core"
+	"github.com/dpopsuev/locus/internal/oculus"
 )
 
 const kindInterface = "interface"
@@ -84,8 +84,8 @@ func Classes(in core.Input, opts core.Options) (string, error) {
 
 // FilterClassesByPkg filters classes by package scope. Exported for use by
 // other typediag renderers.
-func filterClassesByPkg(classes []analysis.ClassInfo, scope string) []analysis.ClassInfo {
-	var filtered []analysis.ClassInfo
+func filterClassesByPkg(classes []oculus.ClassInfo, scope string) []oculus.ClassInfo {
+	var filtered []oculus.ClassInfo
 	for _, c := range classes {
 		if c.Package == scope || strings.HasSuffix(c.Package, "/"+scope) {
 			filtered = append(filtered, c)

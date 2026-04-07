@@ -5,11 +5,11 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/arch"
 	"github.com/dpopsuev/locus/internal/clinic/hexa"
 	"github.com/dpopsuev/locus/internal/clinic/solid"
 	"github.com/dpopsuev/locus/internal/graph"
+	"github.com/dpopsuev/locus/internal/oculus"
 	"github.com/dpopsuev/locus/internal/port"
 )
 
@@ -474,7 +474,7 @@ func signalNewFunctions(svc arch.ArchService) (detected bool, confidence float64
 	return false, 0, ""
 }
 
-func signalSingleMethodInterface(classes []analysis.ClassInfo, pkg string) (detected bool, confidence float64, evidence string) {
+func signalSingleMethodInterface(classes []oculus.ClassInfo, pkg string) (detected bool, confidence float64, evidence string) {
 	for _, c := range classes {
 		if c.Package == pkg && c.Kind == hexa.ClassKindInterface && len(c.Methods) == 1 {
 			return true, 0.7, fmt.Sprintf("single-method interface: %s", c.Name)
@@ -483,7 +483,7 @@ func signalSingleMethodInterface(classes []analysis.ClassInfo, pkg string) (dete
 	return false, 0, ""
 }
 
-func signalMultipleImplementors(classes []analysis.ClassInfo, impls []analysis.ImplEdge, pkg string) (detected bool, confidence float64, evidence string) {
+func signalMultipleImplementors(classes []oculus.ClassInfo, impls []oculus.ImplEdge, pkg string) (detected bool, confidence float64, evidence string) {
 	// Find interfaces in this package.
 	ifaces := make(map[string]bool)
 	for _, c := range classes {
@@ -538,7 +538,7 @@ var stateFieldKeywords = []string{"state", "status", "phase", "mode"}
 // signalStateField checks whether any struct in the package has a field whose name
 // contains a state-like keyword (state, status, phase, mode). This is a heuristic
 // signal for state machine candidate detection.
-func signalStateField(classes []analysis.ClassInfo, pkg string) (detected bool, confidence float64, evidence string) {
+func signalStateField(classes []oculus.ClassInfo, pkg string) (detected bool, confidence float64, evidence string) {
 	for _, c := range classes {
 		if c.Package != pkg || c.Kind != "struct" {
 			continue
@@ -706,8 +706,8 @@ func evaluateSignal(
 	svc arch.ArchService,
 	edges []arch.ArchEdge,
 	cycles []graph.Cycle,
-	classes []analysis.ClassInfo,
-	impls []analysis.ImplEdge,
+	classes []oculus.ClassInfo,
+	impls []oculus.ImplEdge,
 ) (detected bool, confidence float64, evidence string) {
 	switch rule.signal {
 	case "highFanIn":
@@ -753,8 +753,8 @@ func evaluateFingerprint(
 	svc arch.ArchService,
 	edges []arch.ArchEdge,
 	cycles []graph.Cycle,
-	classes []analysis.ClassInfo,
-	impls []analysis.ImplEdge,
+	classes []oculus.ClassInfo,
+	impls []oculus.ImplEdge,
 	roleMultiplier float64,
 ) *PatternDetection {
 	entry := catalogByID[fp.patternID]
@@ -905,8 +905,8 @@ func ComputePatternScan(
 	services []arch.ArchService,
 	edges []arch.ArchEdge,
 	cycles []graph.Cycle,
-	classes []analysis.ClassInfo,
-	impls []analysis.ImplEdge,
+	classes []oculus.ClassInfo,
+	impls []oculus.ImplEdge,
 	roles map[string]hexa.HexaRole,
 	accepted []port.AcceptedViolation,
 ) *PatternScanReport {

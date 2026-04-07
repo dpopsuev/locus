@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/dpopsuev/locus/internal/analysis"
+	"github.com/dpopsuev/locus/internal/oculus"
 	"github.com/dpopsuev/locus/internal/port"
 )
 
@@ -22,11 +22,11 @@ type SymbolBlastReport struct {
 
 // ComputeSymbolBlastRadius computes direct and transitive callers for a symbol,
 // then derives the blast radius as a percentage of total packages affected.
-func ComputeSymbolBlastRadius(edges []analysis.CallEdge, symbol string, totalPkgs int) *SymbolBlastReport {
+func ComputeSymbolBlastRadius(edges []oculus.CallEdge, symbol string, totalPkgs int) *SymbolBlastReport {
 	report := &SymbolBlastReport{Symbol: symbol}
 
 	// Build reverse adjacency: callee -> []CallEdge (who calls it).
-	reverse := make(map[string][]analysis.CallEdge)
+	reverse := make(map[string][]oculus.CallEdge)
 	for _, e := range edges {
 		reverse[e.Callee] = append(reverse[e.Callee], e)
 	}
@@ -96,7 +96,7 @@ func ComputeSymbolBlastRadius(edges []analysis.CallEdge, symbol string, totalPkg
 }
 
 // edgeToCallerSite converts a CallEdge to a port.CallerSite.
-func edgeToCallerSite(e analysis.CallEdge) port.CallerSite {
+func edgeToCallerSite(e oculus.CallEdge) port.CallerSite {
 	return port.CallerSite{
 		Caller:       e.Caller,
 		CallerPkg:    e.CallerPkg,
