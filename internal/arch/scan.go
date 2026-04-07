@@ -71,6 +71,15 @@ type ScanOpts struct {
 	Since           string // git ref to diff against (e.g. HEAD~1) for incremental scan
 }
 
+// NewScanOpts returns ScanOpts with sensible defaults.
+func NewScanOpts() ScanOpts {
+	return ScanOpts{
+		Depth:     DefaultGroupingDepth,
+		ChurnDays: 90,
+		Intent:    IntentHealth,
+	}
+}
+
 const (
 	// MinFanInHotSpot is the minimum fan-in count for a hot spot.
 	MinFanInHotSpot = 3

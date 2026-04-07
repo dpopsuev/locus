@@ -99,6 +99,11 @@ type DesiredState struct {
 	Accepted    []AcceptedViolation `json:"accepted,omitempty" yaml:"accepted"`
 }
 
+// NewDesiredState returns an empty DesiredState ready for configuration.
+func NewDesiredState(layers ...string) *DesiredState {
+	return &DesiredState{Layers: layers}
+}
+
 // AcceptedViolation records a known violation that should be suppressed.
 type AcceptedViolation struct {
 	Component string `json:"component" yaml:"component"`
