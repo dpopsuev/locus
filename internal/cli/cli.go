@@ -70,7 +70,7 @@ var rootCmd = &cobra.Command{
 architecture, dependency graph, git history, churn, hot spots, symbols,
 .cursor/ rules and skills -- via CLI or MCP server.
 
-No ceremony required. No .mos directory. Just point and go.`,
+No ceremony required. No config directory. Just point and go.`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		initLogger()
 		slog.LogAttrs(context.Background(), slog.LevelDebug, "logger initialized", slog.String(logKeyLevel, os.Getenv("LOCUS_LOG_LEVEL")))

@@ -13,7 +13,7 @@ var CommonSkipDirs = map[string]bool{
 	".git":         true,
 	".hg":          true,
 	".svn":         true,
-	".mos":         true,
+	".locus":       true,
 }
 
 // ShouldSkipDir returns true if the directory should be skipped during scanning.

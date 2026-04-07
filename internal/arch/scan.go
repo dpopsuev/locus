@@ -133,7 +133,7 @@ type ContextReport struct {
 }
 
 // ScanAndBuild scans any repository and produces a ContextReport.
-// It requires no .mos directory -- all inputs come from the source tree and git.
+// It requires no config directory -- all inputs come from the source tree and git.
 // The opts.Intent field controls how deep the analysis goes:
 //
 //	L0 (architecture): structure + LOC
