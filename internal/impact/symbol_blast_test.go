@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/dpopsuev/locus/internal/oculus"
+	"github.com/dpopsuev/oculus"
 )
 
 func TestComputeSymbolBlastRadius_SimpleChain(t *testing.T) {

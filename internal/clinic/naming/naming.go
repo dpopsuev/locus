@@ -7,8 +7,8 @@ import (
 	"unicode"
 
 	"github.com/dpopsuev/locus/internal/arch"
-	"github.com/dpopsuev/locus/internal/oculus/lang"
 	"github.com/dpopsuev/locus/internal/port"
+	"github.com/dpopsuev/oculus/lang"
 )
 
 // Fan-in threshold above which severity is escalated from warning to error.

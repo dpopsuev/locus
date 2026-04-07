@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/dpopsuev/locus/internal/oculus"
+	"github.com/dpopsuev/oculus"
 )
 
 // InterfaceMetric holds metrics for a single interface type.

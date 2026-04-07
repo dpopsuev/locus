@@ -15,10 +15,10 @@ import (
 	clinicsolid "github.com/dpopsuev/locus/internal/clinic/solid"
 	"github.com/dpopsuev/locus/internal/constraint"
 	"github.com/dpopsuev/locus/internal/graph"
-	"github.com/dpopsuev/locus/internal/oculus"
-	"github.com/dpopsuev/locus/internal/oculus/lang"
 	"github.com/dpopsuev/locus/internal/port"
 	"github.com/dpopsuev/locus/internal/survey"
+	"github.com/dpopsuev/oculus"
+	"github.com/dpopsuev/oculus/lang"
 )
 
 // Category identifies which linter produced a violation.

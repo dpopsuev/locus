@@ -3,8 +3,8 @@ package protocol
 import (
 	"testing"
 
-	"github.com/dpopsuev/locus/internal/oculus"
 	"github.com/dpopsuev/locus/internal/port"
+	"github.com/dpopsuev/oculus"
 )
 
 func TestComputeDiffIntelligence_SingleFileWithCallers(t *testing.T) {

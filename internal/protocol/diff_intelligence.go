@@ -6,8 +6,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/dpopsuev/locus/internal/oculus"
 	"github.com/dpopsuev/locus/internal/port"
+	"github.com/dpopsuev/oculus"
 )
 
 // SemanticChange describes a symbol in a changed package and its caller impact.

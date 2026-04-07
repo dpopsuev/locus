@@ -19,9 +19,9 @@ import (
 	archgit "github.com/dpopsuev/locus/internal/arch/git"
 	"github.com/dpopsuev/locus/internal/graph"
 	"github.com/dpopsuev/locus/internal/model"
-	"github.com/dpopsuev/locus/internal/oculus"
-	olang "github.com/dpopsuev/locus/internal/oculus/lang"
 	"github.com/dpopsuev/locus/internal/survey"
+	"github.com/dpopsuev/oculus"
+	olang "github.com/dpopsuev/oculus/lang"
 )
 
 // ScanIntent controls what level of analysis to perform.

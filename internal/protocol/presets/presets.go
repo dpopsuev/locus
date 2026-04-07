@@ -13,11 +13,11 @@ import (
 	clinicnaming "github.com/dpopsuev/locus/internal/clinic/naming"
 	clinicsolid "github.com/dpopsuev/locus/internal/clinic/solid"
 	"github.com/dpopsuev/locus/internal/constraint"
-	"github.com/dpopsuev/locus/internal/oculus"
-	"github.com/dpopsuev/locus/internal/oculus/lang"
-	"github.com/dpopsuev/locus/internal/oculus/lsp"
 	"github.com/dpopsuev/locus/internal/port"
 	"github.com/dpopsuev/locus/internal/survey"
+	"github.com/dpopsuev/oculus"
+	"github.com/dpopsuev/oculus/lang"
+	"github.com/dpopsuev/oculus/lsp"
 )
 
 // Preset name constants.

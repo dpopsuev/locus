@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/dpopsuev/locus/internal/graph"
-	"github.com/dpopsuev/locus/internal/oculus"
+	"github.com/dpopsuev/oculus"
 )
 
 // Pattern IDs used by enrichment.

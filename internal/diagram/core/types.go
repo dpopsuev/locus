@@ -3,7 +3,7 @@ package core
 import (
 	"github.com/dpopsuev/locus/internal/arch"
 	"github.com/dpopsuev/locus/internal/history"
-	"github.com/dpopsuev/locus/internal/oculus"
+	"github.com/dpopsuev/oculus"
 )
 
 // Options controls which diagram is rendered and how it is scoped.

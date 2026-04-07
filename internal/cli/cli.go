@@ -25,10 +25,10 @@ import (
 	gitpkg "github.com/dpopsuev/locus/internal/git"
 	"github.com/dpopsuev/locus/internal/lint"
 	locusmcp "github.com/dpopsuev/locus/internal/mcp"
-	"github.com/dpopsuev/locus/internal/oculus"
-	"github.com/dpopsuev/locus/internal/oculus/lsp"
 	"github.com/dpopsuev/locus/internal/protocol"
 	"github.com/dpopsuev/locus/internal/triage"
+	"github.com/dpopsuev/oculus"
+	"github.com/dpopsuev/oculus/lsp"
 )
 
 // version is set by Execute and used by commands.

@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	"github.com/dpopsuev/locus/internal/model"
-	"github.com/dpopsuev/locus/internal/oculus/lang"
+	"github.com/dpopsuev/oculus/lang"
 )
 
 // LanguageSupport describes how to scan a particular language.

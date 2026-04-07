@@ -8,7 +8,7 @@ import (
 	"github.com/dpopsuev/locus/internal/arch"
 	clinichexa "github.com/dpopsuev/locus/internal/clinic/hexa"
 	"github.com/dpopsuev/locus/internal/diagram/core"
-	"github.com/dpopsuev/locus/internal/oculus"
+	"github.com/dpopsuev/oculus"
 )
 
 func integrationRoot(t *testing.T) string {

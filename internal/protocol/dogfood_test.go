@@ -10,8 +10,8 @@ import (
 	clinichexa "github.com/dpopsuev/locus/internal/clinic/hexa"
 	clinicsolid "github.com/dpopsuev/locus/internal/clinic/solid"
 	"github.com/dpopsuev/locus/internal/impact"
-	"github.com/dpopsuev/locus/internal/oculus"
 	"github.com/dpopsuev/locus/internal/port"
+	"github.com/dpopsuev/oculus"
 )
 
 // locusRoot returns the absolute path to the Locus repository root,

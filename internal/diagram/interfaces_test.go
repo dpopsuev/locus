@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/dpopsuev/locus/internal/diagram/core"
-	"github.com/dpopsuev/locus/internal/oculus"
+	"github.com/dpopsuev/oculus"
 )
 
 func TestRenderInterfaces_WithImplementors(t *testing.T) {

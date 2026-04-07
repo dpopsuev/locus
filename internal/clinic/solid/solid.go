@@ -13,8 +13,8 @@ import (
 	"github.com/dpopsuev/locus/internal/arch"
 	"github.com/dpopsuev/locus/internal/clinic/hexa"
 	"github.com/dpopsuev/locus/internal/graph"
-	"github.com/dpopsuev/locus/internal/oculus"
 	"github.com/dpopsuev/locus/internal/port"
+	"github.com/dpopsuev/oculus"
 )
 
 // SOLIDPrinciple identifies one of the four SOLID principles detected.

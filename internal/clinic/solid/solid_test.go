@@ -7,8 +7,8 @@ import (
 
 	"github.com/dpopsuev/locus/internal/arch"
 	"github.com/dpopsuev/locus/internal/model"
-	"github.com/dpopsuev/locus/internal/oculus"
 	"github.com/dpopsuev/locus/internal/port"
+	"github.com/dpopsuev/oculus"
 )
 
 func TestComputeSRPViolations_HighFanOut(t *testing.T) {

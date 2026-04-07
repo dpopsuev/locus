@@ -10,7 +10,7 @@ import (
 	"github.com/dpopsuev/locus/internal/graph"
 	"github.com/dpopsuev/locus/internal/history"
 	"github.com/dpopsuev/locus/internal/model"
-	"github.com/dpopsuev/locus/internal/oculus"
+	"github.com/dpopsuev/oculus"
 )
 
 func testReport() *arch.ContextReport {

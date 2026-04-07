@@ -2,7 +2,7 @@ package survey
 
 import (
 	"github.com/dpopsuev/locus/internal/model"
-	"github.com/dpopsuev/locus/internal/oculus/lang"
+	"github.com/dpopsuev/oculus/lang"
 )
 
 // LanguageMarker is re-exported from oculus/lang for backward compatibility.

@@ -5,13 +5,15 @@ go 1.25.8
 require (
 	github.com/BurntSushi/toml v1.6.0
 	github.com/modelcontextprotocol/go-sdk v1.4.0
-	github.com/smacker/go-tree-sitter v0.0.0-20240827094217-dd81d9e9be82
+	github.com/smacker/go-tree-sitter v0.0.0-20240827094217-dd81d9e9be82 // indirect
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/mod v0.33.0
 	golang.org/x/tools v0.42.0
 )
 
-require github.com/dpopsuev/battery v0.0.0-00010101000000-000000000000 // indirect
+require github.com/dpopsuev/battery v0.0.0-00010101000000-000000000000
+
+require github.com/dpopsuev/oculus v0.1.0
 
 require (
 	github.com/google/jsonschema-go v0.4.2 // indirect
@@ -28,3 +30,5 @@ require (
 )
 
 replace github.com/dpopsuev/battery => ../battery
+
+replace github.com/dpopsuev/oculus => ../oculus

@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/dpopsuev/locus/internal/model"
-	"github.com/dpopsuev/locus/internal/oculus/lsp"
+	"github.com/dpopsuev/oculus/lsp"
 )
 
 var errEmptyServerCmd = errors.New("lsp scanner: empty ServerCmd")

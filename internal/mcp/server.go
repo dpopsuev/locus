@@ -19,11 +19,11 @@ import (
 	gitpkg "github.com/dpopsuev/locus/internal/git"
 	"github.com/dpopsuev/locus/internal/impact"
 	"github.com/dpopsuev/locus/internal/lint"
-	"github.com/dpopsuev/locus/internal/oculus"
-	"github.com/dpopsuev/locus/internal/oculus/lsp"
 	"github.com/dpopsuev/locus/internal/protocol"
 	"github.com/dpopsuev/locus/internal/store"
 	"github.com/dpopsuev/locus/internal/triage"
+	"github.com/dpopsuev/oculus"
+	"github.com/dpopsuev/oculus/lsp"
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 

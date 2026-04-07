@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/dpopsuev/locus/internal/oculus"
 	"github.com/dpopsuev/locus/internal/port"
+	"github.com/dpopsuev/oculus"
 )
 
 // SymbolBlastReport holds the blast radius analysis for a single symbol,

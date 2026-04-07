@@ -25,13 +25,13 @@ import (
 	"github.com/dpopsuev/locus/internal/graph"
 	"github.com/dpopsuev/locus/internal/history"
 	"github.com/dpopsuev/locus/internal/impact"
-	"github.com/dpopsuev/locus/internal/oculus"
-	"github.com/dpopsuev/locus/internal/oculus/lang"
-	"github.com/dpopsuev/locus/internal/oculus/lsp"
 	"github.com/dpopsuev/locus/internal/port"
 	"github.com/dpopsuev/locus/internal/protocol/presets"
 	"github.com/dpopsuev/locus/internal/remote"
 	"github.com/dpopsuev/locus/internal/survey"
+	"github.com/dpopsuev/oculus"
+	"github.com/dpopsuev/oculus/lang"
+	"github.com/dpopsuev/oculus/lsp"
 )
 
 // Error messages used across protocol methods.

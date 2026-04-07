@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/dpopsuev/locus/internal/diagram/core"
-	"github.com/dpopsuev/locus/internal/oculus"
+	"github.com/dpopsuev/oculus"
 )
 
 // Interfaces produces a Mermaid classDiagram showing only interfaces

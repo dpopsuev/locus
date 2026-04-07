@@ -3,7 +3,7 @@ package clinic
 import (
 	"testing"
 
-	"github.com/dpopsuev/locus/internal/oculus"
+	"github.com/dpopsuev/oculus"
 )
 
 func TestEnrichFeatureEnvy_WithTargets(t *testing.T) {

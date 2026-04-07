@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 
 	"github.com/dpopsuev/locus/internal/model"
-	"github.com/dpopsuev/locus/internal/oculus/lang"
+	"github.com/dpopsuev/oculus/lang"
 )
 
 // AutoScanner selects the best available scanner for a project root.

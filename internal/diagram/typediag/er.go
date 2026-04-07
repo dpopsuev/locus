@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/dpopsuev/locus/internal/diagram/core"
-	"github.com/dpopsuev/locus/internal/oculus"
+	"github.com/dpopsuev/oculus"
 )
 
 // ER produces a Mermaid erDiagram showing type relationships
