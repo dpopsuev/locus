@@ -27,12 +27,10 @@ func testReport(components, edges int) *arch.ContextReport {
 	for i := range edges {
 		edgeList = append(edgeList, arch.ArchEdge{From: "a", To: "b" + string(rune('0'+i))})
 	}
-	return &arch.ContextReport{
-		Architecture: arch.ArchModel{
-			Services: svcs,
-			Edges:    edgeList,
-		},
-	}
+	return &arch.ContextReport{ScanCore: arch.ScanCore{Architecture: arch.ArchModel{
+		Services: svcs,
+		Edges:    edgeList,
+	}}}
 }
 
 func TestRecordAndList(t *testing.T) {

@@ -15,7 +15,7 @@ func TestLRU_HitAvoidsDisk(t *testing.T) {
 	lru := store.NewLRU(inner, 4)
 
 	ctx := context.Background()
-	report := &arch.ContextReport{ModulePath: "test/repo", Scanner: "go"}
+	report := &arch.ContextReport{ScanCore: arch.ScanCore{ModulePath: "test/repo", Scanner: "go"}}
 
 	_ = lru.PutReport(ctx, "/repo", "sha1", report)
 
@@ -45,9 +45,9 @@ func TestLRU_EvictionAtCapacity(t *testing.T) {
 	lru := store.NewLRU(inner, 2) // capacity 2
 
 	ctx := context.Background()
-	r1 := &arch.ContextReport{ModulePath: "repo1"}
-	r2 := &arch.ContextReport{ModulePath: "repo2"}
-	r3 := &arch.ContextReport{ModulePath: "repo3"}
+	r1 := &arch.ContextReport{ScanCore: arch.ScanCore{ModulePath: "repo1"}}
+	r2 := &arch.ContextReport{ScanCore: arch.ScanCore{ModulePath: "repo2"}}
+	r3 := &arch.ContextReport{ScanCore: arch.ScanCore{ModulePath: "repo3"}}
 
 	_ = lru.PutReport(ctx, "/r1", "s1", r1)
 	_ = lru.PutReport(ctx, "/r2", "s2", r2)

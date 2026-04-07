@@ -297,30 +297,26 @@ func TestGetScanDiff(t *testing.T) {
 	s := testStore(filepath.Join(t.TempDir(), "cache"), t.TempDir())
 	p := New(s, nil)
 
-	beforeReport := &arch.ContextReport{
-		Architecture: arch.ArchModel{
-			Services: []arch.ArchService{
-				{Name: "pkg_a", LOC: 100},
-				{Name: "pkg_b", LOC: 200},
-			},
-			Edges: []arch.ArchEdge{
-				{From: "pkg_a", To: "pkg_b"},
-			},
+	beforeReport := &arch.ContextReport{ScanCore: arch.ScanCore{Architecture: arch.ArchModel{
+		Services: []arch.ArchService{
+			{Name: "pkg_a", LOC: 100},
+			{Name: "pkg_b", LOC: 200},
 		},
-	}
-	afterReport := &arch.ContextReport{
-		Architecture: arch.ArchModel{
-			Services: []arch.ArchService{
-				{Name: "pkg_a", LOC: 150},
-				{Name: "pkg_b", LOC: 200},
-				{Name: "pkg_c", LOC: 50},
-			},
-			Edges: []arch.ArchEdge{
-				{From: "pkg_a", To: "pkg_b"},
-				{From: "pkg_a", To: "pkg_c"},
-			},
+		Edges: []arch.ArchEdge{
+			{From: "pkg_a", To: "pkg_b"},
 		},
-	}
+	}}}
+	afterReport := &arch.ContextReport{ScanCore: arch.ScanCore{Architecture: arch.ArchModel{
+		Services: []arch.ArchService{
+			{Name: "pkg_a", LOC: 150},
+			{Name: "pkg_b", LOC: 200},
+			{Name: "pkg_c", LOC: 50},
+		},
+		Edges: []arch.ArchEdge{
+			{From: "pkg_a", To: "pkg_b"},
+			{From: "pkg_a", To: "pkg_c"},
+		},
+	}}}
 
 	_ = s.PutReport(context.Background(), "/repo", "sha1", beforeReport)
 	_ = s.PutReport(context.Background(), "/repo", "sha2", afterReport)
@@ -352,10 +348,9 @@ func TestGetCachedReport_RoundTrip(t *testing.T) {
 	fakeProject := "remote:https://github.com/example/repo"
 	fakeSHA := "abc123def456"
 	fakeKey := fakeProject + "@" + fakeSHA
-	report := &arch.ContextReport{
-		ModulePath: "github.com/example/repo",
-		Scanner:    "go",
-	}
+	report := &arch.ContextReport{ScanCore: arch.ScanCore{ModulePath: "github.com/example/repo",
+		Scanner: "go",
+	}}
 	if err := s.PutReport(context.Background(), fakeProject, fakeSHA, report); err != nil {
 		t.Fatalf("put: %v", err)
 	}
@@ -417,18 +412,16 @@ func TestGetComponentDetail(t *testing.T) {
 	s := testStore(filepath.Join(t.TempDir(), "cache"), t.TempDir())
 	p := New(s, nil)
 
-	report := &arch.ContextReport{
-		Architecture: arch.ArchModel{
-			Services: []arch.ArchService{
-				{Name: "pkg_a", LOC: 500, Churn: 3, Symbols: model.SymbolsFromNames("Foo", "Bar", "Baz")},
-				{Name: "pkg_b", LOC: 200},
-			},
-			Edges: []arch.ArchEdge{
-				{From: "pkg_a", To: "pkg_b"},
-				{From: "pkg_b", To: "pkg_a"},
-			},
+	report := &arch.ContextReport{ScanCore: arch.ScanCore{Architecture: arch.ArchModel{
+		Services: []arch.ArchService{
+			{Name: "pkg_a", LOC: 500, Churn: 3, Symbols: model.SymbolsFromNames("Foo", "Bar", "Baz")},
+			{Name: "pkg_b", LOC: 200},
 		},
-	}
+		Edges: []arch.ArchEdge{
+			{From: "pkg_a", To: "pkg_b"},
+			{From: "pkg_b", To: "pkg_a"},
+		},
+	}}}
 	_ = s.PutReport(context.Background(), "/repo", "sha1", report)
 
 	detail, err := p.GetComponentDetail(context.Background(), "/repo", "pkg_a", "")
@@ -475,10 +468,9 @@ func TestAnswerQuery(t *testing.T) {
 
 func TestGenerateHints(t *testing.T) {
 	// Report with cycles and hot spots should produce hints.
-	report := &arch.ContextReport{
-		Cycles:   []graph.Cycle{{"a", "b", "a"}},
+	report := &arch.ContextReport{GraphMetrics: arch.GraphMetrics{Cycles: []graph.Cycle{{"a", "b", "a"}},
 		HotSpots: []arch.HotSpot{{Component: "pkg_a", FanIn: 5, Churn: 10}},
-	}
+	}}
 	hints := GenerateHints(report)
 	if len(hints) < 2 {
 		t.Errorf("expected at least 2 hints, got %d", len(hints))
@@ -604,17 +596,15 @@ func TestGetDrift_NoBoundariesNoBudgets(t *testing.T) {
 	s := testStore(filepath.Join(t.TempDir(), "cache"), t.TempDir())
 	p := New(s, nil)
 
-	report := &arch.ContextReport{
-		Architecture: arch.ArchModel{
-			Services: []arch.ArchService{
-				{Name: "pkg_a", LOC: 100},
-				{Name: "pkg_b", LOC: 200},
-			},
-			Edges: []arch.ArchEdge{
-				{From: "pkg_a", To: "pkg_b"},
-			},
+	report := &arch.ContextReport{ScanCore: arch.ScanCore{Architecture: arch.ArchModel{
+		Services: []arch.ArchService{
+			{Name: "pkg_a", LOC: 100},
+			{Name: "pkg_b", LOC: 200},
 		},
-	}
+		Edges: []arch.ArchEdge{
+			{From: "pkg_a", To: "pkg_b"},
+		},
+	}}}
 	_ = s.PutReport(context.Background(), "/repo", "sha1", report)
 	_ = s.PutDesiredState(context.Background(), "/repo", &port.DesiredState{
 		Layers: []string{"pkg_b", "pkg_a"}, // b is lower, a is higher, edge goes down = clean
@@ -639,17 +629,15 @@ func TestGetDrift_WithBoundaryViolations(t *testing.T) {
 	s := testStore(filepath.Join(t.TempDir(), "cache"), t.TempDir())
 	p := New(s, nil)
 
-	report := &arch.ContextReport{
-		Architecture: arch.ArchModel{
-			Services: []arch.ArchService{
-				{Name: "internal/core", LOC: 500},
-				{Name: "internal/api", LOC: 300},
-			},
-			Edges: []arch.ArchEdge{
-				{From: "internal/core", To: "internal/api"},
-			},
+	report := &arch.ContextReport{ScanCore: arch.ScanCore{Architecture: arch.ArchModel{
+		Services: []arch.ArchService{
+			{Name: "internal/core", LOC: 500},
+			{Name: "internal/api", LOC: 300},
 		},
-	}
+		Edges: []arch.ArchEdge{
+			{From: "internal/core", To: "internal/api"},
+		},
+	}}}
 	_ = s.PutReport(context.Background(), "/repo", "sha1", report)
 	_ = s.PutDesiredState(context.Background(), "/repo", &port.DesiredState{
 		Layers: []string{"internal/core", "internal/api"},
@@ -680,18 +668,16 @@ func TestGetDrift_WithBudgetViolations(t *testing.T) {
 	s := testStore(filepath.Join(t.TempDir(), "cache"), t.TempDir())
 	p := New(s, nil)
 
-	report := &arch.ContextReport{
-		Architecture: arch.ArchModel{
-			Services: []arch.ArchService{
-				{Name: "pkg/core", LOC: 1000, Churn: 20},
-				{Name: "pkg/util", LOC: 200},
-			},
-			Edges: []arch.ArchEdge{
-				{From: "pkg/util", To: "pkg/core"},
-				{From: "pkg/core", To: "pkg/util"},
-			},
+	report := &arch.ContextReport{ScanCore: arch.ScanCore{Architecture: arch.ArchModel{
+		Services: []arch.ArchService{
+			{Name: "pkg/core", LOC: 1000, Churn: 20},
+			{Name: "pkg/util", LOC: 200},
 		},
-	}
+		Edges: []arch.ArchEdge{
+			{From: "pkg/util", To: "pkg/core"},
+			{From: "pkg/core", To: "pkg/util"},
+		},
+	}}}
 	_ = s.PutReport(context.Background(), "/repo", "sha1", report)
 	_ = s.PutDesiredState(context.Background(), "/repo", &port.DesiredState{
 		Layers: []string{"pkg/util", "pkg/core"},
@@ -719,20 +705,18 @@ func TestGetDrift_CombinedViolations(t *testing.T) {
 	s := testStore(filepath.Join(t.TempDir(), "cache"), t.TempDir())
 	p := New(s, nil)
 
-	report := &arch.ContextReport{
-		Architecture: arch.ArchModel{
-			Services: []arch.ArchService{
-				{Name: "api", LOC: 100, Churn: 30},
-				{Name: "core", LOC: 500},
-				{Name: "db", LOC: 200},
-			},
-			Edges: []arch.ArchEdge{
-				{From: "api", To: "core"},
-				{From: "core", To: "api"}, // layer violation (core is lower, importing higher)
-				{From: "api", To: "db"},   // boundary violation
-			},
+	report := &arch.ContextReport{ScanCore: arch.ScanCore{Architecture: arch.ArchModel{
+		Services: []arch.ArchService{
+			{Name: "api", LOC: 100, Churn: 30},
+			{Name: "core", LOC: 500},
+			{Name: "db", LOC: 200},
 		},
-	}
+		Edges: []arch.ArchEdge{
+			{From: "api", To: "core"},
+			{From: "core", To: "api"}, // layer violation (core is lower, importing higher)
+			{From: "api", To: "db"},   // boundary violation
+		},
+	}}}
 	_ = s.PutReport(context.Background(), "/repo", "sha1", report)
 	_ = s.PutDesiredState(context.Background(), "/repo", &port.DesiredState{
 		Layers: []string{"db", "core", "api"}, // db=low, core=mid, api=high
@@ -787,18 +771,16 @@ func TestGetDrift_ScoreCalculation(t *testing.T) {
 	s := testStore(filepath.Join(t.TempDir(), "cache"), t.TempDir())
 	p := New(s, nil)
 
-	report := &arch.ContextReport{
-		Architecture: arch.ArchModel{
-			Services: []arch.ArchService{
-				{Name: "a", LOC: 100},
-				{Name: "b", LOC: 200},
-			},
-			Edges: []arch.ArchEdge{
-				{From: "a", To: "b"},
-				{From: "b", To: "a"},
-			},
+	report := &arch.ContextReport{ScanCore: arch.ScanCore{Architecture: arch.ArchModel{
+		Services: []arch.ArchService{
+			{Name: "a", LOC: 100},
+			{Name: "b", LOC: 200},
 		},
-	}
+		Edges: []arch.ArchEdge{
+			{From: "a", To: "b"},
+			{From: "b", To: "a"},
+		},
+	}}}
 	_ = s.PutReport(context.Background(), "/repo", "sha1", report)
 	_ = s.PutDesiredState(context.Background(), "/repo", &port.DesiredState{
 		Layers: []string{"a", "b"}, // a=low, b=high; a->b is OK, b->a is violation

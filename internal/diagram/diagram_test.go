@@ -15,39 +15,43 @@ import (
 
 func testReport() *arch.ContextReport {
 	return &arch.ContextReport{
-		ModulePath:     "github.com/example/project",
-		Scanner:        "test",
-		SuggestedDepth: 1,
-		Architecture: arch.ArchModel{
-			Title: "project",
-			Services: []arch.ArchService{
-				{Name: "cmd/app", Package: "github.com/example/project/cmd/app", Churn: 5, Symbols: model.SymbolsFromNames("main")},
-				{Name: "internal/core", Package: "github.com/example/project/internal/core", Churn: 20, Symbols: model.SymbolsFromNames("Run", "Config", "New")},
-				{Name: "internal/store", Package: "github.com/example/project/internal/store", Churn: 8, Symbols: model.SymbolsFromNames("DB", "Get", "Put")},
-				{Name: "internal/api", Package: "github.com/example/project/internal/api", Churn: 12, Symbols: model.SymbolsFromNames("Handler", "Router")},
-				{Name: "pkg/util", Package: "github.com/example/project/pkg/util", Churn: 2, Symbols: model.SymbolsFromNames("Must")},
+		ScanCore: arch.ScanCore{
+			ModulePath:     "github.com/example/project",
+			Scanner:        "test",
+			SuggestedDepth: 1,
+			Architecture: arch.ArchModel{
+				Title: "project",
+				Services: []arch.ArchService{
+					{Name: "cmd/app", Package: "github.com/example/project/cmd/app", Churn: 5, Symbols: model.SymbolsFromNames("main")},
+					{Name: "internal/core", Package: "github.com/example/project/internal/core", Churn: 20, Symbols: model.SymbolsFromNames("Run", "Config", "New")},
+					{Name: "internal/store", Package: "github.com/example/project/internal/store", Churn: 8, Symbols: model.SymbolsFromNames("DB", "Get", "Put")},
+					{Name: "internal/api", Package: "github.com/example/project/internal/api", Churn: 12, Symbols: model.SymbolsFromNames("Handler", "Router")},
+					{Name: "pkg/util", Package: "github.com/example/project/pkg/util", Churn: 2, Symbols: model.SymbolsFromNames("Must")},
+				},
+				Edges: []arch.ArchEdge{
+					{From: "cmd/app", To: "internal/core", Weight: 1, CallSites: 3, LOCSurface: 10},
+					{From: "cmd/app", To: "internal/api", Weight: 1, CallSites: 2, LOCSurface: 5},
+					{From: "internal/api", To: "internal/core", Weight: 2, CallSites: 8, LOCSurface: 25},
+					{From: "internal/api", To: "internal/store", Weight: 1, CallSites: 4, LOCSurface: 12},
+					{From: "internal/core", To: "internal/store", Weight: 1, CallSites: 5, LOCSurface: 15},
+					{From: "internal/core", To: "pkg/util", Weight: 1, CallSites: 2, LOCSurface: 3},
+				},
 			},
-			Edges: []arch.ArchEdge{
-				{From: "cmd/app", To: "internal/core", Weight: 1, CallSites: 3, LOCSurface: 10},
-				{From: "cmd/app", To: "internal/api", Weight: 1, CallSites: 2, LOCSurface: 5},
-				{From: "internal/api", To: "internal/core", Weight: 2, CallSites: 8, LOCSurface: 25},
-				{From: "internal/api", To: "internal/store", Weight: 1, CallSites: 4, LOCSurface: 12},
-				{From: "internal/core", To: "internal/store", Weight: 1, CallSites: 5, LOCSurface: 15},
-				{From: "internal/core", To: "pkg/util", Weight: 1, CallSites: 2, LOCSurface: 3},
+		},
+		GraphMetrics: arch.GraphMetrics{
+			HotSpots: []arch.HotSpot{
+				{Component: "internal/core", FanIn: 2, Churn: 20},
 			},
-		},
-		HotSpots: []arch.HotSpot{
-			{Component: "internal/core", FanIn: 2, Churn: 20},
-		},
-		ImportDepth: graph.DepthMap{
-			"cmd/app":        0,
-			"internal/api":   1,
-			"internal/core":  2,
-			"internal/store": 3,
-			"pkg/util":       3,
-		},
-		LayerViolations: []graph.LayerViolation{
-			{From: "internal/store", To: "internal/api", FromLayer: "3", ToLayer: "1"},
+			ImportDepth: graph.DepthMap{
+				"cmd/app":        0,
+				"internal/api":   1,
+				"internal/core":  2,
+				"internal/store": 3,
+				"pkg/util":       3,
+			},
+			LayerViolations: []graph.LayerViolation{
+				{From: "internal/store", To: "internal/api", FromLayer: "3", ToLayer: "1"},
+			},
 		},
 	}
 }

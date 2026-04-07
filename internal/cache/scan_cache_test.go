@@ -32,7 +32,7 @@ func initGitRepo(t *testing.T, dir string) string {
 
 func TestCacheHitBySHA(t *testing.T) {
 	c := tempCache(t)
-	report := &arch.ContextReport{Scanner: "test", ModulePath: "example.com/test"}
+	report := &arch.ContextReport{ScanCore: arch.ScanCore{Scanner: "test", ModulePath: "example.com/test"}}
 
 	if err := c.Put("/repo/a", "abc123", report); err != nil {
 		t.Fatal(err)
@@ -52,7 +52,7 @@ func TestCacheHitBySHA(t *testing.T) {
 
 func TestCacheMissDifferentSHA(t *testing.T) {
 	c := tempCache(t)
-	report := &arch.ContextReport{Scanner: "test"}
+	report := &arch.ContextReport{ScanCore: arch.ScanCore{Scanner: "test"}}
 
 	if err := c.Put("/repo/a", "sha-1", report); err != nil {
 		t.Fatal(err)
@@ -70,8 +70,8 @@ func TestCacheMissDifferentSHA(t *testing.T) {
 func TestMultipleSHAsPerRepo(t *testing.T) {
 	c := tempCache(t)
 
-	r1 := &arch.ContextReport{Scanner: "branch-a"}
-	r2 := &arch.ContextReport{Scanner: "branch-b"}
+	r1 := &arch.ContextReport{ScanCore: arch.ScanCore{Scanner: "branch-a"}}
+	r2 := &arch.ContextReport{ScanCore: arch.ScanCore{Scanner: "branch-b"}}
 
 	if err := c.Put("/repo", "sha-a", r1); err != nil {
 		t.Fatal(err)
@@ -97,7 +97,7 @@ func TestGetCurrent(t *testing.T) {
 	repoPath := t.TempDir()
 	sha := initGitRepo(t, repoPath)
 
-	report := &arch.ContextReport{Scanner: "current"}
+	report := &arch.ContextReport{ScanCore: arch.ScanCore{Scanner: "current"}}
 	if err := c.Put(repoPath, sha, report); err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +123,7 @@ func TestGetCurrentMissAfterNewCommit(t *testing.T) {
 	repoPath := t.TempDir()
 	sha1 := initGitRepo(t, repoPath)
 
-	if err := c.Put(repoPath, sha1, &arch.ContextReport{Scanner: "old"}); err != nil {
+	if err := c.Put(repoPath, sha1, &arch.ContextReport{ScanCore: arch.ScanCore{Scanner: "old"}}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -151,10 +151,10 @@ func TestGetCurrentMissAfterNewCommit(t *testing.T) {
 func TestInvalidate(t *testing.T) {
 	c := tempCache(t)
 
-	if err := c.Put("/repo", "sha1", &arch.ContextReport{Scanner: "test"}); err != nil {
+	if err := c.Put("/repo", "sha1", &arch.ContextReport{ScanCore: arch.ScanCore{Scanner: "test"}}); err != nil {
 		t.Fatal(err)
 	}
-	if err := c.Put("/repo", "sha2", &arch.ContextReport{Scanner: "test2"}); err != nil {
+	if err := c.Put("/repo", "sha2", &arch.ContextReport{ScanCore: arch.ScanCore{Scanner: "test2"}}); err != nil {
 		t.Fatal(err)
 	}
 

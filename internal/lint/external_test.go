@@ -8,7 +8,7 @@ import (
 )
 
 func TestRun_External(t *testing.T) {
-	report := &arch.ContextReport{Architecture: arch.ArchModel{}}
+	report := &arch.ContextReport{ScanCore: arch.ScanCore{Architecture: arch.ArchModel{}}}
 	result := lint.Run(report, lint.RunOpts{})
 	if result == nil {
 		t.Fatal("nil result")

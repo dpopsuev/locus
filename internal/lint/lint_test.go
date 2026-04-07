@@ -212,9 +212,9 @@ func TestRun_ViolationsSortedBySeverity(t *testing.T) {
 
 func TestRun_EmptyReport(t *testing.T) {
 	// Minimal ContextReport with no services.
-	report := &arch.ContextReport{
+	report := &arch.ContextReport{ScanCore: arch.ScanCore{
 		Architecture: arch.ArchModel{},
-	}
+	}}
 
 	result := lint.Run(report, lint.RunOpts{})
 	if result == nil {

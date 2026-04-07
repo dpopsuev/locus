@@ -16,7 +16,7 @@ func hexaTheme() *core.ResolvedTheme {
 
 func hexaTestInput() core.Input {
 	return core.Input{
-		Report: &arch.ContextReport{
+		Report: &arch.ContextReport{ScanCore: arch.ScanCore{
 			Architecture: arch.ArchModel{
 				Services: []arch.ArchService{
 					{Name: "domain/model"},
@@ -31,7 +31,7 @@ func hexaTestInput() core.Input {
 					{From: "adapter/postgres", To: "port/store"},
 				},
 			},
-		},
+		}},
 		HexaRoles: map[string]string{
 			"domain/model":     "domain",
 			"domain/entity":    "domain",
@@ -64,7 +64,7 @@ func TestRenderHexa_BasicStructure(t *testing.T) {
 
 func TestRenderHexa_ViolationEdge(t *testing.T) {
 	in := core.Input{
-		Report: &arch.ContextReport{
+		Report: &arch.ContextReport{ScanCore: arch.ScanCore{
 			Architecture: arch.ArchModel{
 				Services: []arch.ArchService{
 					{Name: "domain/model"},
@@ -74,7 +74,7 @@ func TestRenderHexa_ViolationEdge(t *testing.T) {
 					{From: "domain/model", To: "adapter/http"},
 				},
 			},
-		},
+		}},
 		HexaRoles: map[string]string{
 			"domain/model": "domain",
 			"adapter/http": "adapter",
@@ -93,9 +93,9 @@ func TestRenderHexa_ViolationEdge(t *testing.T) {
 
 func TestRenderHexa_EmptyRoles(t *testing.T) {
 	in := core.Input{
-		Report: &arch.ContextReport{
+		Report: &arch.ContextReport{ScanCore: arch.ScanCore{
 			Architecture: arch.ArchModel{},
-		},
+		}},
 		HexaRoles: nil,
 	}
 
@@ -138,7 +138,7 @@ func TestRenderHexa_ScopeFilter(t *testing.T) {
 
 func TestRenderHexa_PortToAdapterViolation(t *testing.T) {
 	in := core.Input{
-		Report: &arch.ContextReport{
+		Report: &arch.ContextReport{ScanCore: arch.ScanCore{
 			Architecture: arch.ArchModel{
 				Services: []arch.ArchService{
 					{Name: "port/repo"},
@@ -148,7 +148,7 @@ func TestRenderHexa_PortToAdapterViolation(t *testing.T) {
 					{From: "port/repo", To: "adapter/pg"},
 				},
 			},
-		},
+		}},
 		HexaRoles: map[string]string{
 			"port/repo":  "port",
 			"adapter/pg": "adapter",
