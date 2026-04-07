@@ -83,6 +83,9 @@ const (
 	fingerprintHighThreshold    = 0.9
 	thresholdCoverageGapFanIn   = 3
 	thresholdFragileContractFan = 5
+	thresholdMediatorFanOut     = 10
+	thresholdMediatorMaxFanIn   = 3
+	thresholdMediatorAvgLOC     = 30
 )
 
 // patternCatalog is the compile-time catalog of known patterns and smells.
@@ -142,6 +145,11 @@ var patternCatalog = []CatalogEntry{
 		ID: "state_machine_candidate", Name: "State Machine Candidate", Kind: PatternKindPattern,
 		Category: "behavioral", Description: "Struct with state/status field and methods that switch on it",
 		Indicators: []string{"field named state/status/phase/mode", "switch/if-else on state field in methods"},
+	},
+	{
+		ID: "mediator", Name: "Mediator", Kind: PatternKindPattern,
+		Category: "behavioral", Description: "Coordinates interactions between components without direct coupling",
+		Indicators: []string{"high fan-out (>10)", "low fan-in (<=3)", "thin delegate methods"},
 	},
 	// ── Smells ──
 	{
@@ -897,6 +905,59 @@ func detectMissingPattern(
 	return extra
 }
 
+// reclassifyMediators checks god_component detections for Mediator structural role.
+// A component with high fan-out (>10), low fan-in (<=3), and low average LOC per
+// symbol (<30) is a Mediator — it coordinates others rather than doing too much.
+// The god_component smell is replaced with a Mediator pattern (info severity).
+func reclassifyMediators(detections []PatternDetection, services []arch.ArchService, edges []arch.ArchEdge) []PatternDetection {
+	mediatorEntry := catalogByID["mediator"]
+	if mediatorEntry == nil {
+		return detections
+	}
+
+	fanIn := graph.FanIn(edges)
+	fanOut := graph.FanOut(edges)
+	svcLOC := make(map[string]int, len(services))
+	svcSymbols := make(map[string]int, len(services))
+	for i := range services {
+		svcLOC[services[i].Name] = services[i].LOC
+		svcSymbols[services[i].Name] = len(services[i].Symbols)
+	}
+
+	result := make([]PatternDetection, 0, len(detections))
+	for i := range detections {
+		d := &detections[i]
+		if d.PatternID != patternIDGodComponent {
+			result = append(result, *d)
+			continue
+		}
+		fo := fanOut[d.Component]
+		fi := fanIn[d.Component]
+		syms := svcSymbols[d.Component]
+		loc := svcLOC[d.Component]
+		avgLOC := 0
+		if syms > 0 {
+			avgLOC = loc / syms
+		}
+		if fo >= thresholdMediatorFanOut && fi <= thresholdMediatorMaxFanIn && avgLOC <= thresholdMediatorAvgLOC {
+			result = append(result, PatternDetection{
+				PatternID:   mediatorEntry.ID,
+				PatternName: mediatorEntry.Name,
+				Kind:        PatternKindPattern,
+				Component:   d.Component,
+				Confidence:  d.Confidence,
+				Evidence: append(d.Evidence,
+					fmt.Sprintf("mediator: fan-out=%d (>%d), fan-in=%d (<=%d), avg LOC/symbol=%d (<=%d)",
+						fo, thresholdMediatorFanOut, fi, thresholdMediatorMaxFanIn, avgLOC, thresholdMediatorAvgLOC)),
+				Severity: port.SeverityInfo,
+			})
+		} else {
+			result = append(result, *d)
+		}
+	}
+	return result
+}
+
 // ComputePatternScan evaluates all fingerprints against the provided architecture
 // data and returns a report of detected patterns and smells.
 // Thresholds for smell fingerprints are scaled by role multiplier; accepted
@@ -931,6 +992,9 @@ func ComputePatternScan(
 			}
 		}
 	}
+
+	// Post-processing: reclassify god_component as Mediator when structural role matches.
+	detections = reclassifyMediators(detections, services, edges)
 
 	// Post-processing: flag high-churn components with no recognized pattern.
 	detections = append(detections, detectMissingPattern(services, detections, accepted)...)

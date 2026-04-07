@@ -290,10 +290,10 @@ func TestComputePatternScan_EmptyInput(t *testing.T) {
 func TestGetPatternCatalog_All(t *testing.T) {
 	report := GetPatternCatalog("")
 
-	if len(report.Entries) != 24 {
-		t.Fatalf("expected 24 entries, got %d", len(report.Entries))
+	if len(report.Entries) != 25 {
+		t.Fatalf("expected 25 entries, got %d", len(report.Entries))
 	}
-	if report.Summary != "24 catalog entries" {
+	if report.Summary != "25 catalog entries" {
 		t.Errorf("unexpected summary: %s", report.Summary)
 	}
 }
@@ -314,8 +314,8 @@ func TestGetPatternCatalog_FilterSmells(t *testing.T) {
 func TestGetPatternCatalog_FilterPatterns(t *testing.T) {
 	report := GetPatternCatalog("pattern")
 
-	if len(report.Entries) != 11 {
-		t.Fatalf("expected 11 pattern entries, got %d", len(report.Entries))
+	if len(report.Entries) != 12 {
+		t.Fatalf("expected 12 pattern entries, got %d", len(report.Entries))
 	}
 	for _, e := range report.Entries {
 		if e.Kind != PatternKindPattern {

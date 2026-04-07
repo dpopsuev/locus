@@ -76,6 +76,13 @@ func (s *GoScanner) Scan(root string) (*model.Project, error) {
 			importPath = modPath + "/" + filepath.ToSlash(dir)
 		}
 
+		// External test packages (package foo_test) are distinct components.
+		// They appear as separate nodes in the import graph so coverage_gap
+		// detection can see cross-package test imports.
+		if strings.HasSuffix(pkgName, "_test") {
+			importPath += "_test"
+		}
+
 		pkg, ok := pkgs[importPath]
 		if !ok {
 			pkg = model.NewNamespace(pkgName, importPath)
