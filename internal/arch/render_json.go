@@ -4,21 +4,23 @@ import (
 	"encoding/json"
 	"sort"
 
+	archanchors "github.com/dpopsuev/locus/internal/arch/anchors"
+	archgit "github.com/dpopsuev/locus/internal/arch/git"
 	"github.com/dpopsuev/locus/internal/graph"
 )
 
 // jsonReport is the top-level JSON output structure for mcontext.
 type jsonReport struct {
-	Project        string              `json:"project"`
-	Scanner        string              `json:"scanner"`
-	Components     []jsonComponent     `json:"components"`
-	Edges          []jsonEdge          `json:"edges"`
-	SuggestedDepth int                 `json:"suggested_depth,omitempty"`
-	HotSpots       []HotSpot           `json:"hot_spots,omitempty"`
-	RecentCommits  []PackageCommit     `json:"recent_commits,omitempty"`
-	Authors        map[string][]Author `json:"authors,omitempty"`
-	FileHotSpots   []HotFile           `json:"file_hot_spots,omitempty"`
-	Anchors        []SemanticAnchor    `json:"anchors,omitempty"`
+	Project        string                       `json:"project"`
+	Scanner        string                       `json:"scanner"`
+	Components     []jsonComponent              `json:"components"`
+	Edges          []jsonEdge                   `json:"edges"`
+	SuggestedDepth int                          `json:"suggested_depth,omitempty"`
+	HotSpots       []HotSpot                    `json:"hot_spots,omitempty"`
+	RecentCommits  []archgit.PackageCommit      `json:"recent_commits,omitempty"`
+	Authors        map[string][]archgit.Author  `json:"authors,omitempty"`
+	FileHotSpots   []archgit.HotFile            `json:"file_hot_spots,omitempty"`
+	Anchors        []archanchors.SemanticAnchor `json:"anchors,omitempty"`
 }
 
 type jsonComponent struct {

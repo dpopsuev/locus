@@ -15,7 +15,11 @@ import (
 
 	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/arch"
+	archgit "github.com/dpopsuev/locus/internal/arch/git"
 	"github.com/dpopsuev/locus/internal/clinic"
+	clinichexa "github.com/dpopsuev/locus/internal/clinic/hexa"
+	clinicnaming "github.com/dpopsuev/locus/internal/clinic/naming"
+	clinicsolid "github.com/dpopsuev/locus/internal/clinic/solid"
 	"github.com/dpopsuev/locus/internal/constraint"
 	"github.com/dpopsuev/locus/internal/cursor"
 	gitpkg "github.com/dpopsuev/locus/internal/git"
@@ -25,6 +29,7 @@ import (
 	"github.com/dpopsuev/locus/internal/oculus/lang"
 	"github.com/dpopsuev/locus/internal/oculus/lsp"
 	"github.com/dpopsuev/locus/internal/port"
+	"github.com/dpopsuev/locus/internal/protocol/presets"
 	"github.com/dpopsuev/locus/internal/remote"
 	"github.com/dpopsuev/locus/internal/survey"
 )
@@ -933,15 +938,16 @@ func (p *Protocol) GetCrossRepo(ctx context.Context, pathA, pathB, cacheKeyA, ca
 
 // --- Analysis presets ---
 
+// Preset name constants re-exported for consumer convenience.
 const (
-	PresetArchReview  = "architecture_review"
-	PresetHealthCheck = "health_check"
-	PresetOnboarding  = "onboarding"
-	PresetPrePR       = "pre_pr"
-	PresetNormative   = "normative"
-	PresetPreRefactor = "pre_refactor"
-	PresetFullClinic  = "full_clinic"
-	PresetCodeHealth  = "code_health"
+	PresetArchReview  = presets.ArchReview
+	PresetHealthCheck = presets.HealthCheck
+	PresetOnboarding  = presets.Onboarding
+	PresetPrePR       = presets.PrePR
+	PresetNormative   = presets.Normative
+	PresetPreRefactor = presets.PreRefactor
+	PresetFullClinic  = presets.FullClinic
+	PresetCodeHealth  = presets.CodeHealth
 )
 
 func (p *Protocol) RunPreset(ctx context.Context, path, preset string, cacheKey ...string) (string, error) {
@@ -950,223 +956,12 @@ func (p *Protocol) RunPreset(ctx context.Context, path, preset string, cacheKey 
 	if err != nil {
 		return "", err
 	}
-
-	var b strings.Builder
-	switch preset {
-	case PresetArchReview:
-		renderPresetArchReview(&b, report)
-	case PresetHealthCheck:
-		renderPresetHealthCheck(&b, report)
-	case PresetOnboarding:
-		renderPresetOnboarding(&b, report)
-	case PresetPrePR:
-		renderPresetPrePR(&b, report)
-	case PresetNormative:
-		p.renderPresetNormative(ctx, &b, path, report)
-	case PresetPreRefactor:
-		renderPresetPreRefactor(&b, path, report)
-	case PresetFullClinic:
-		p.renderPresetFullClinic(ctx, &b, path, report)
-	case PresetCodeHealth:
-		p.renderPresetCodeHealth(&b, path, report)
-	default:
-		return "", fmt.Errorf("%w %q (valid: %s, %s, %s, %s, %s, %s, %s, %s)",
-			ErrUnknownPreset, preset, PresetArchReview, PresetHealthCheck, PresetOnboarding, PresetPrePR,
-			PresetNormative, PresetPreRefactor, PresetFullClinic, PresetCodeHealth)
-	}
-	return b.String(), nil
-}
-
-func renderPresetArchReview(b *strings.Builder, report *arch.ContextReport) {
-	fmt.Fprintf(b, "# Architecture Review: %s\n\n", report.ModulePath)
-	fmt.Fprintf(b, "%d components, %d edges, %d cycles\n\n", len(report.Architecture.Services), len(report.Architecture.Edges), len(report.Cycles))
-	spots := report.HotSpots
-	if len(spots) > 5 {
-		spots = spots[:5]
-	}
-	if len(spots) > 0 {
-		b.WriteString("## Hot Spots\n")
-		for _, s := range spots {
-			fmt.Fprintf(b, "- %s (churn:%d, fan-in:%d)\n", s.Component, s.Churn, s.FanIn)
-		}
-	}
-	if len(report.Cycles) > 0 {
-		b.WriteString("\n## Cycles\n")
-		for i, c := range report.Cycles {
-			if i >= 3 {
-				fmt.Fprintf(b, "... and %d more\n", len(report.Cycles)-3)
-				break
-			}
-			fmt.Fprintf(b, "- %s\n", strings.Join(c, " → "))
-		}
-	}
-}
-
-func renderPresetHealthCheck(b *strings.Builder, report *arch.ContextReport) {
-	fmt.Fprintf(b, "# Health Check: %s\n\n", report.ModulePath)
-	spots := report.HotSpots
-	if len(spots) > 5 {
-		spots = spots[:5]
-	}
-	for _, s := range spots {
-		fmt.Fprintf(b, "- %s (churn:%d, fan-in:%d)\n", s.Component, s.Churn, s.FanIn)
-	}
-	if len(spots) == 0 {
-		b.WriteString("No hot spots detected.\n")
-	}
-}
-
-func renderPresetOnboarding(b *strings.Builder, report *arch.ContextReport) {
-	fmt.Fprintf(b, "# Onboarding: %s\n\n", report.ModulePath)
-	fmt.Fprintf(b, "%d components, scanner=%s\n\n", len(report.Architecture.Services), report.Scanner)
-	b.WriteString("## Top Components\n")
-	n := min(len(report.Architecture.Services), 10)
-	for i := range report.Architecture.Services[:n] {
-		fmt.Fprintf(b, "- %s (%d LOC)\n", report.Architecture.Services[i].Name, report.Architecture.Services[i].LOC)
-	}
-}
-
-func renderPresetPrePR(b *strings.Builder, report *arch.ContextReport) {
-	fmt.Fprintf(b, "# Pre-PR Review: %s\n\n", report.ModulePath)
-	fmt.Fprintf(b, "%d components, %d cycles, %d violations\n",
-		len(report.Architecture.Services), len(report.Cycles), len(report.LayerViolations))
-}
-
-func (p *Protocol) renderPresetNormative(ctx context.Context, b *strings.Builder, path string, report *arch.ContextReport) {
-	fmt.Fprintf(b, "# Normative Analysis: %s\n\n", report.ModulePath)
-
-	idReport := constraint.ComputeImportDirection(report.Architecture.Edges, report.ImportDepth)
-	fmt.Fprintf(b, "## Import Direction\n%s\n\n", idReport.Summary)
-	for i, v := range idReport.Violations {
-		if i >= 5 {
-			fmt.Fprintf(b, "... and %d more\n", len(idReport.Violations)-5)
-			break
-		}
-		fmt.Fprintf(b, "- [%s] %s → %s (depth %d→%d)\n", v.Severity, v.From, v.To, v.FromDepth, v.ToDepth)
-	}
-
-	tbReport := constraint.ComputeTrustBoundaries(report.Architecture.Services, report.Architecture.Edges, desiredRolesForTrust(ctx, p, path))
-	fmt.Fprintf(b, "\n## Trust Boundaries\n%s\n", tbReport.Summary)
-
-	if desired, _ := p.db.GetDesiredState(ctx, path); desired != nil && len(desired.Constraints) > 0 {
-		budgetReport := constraint.ComputeBudgetViolations(report.Architecture.Services, report.Architecture.Edges, desired.Constraints)
-		fmt.Fprintf(b, "\n## Budgets\n%s\n", budgetReport.Summary)
-	}
-}
-
-func renderPresetPreRefactor(b *strings.Builder, path string, report *arch.ContextReport) {
-	fmt.Fprintf(b, "# Pre-Refactor Analysis: %s\n\n", report.ModulePath)
-
-	spots := report.HotSpots
-	if len(spots) > 10 {
-		spots = spots[:10]
-	}
-	b.WriteString("## Hot Spots (churn × coupling)\n")
-	for _, s := range spots {
-		fmt.Fprintf(b, "- %s (churn:%d, fan-in:%d)\n", s.Component, s.Churn, s.FanIn)
-	}
-
-	da := analysis.NewFallback(path, nil)
-	if classes, err := da.Classes(path); err == nil {
-		impls, _ := da.Implements(path)
-		imReport := constraint.ComputeInterfaceMetrics(classes, impls)
-		fmt.Fprintf(b, "\n## Interfaces\n%s\n", imReport.Summary)
-		for _, iface := range imReport.Interfaces {
-			if iface.IsOrphan {
-				fmt.Fprintf(b, "- ORPHAN: %s (%d methods, 0 implementors)\n", iface.Name, iface.MethodCount)
-			}
-		}
-	}
-
-	idReport := constraint.ComputeImportDirection(report.Architecture.Edges, report.ImportDepth)
-	if len(idReport.Violations) > 0 {
-		fmt.Fprintf(b, "\n## Import Direction\n%s\n", idReport.Summary)
-	}
-}
-
-func (p *Protocol) renderPresetFullClinic(ctx context.Context, b *strings.Builder, path string, report *arch.ContextReport) {
-	fmt.Fprintf(b, "# Full Clinic: %s\n\n", report.ModulePath)
-	fmt.Fprintf(b, "%d components, %d edges\n\n", len(report.Architecture.Services), len(report.Architecture.Edges))
-
-	fmt.Fprintf(b, "## Architecture\n")
-	fmt.Fprintf(b, "- Cycles: %d\n", len(report.Cycles))
-	fmt.Fprintf(b, "- Layer violations: %d\n", len(report.LayerViolations))
-
-	idReport := constraint.ComputeImportDirection(report.Architecture.Edges, report.ImportDepth)
-	fmt.Fprintf(b, "- Import direction: %s\n", idReport.Summary)
-
-	tbReport := constraint.ComputeTrustBoundaries(report.Architecture.Services, report.Architecture.Edges, desiredRolesForTrust(ctx, p, path))
-	fmt.Fprintf(b, "- Trust zones: %s\n", tbReport.Summary)
-
-	spots := report.HotSpots
-	if len(spots) > 5 {
-		spots = spots[:5]
-	}
-	if len(spots) > 0 {
-		fmt.Fprintf(b, "\n## Hot Spots\n")
-		for _, s := range spots {
-			fmt.Fprintf(b, "- %s (churn:%d, fan-in:%d)\n", s.Component, s.Churn, s.FanIn)
-		}
-	}
-
-	da := analysis.NewFallback(path, p.pool)
-	if classes, err := da.Classes(path); err == nil {
-		impls, _ := da.Implements(path)
-		imReport := constraint.ComputeInterfaceMetrics(classes, impls)
-		fmt.Fprintf(b, "\n## Interfaces\n%s\n", imReport.Summary)
-	}
-
-	if desired, _ := p.db.GetDesiredState(ctx, path); desired != nil && len(desired.Constraints) > 0 {
-		budgetReport := constraint.ComputeBudgetViolations(report.Architecture.Services, report.Architecture.Edges, desired.Constraints)
-		fmt.Fprintf(b, "\n## Budgets\n%s\n", budgetReport.Summary)
-	}
-
-	// Code Health Clinic pillars
-	fa := analysis.NewFallback(path, p.pool)
-	if classes, err := fa.Classes(path); err == nil {
-		impls, _ := fa.Implements(path)
-
-		hexaClass := clinic.ComputeHexaClassification(report.Architecture.Services, report.Architecture.Edges, classes)
-		desired, _ := p.db.GetDesiredState(ctx, path)
-		roles, accepted := resolveRolesAndAccepted(hexaClass, desired)
-
-		patternReport := clinic.ComputePatternScan(report.Architecture.Services, report.Architecture.Edges, report.Cycles, classes, impls, roles, accepted)
-		fmt.Fprintf(b, "\n## Patterns & Smells\n%s\n", patternReport.Summary)
-
-		hexaReport := clinic.ComputeHexaViolations(report.Architecture.Services, report.Architecture.Edges, classes)
-		fmt.Fprintf(b, "\n## Hexagonal Architecture\n%s\n", hexaReport.Summary)
-
-		solidReport := clinic.ComputeSOLIDScan(report.Architecture.Services, report.Architecture.Edges, classes, impls, hexaClass, path, roles, accepted)
-		fmt.Fprintf(b, "\n## SOLID Principles\n%s\n", solidReport.Summary)
-	}
-
-	rules := rulesFromServices(report.Architecture.Services)
-	sqReport := clinic.ComputeSymbolQuality(report.Architecture.Services, report.Architecture.Edges, rules)
-	fmt.Fprintf(b, "\n## Symbol Quality\n%s\n", sqReport.Summary)
-}
-
-func (p *Protocol) renderPresetCodeHealth(b *strings.Builder, path string, report *arch.ContextReport) {
-	fmt.Fprintf(b, "# Code Health Clinic: %s\n\n", report.ModulePath)
-	fmt.Fprintf(b, "%d components, %d edges\n\n", len(report.Architecture.Services), len(report.Architecture.Edges))
-
-	fa := analysis.NewFallback(path, p.pool)
-	classes, _ := fa.Classes(path)
-	impls, _ := fa.Implements(path)
-
-	hexaClass := clinic.ComputeHexaClassification(report.Architecture.Services, report.Architecture.Edges, classes)
-
-	patternReport := clinic.ComputePatternScan(report.Architecture.Services, report.Architecture.Edges, report.Cycles, classes, impls, nil, nil)
-	fmt.Fprintf(b, "## Patterns & Smells\n%s\n\n", patternReport.Summary)
-
-	hexaReport := clinic.ComputeHexaViolations(report.Architecture.Services, report.Architecture.Edges, classes)
-	fmt.Fprintf(b, "## Hexagonal Architecture\n%s\n\n", hexaReport.Summary)
-
-	solidReport := clinic.ComputeSOLIDScan(report.Architecture.Services, report.Architecture.Edges, classes, impls, hexaClass, path, nil, nil)
-	fmt.Fprintf(b, "## SOLID Principles\n%s\n\n", solidReport.Summary)
-
-	rules := rulesFromServices(report.Architecture.Services)
-	sqReport := clinic.ComputeSymbolQuality(report.Architecture.Services, report.Architecture.Edges, rules)
-	fmt.Fprintf(b, "## Symbol Quality\n%s\n", sqReport.Summary)
+	return presets.Run(ctx, report, path, preset, presets.Deps{
+		Pool: p.pool,
+		DesiredState: func(ctx context.Context, path string) (*port.DesiredState, error) {
+			return p.db.GetDesiredState(ctx, path)
+		},
+	})
 }
 
 // --- Component drill-down ---
@@ -1430,13 +1225,13 @@ func diffEdges(beforeEdges, afterEdges []arch.ArchEdge) (added, removed int) {
 
 // CoverageReport holds per-component coverage data.
 type CoverageReport struct {
-	Coverage       []arch.CoverageResult `json:"coverage"`
-	BelowThreshold []arch.CoverageResult `json:"below_threshold,omitempty"`
+	Coverage       []archgit.CoverageResult `json:"coverage"`
+	BelowThreshold []archgit.CoverageResult `json:"below_threshold,omitempty"`
 }
 
 func (p *Protocol) GetCoverage(ctx context.Context, path string, threshold float64) (*CoverageReport, error) {
 	path = p.resolvePath(path)
-	cov, err := arch.RunGoCoverage(path, arch.DetectProjectPath(path))
+	cov, err := archgit.RunGoCoverage(path, arch.DetectProjectPath(path))
 	if err != nil {
 		return nil, err
 	}
@@ -1494,7 +1289,7 @@ func (p *Protocol) CodographRemote(ctx context.Context, url string, opts RemoteO
 	if url == "" {
 		return nil, ErrURLRequired
 	}
-	result, err := remote.Codograph(ctx, url, remote.Opts{
+	result, err := remote.ScanRemote(ctx, url, remote.Opts{
 		Ref:       opts.Ref,
 		Keep:      opts.Keep,
 		Depth:     opts.Depth,
@@ -1734,7 +1529,7 @@ func (p *Protocol) GetTrustBoundaries(ctx context.Context, path string, cacheKey
 
 // --- Code Health Clinic methods ---
 
-func (p *Protocol) GetHexaValidation(ctx context.Context, path string, cacheKey ...string) (*clinic.HexaValidationReport, error) {
+func (p *Protocol) GetHexaValidation(ctx context.Context, path string, cacheKey ...string) (*clinichexa.HexaValidationReport, error) {
 	path = p.resolvePath(path)
 	report, err := p.getOrScan(path, cacheKey...)
 	if err != nil {
@@ -1742,10 +1537,10 @@ func (p *Protocol) GetHexaValidation(ctx context.Context, path string, cacheKey 
 	}
 	fa := analysis.NewFallback(path, p.pool)
 	classes, _ := fa.Classes(path)
-	return clinic.ComputeHexaViolations(report.Architecture.Services, report.Architecture.Edges, classes), nil
+	return clinichexa.ComputeHexaViolations(report.Architecture.Services, report.Architecture.Edges, classes), nil
 }
 
-func (p *Protocol) GetSOLIDScan(ctx context.Context, path string, cacheKey ...string) (*clinic.SOLIDReport, error) {
+func (p *Protocol) GetSOLIDScan(ctx context.Context, path string, cacheKey ...string) (*clinicsolid.SOLIDReport, error) {
 	path = p.resolvePath(path)
 	report, err := p.getOrScan(path, cacheKey...)
 	if err != nil {
@@ -1754,29 +1549,29 @@ func (p *Protocol) GetSOLIDScan(ctx context.Context, path string, cacheKey ...st
 	fa := analysis.NewFallback(path, p.pool)
 	classes, _ := fa.Classes(path)
 	impls, _ := fa.Implements(path)
-	hexaClass := clinic.ComputeHexaClassification(report.Architecture.Services, report.Architecture.Edges, classes)
+	hexaClass := clinichexa.ComputeHexaClassification(report.Architecture.Services, report.Architecture.Edges, classes)
 	desired, _ := p.db.GetDesiredState(ctx, path)
 	roles, accepted := resolveRolesAndAccepted(hexaClass, desired)
-	return clinic.ComputeSOLIDScan(report.Architecture.Services, report.Architecture.Edges, classes, impls, hexaClass, path, roles, accepted), nil
+	return clinicsolid.ComputeSOLIDScan(report.Architecture.Services, report.Architecture.Edges, classes, impls, hexaClass, path, roles, accepted), nil
 }
 
-func (p *Protocol) GetSymbolQuality(_ context.Context, path string, cacheKey ...string) (*clinic.SymbolQualityReport, error) {
+func (p *Protocol) GetSymbolQuality(_ context.Context, path string, cacheKey ...string) (*clinicnaming.SymbolQualityReport, error) {
 	path = p.resolvePath(path)
 	report, err := p.getOrScan(path, cacheKey...)
 	if err != nil {
 		return nil, err
 	}
 	rules := rulesFromServices(report.Architecture.Services)
-	return clinic.ComputeSymbolQuality(report.Architecture.Services, report.Architecture.Edges, rules), nil
+	return clinicnaming.ComputeSymbolQuality(report.Architecture.Services, report.Architecture.Edges, rules), nil
 }
 
-func (p *Protocol) GetVocabMap(_ context.Context, path string, cacheKey ...string) (*clinic.VocabMapReport, error) {
+func (p *Protocol) GetVocabMap(_ context.Context, path string, cacheKey ...string) (*clinicnaming.VocabMapReport, error) {
 	path = p.resolvePath(path)
 	report, err := p.getOrScan(path, cacheKey...)
 	if err != nil {
 		return nil, err
 	}
-	return clinic.ComputeVocabMap(report.Architecture.Services), nil
+	return clinicnaming.ComputeVocabMap(report.Architecture.Services), nil
 }
 
 func (p *Protocol) GetPatternScan(ctx context.Context, path string, cacheKey ...string) (*clinic.PatternScanReport, error) {
@@ -1788,7 +1583,7 @@ func (p *Protocol) GetPatternScan(ctx context.Context, path string, cacheKey ...
 	fa := analysis.NewFallback(path, p.pool)
 	classes, _ := fa.Classes(path)
 	impls, _ := fa.Implements(path)
-	hexaClass := clinic.ComputeHexaClassification(report.Architecture.Services, report.Architecture.Edges, classes)
+	hexaClass := clinichexa.ComputeHexaClassification(report.Architecture.Services, report.Architecture.Edges, classes)
 	desired, _ := p.db.GetDesiredState(ctx, path)
 	roles, accepted := resolveRolesAndAccepted(hexaClass, desired)
 	patternReport := clinic.ComputePatternScan(report.Architecture.Services, report.Architecture.Edges, report.Cycles, classes, impls, roles, accepted)
@@ -1832,8 +1627,8 @@ func (p *Protocol) GetCachedReport(cacheKey string) (*arch.ContextReport, error)
 
 // resolveRolesAndAccepted extracts roles and accepted violations from
 // hexa classification and desired state. Either may be nil.
-func resolveRolesAndAccepted(hexaClass *clinic.HexaClassificationReport, desired *port.DesiredState) (map[string]clinic.HexaRole, []port.AcceptedViolation) {
-	var roles map[string]clinic.HexaRole
+func resolveRolesAndAccepted(hexaClass *clinichexa.HexaClassificationReport, desired *port.DesiredState) (map[string]clinichexa.HexaRole, []port.AcceptedViolation) {
+	var roles map[string]clinichexa.HexaRole
 	var accepted []port.AcceptedViolation
 
 	if hexaClass != nil {
@@ -1841,7 +1636,7 @@ func resolveRolesAndAccepted(hexaClass *clinic.HexaClassificationReport, desired
 		if desired != nil {
 			overrides = desired.Roles
 		}
-		roles = clinic.ResolveRoles(hexaClass, overrides)
+		roles = clinichexa.ResolveRoles(hexaClass, overrides)
 	}
 	if desired != nil {
 		accepted = desired.Accepted

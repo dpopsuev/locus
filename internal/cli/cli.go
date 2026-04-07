@@ -22,6 +22,7 @@ import (
 	"github.com/dpopsuev/locus/internal/arch"
 	"github.com/dpopsuev/locus/internal/config"
 	"github.com/dpopsuev/locus/internal/diagram"
+	diagramcore "github.com/dpopsuev/locus/internal/diagram/core"
 	gitpkg "github.com/dpopsuev/locus/internal/git"
 	"github.com/dpopsuev/locus/internal/lint"
 	locusmcp "github.com/dpopsuev/locus/internal/mcp"
@@ -378,7 +379,7 @@ Examples:
 			return err
 		}
 
-		in := diagram.Input{Report: result.Report, Root: path}
+		in := diagramcore.Input{Report: result.Report, Root: path}
 
 		if diagramFlags.diagramType == "churn" {
 			hist, _ := proto.GetHistory(cmd.Context(), path, 20)
@@ -396,7 +397,7 @@ Examples:
 		if theme == "" {
 			theme = os.Getenv("LOCUS_THEME")
 		}
-		out, err := diagram.Render(in, diagram.Options{
+		out, err := diagram.Render(in, diagramcore.Options{
 			Type:         diagramFlags.diagramType,
 			Scope:        diagramFlags.scope,
 			Depth:        diagramFlags.depth,

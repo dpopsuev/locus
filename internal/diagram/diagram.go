@@ -4,83 +4,65 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/arch"
-	"github.com/dpopsuev/locus/internal/history"
+	"github.com/dpopsuev/locus/internal/diagram/behavioral"
+	"github.com/dpopsuev/locus/internal/diagram/core"
+	"github.com/dpopsuev/locus/internal/diagram/metrics"
+	"github.com/dpopsuev/locus/internal/diagram/structural"
+	"github.com/dpopsuev/locus/internal/diagram/typediag"
 )
 
-const themeNatural = "natural"
-
-// Options controls which diagram is rendered and how it is scoped.
-type Options struct {
-	Type         string // dependency, c4, coupling, churn, layers, tree, classes, sequence, er, dataflow, callgraph, state
-	Scope        string // restrict to a single component (empty = all)
-	Depth        int    // grouping depth override (0 = use report's SuggestedDepth)
-	TopN         int    // limit items shown (0 = all)
-	Entry        string // entry point function name (sequence, dataflow, callgraph)
-	ExportedOnly bool   // only exported functions (callgraph)
-	Theme        string // "light" | "dark" | "natural" (default)
-	Enrich       string // comma-separated metrics to show on node labels: loc, fan_in, churn
-}
-
-// Input bundles everything the renderers may need. Not every renderer
-// uses every field — e.g. churn needs History while dependency does not.
-type Input struct {
-	Report        *arch.ContextReport
-	History       []history.EntrySummary
-	Analyzer      analysis.TypeAnalyzer
-	DeepAnalyzer  analysis.DeepAnalyzer
-	Root          string // repository root path (needed by Tier 2/3 renderers)
-	ResolvedTheme *ResolvedTheme
-	HexaRoles     map[string]string // component name → hexa role (domain, port, adapter, infra, app, entrypoint)
-}
-
 // Render dispatches to the appropriate renderer by type name.
-func Render(in Input, opts Options) (string, error) {
+func Render(in core.Input, opts core.Options) (string, error) {
 	if in.ResolvedTheme == nil {
-		theme := DefaultTheme()
+		theme := core.DefaultTheme()
 		mode := opts.Theme
 		if mode == "" {
-			mode = themeNatural
+			mode = core.ThemeNatural
 		}
 		in.ResolvedTheme = theme.Resolve(mode)
 	}
 	switch opts.Type {
 	case "dependency":
-		return renderDependency(in, opts), nil
+		return structural.Dependency(in, opts), nil
 	case "c4":
-		return renderC4(in, opts), nil
-	case "coupling":
-		return renderCoupling(in, opts), nil
-	case "churn":
-		return renderChurn(in, opts), nil
-	case "layers":
-		return renderLayers(in, opts), nil
+		return structural.C4(in, opts), nil
 	case "tree":
-		return renderTree(in, opts), nil
-	case "classes":
-		return renderClasses(in, opts)
-	case "interfaces":
-		return renderInterfaces(in, opts)
-	case "sequence":
-		return renderSequence(in, opts)
-	case "er":
-		return renderER(in, opts)
-	case "dataflow":
-		return renderDataflow(in, opts)
-	case "callgraph":
-		return renderCallGraph(in, opts)
-	case "state":
-		return renderState(in, opts)
+		return structural.Tree(in, opts), nil
+	case "layers":
+		return structural.Layers(in, opts), nil
 	case "zones":
-		return renderZones(in, opts), nil
-	case "hexa":
-		return renderHexa(in, opts)
+		return structural.Zones(in, opts), nil
 	case "dsm":
-		return renderDSM(in, opts), nil
+		return structural.DSM(in, opts), nil
+	case "sequence":
+		return behavioral.Sequence(in, opts)
+	case "callgraph":
+		return behavioral.CallGraph(in, opts)
+	case "dataflow":
+		return behavioral.Dataflow(in, opts)
+	case "state":
+		return behavioral.State(in, opts)
+	case "classes":
+		return typediag.Classes(in, opts)
+	case "interfaces":
+		return typediag.Interfaces(in, opts)
+	case "er":
+		return typediag.ER(in, opts)
+	case "coupling":
+		return metrics.Coupling(in, opts), nil
+	case "churn":
+		return metrics.Churn(in, opts), nil
+	case "hexa":
+		return metrics.Hexa(in, opts)
 	default:
-		return "", fmt.Errorf("%w %q (use: %s)", ErrUnknownDiagramType, opts.Type, strings.Join(Types(), ", "))
+		return "", fmt.Errorf("%w %q (use: %s)", core.ErrUnknownDiagramType, opts.Type, strings.Join(Types(), ", "))
 	}
+}
+
+// RenderFacts returns plain-text machine-readable assertions.
+func RenderFacts(report *arch.ContextReport) string {
+	return metrics.Facts(report)
 }
 
 // Types returns the list of supported diagram type names.

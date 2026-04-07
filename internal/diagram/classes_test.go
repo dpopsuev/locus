@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/dpopsuev/locus/internal/analysis"
+	"github.com/dpopsuev/locus/internal/diagram/core"
 )
 
 type mockAnalyzer struct {
@@ -49,14 +50,14 @@ func TestRenderClasses(t *testing.T) {
 		},
 	}
 
-	in := Input{Analyzer: mock, Root: "/tmp/test"}
-	out, err := renderClasses(in, Options{})
+	in := core.Input{Analyzer: mock, Root: "/tmp/test"}
+	out, err := Render(in, core.Options{Type: "classes"})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if !strings.HasPrefix(out, "classDiagram") {
-		t.Error("expected classDiagram prefix")
+	if !strings.Contains(out, "classDiagram") {
+		t.Error("expected classDiagram")
 	}
 	if !strings.Contains(out, "class Server") {
 		t.Error("missing Server class")
@@ -80,14 +81,14 @@ func TestRenderSequence(t *testing.T) {
 		},
 	}
 
-	in := Input{Analyzer: mock, Root: "/tmp/test"}
-	out, err := renderSequence(in, Options{Entry: "main"})
+	in := core.Input{Analyzer: mock, Root: "/tmp/test"}
+	out, err := Render(in, core.Options{Type: "sequence", Entry: "main"})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if !strings.HasPrefix(out, "sequenceDiagram") {
-		t.Error("expected sequenceDiagram prefix")
+	if !strings.Contains(out, "sequenceDiagram") {
+		t.Error("expected sequenceDiagram")
 	}
 	if !strings.Contains(out, "participant main") {
 		t.Error("missing main participant")
@@ -117,14 +118,14 @@ func TestRenderER(t *testing.T) {
 		},
 	}
 
-	in := Input{Analyzer: mock, Root: "/tmp/test"}
-	out, err := renderER(in, Options{})
+	in := core.Input{Analyzer: mock, Root: "/tmp/test"}
+	out, err := Render(in, core.Options{Type: "er"})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if !strings.HasPrefix(out, "erDiagram") {
-		t.Error("expected erDiagram prefix")
+	if !strings.Contains(out, "erDiagram") {
+		t.Error("expected erDiagram")
 	}
 	if !strings.Contains(out, "User") {
 		t.Error("missing User entity")
@@ -147,8 +148,8 @@ func TestRenderSequence_AutoEntry(t *testing.T) {
 		},
 	}
 
-	in := Input{Analyzer: mock, Root: "/tmp/test"}
-	out, err := renderSequence(in, Options{})
+	in := core.Input{Analyzer: mock, Root: "/tmp/test"}
+	out, err := Render(in, core.Options{Type: "sequence"})
 	if err != nil {
 		t.Fatal(err)
 	}

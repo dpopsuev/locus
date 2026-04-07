@@ -35,7 +35,7 @@ func CloneDir(repoURL, ref string) string {
 	return filepath.Join(home, ".locus", "clones", fmt.Sprintf("%x", h[:8]))
 }
 
-func Codograph(ctx context.Context, repoURL string, opts Opts) (*Result, error) {
+func ScanRemote(ctx context.Context, repoURL string, opts Opts) (*Result, error) {
 	ref := opts.Ref
 	if ref == "" {
 		ref = "HEAD"

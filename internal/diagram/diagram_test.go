@@ -7,6 +7,7 @@ import (
 
 	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/arch"
+	"github.com/dpopsuev/locus/internal/diagram/core"
 	"github.com/dpopsuev/locus/internal/graph"
 	"github.com/dpopsuev/locus/internal/history"
 	"github.com/dpopsuev/locus/internal/model"
@@ -61,7 +62,7 @@ func testHistory() []history.EntrySummary {
 }
 
 func TestRenderDependency(t *testing.T) {
-	out, err := Render(Input{Report: testReport()}, Options{Type: "dependency"})
+	out, err := Render(core.Input{Report: testReport()}, core.Options{Type: "dependency"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +73,7 @@ func TestRenderDependency(t *testing.T) {
 }
 
 func TestRenderDependencyScoped(t *testing.T) {
-	out, err := Render(Input{Report: testReport()}, Options{Type: "dependency", Scope: "internal/core"})
+	out, err := Render(core.Input{Report: testReport()}, core.Options{Type: "dependency", Scope: "internal/core"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +85,7 @@ func TestRenderDependencyScoped(t *testing.T) {
 }
 
 func TestRenderC4(t *testing.T) {
-	out, err := Render(Input{Report: testReport()}, Options{Type: "c4"})
+	out, err := Render(core.Input{Report: testReport()}, core.Options{Type: "c4"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +96,7 @@ func TestRenderC4(t *testing.T) {
 }
 
 func TestRenderCoupling(t *testing.T) {
-	out, err := Render(Input{Report: testReport()}, Options{Type: "coupling"})
+	out, err := Render(core.Input{Report: testReport()}, core.Options{Type: "coupling"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +106,7 @@ func TestRenderCoupling(t *testing.T) {
 }
 
 func TestRenderCouplingTopN(t *testing.T) {
-	out, err := Render(Input{Report: testReport()}, Options{Type: "coupling", TopN: 2})
+	out, err := Render(core.Input{Report: testReport()}, core.Options{Type: "coupling", TopN: 2})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,7 +123,7 @@ func TestRenderCouplingTopN(t *testing.T) {
 }
 
 func TestRenderChurnBar(t *testing.T) {
-	out, err := Render(Input{Report: testReport()}, Options{Type: "churn"})
+	out, err := Render(core.Input{Report: testReport()}, core.Options{Type: "churn"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +133,7 @@ func TestRenderChurnBar(t *testing.T) {
 }
 
 func TestRenderChurnTimeline(t *testing.T) {
-	out, err := Render(Input{Report: testReport(), History: testHistory()}, Options{Type: "churn"})
+	out, err := Render(core.Input{Report: testReport(), History: testHistory()}, core.Options{Type: "churn"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,7 +143,7 @@ func TestRenderChurnTimeline(t *testing.T) {
 }
 
 func TestRenderLayers(t *testing.T) {
-	out, err := Render(Input{Report: testReport()}, Options{Type: "layers"})
+	out, err := Render(core.Input{Report: testReport()}, core.Options{Type: "layers"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +153,7 @@ func TestRenderLayers(t *testing.T) {
 }
 
 func TestRenderTree(t *testing.T) {
-	out, err := Render(Input{Report: testReport()}, Options{Type: "tree"})
+	out, err := Render(core.Input{Report: testReport()}, core.Options{Type: "tree"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -167,7 +168,7 @@ func TestRenderTree(t *testing.T) {
 }
 
 func TestRenderZones(t *testing.T) {
-	out, err := Render(Input{Report: testReport()}, Options{Type: "zones"})
+	out, err := Render(core.Input{Report: testReport()}, core.Options{Type: "zones"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,7 +178,7 @@ func TestRenderZones(t *testing.T) {
 }
 
 func TestRenderDSM(t *testing.T) {
-	out, err := Render(Input{Report: testReport()}, Options{Type: "dsm"})
+	out, err := Render(core.Input{Report: testReport()}, core.Options{Type: "dsm"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -187,7 +188,7 @@ func TestRenderDSM(t *testing.T) {
 }
 
 func TestRenderTreeDarkTheme(t *testing.T) {
-	out, err := Render(Input{Report: testReport()}, Options{Type: "tree", Theme: "dark"})
+	out, err := Render(core.Input{Report: testReport()}, core.Options{Type: "tree", Theme: "dark"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -196,7 +197,7 @@ func TestRenderTreeDarkTheme(t *testing.T) {
 }
 
 func TestRenderTreeTopN(t *testing.T) {
-	out, err := Render(Input{Report: testReport()}, Options{Type: "tree", TopN: 1})
+	out, err := Render(core.Input{Report: testReport()}, core.Options{Type: "tree", TopN: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,7 +209,7 @@ func TestRenderTreeTopN(t *testing.T) {
 }
 
 func TestRenderUnknownType(t *testing.T) {
-	_, err := Render(Input{Report: testReport()}, Options{Type: "unknown"})
+	_, err := Render(core.Input{Report: testReport()}, core.Options{Type: "unknown"})
 	if err == nil {
 		t.Fatal("expected error for unknown type")
 	}
@@ -275,8 +276,8 @@ func (m *mockDeepAnalyzer) DetectStateMachines(_ string) ([]analysis.StateMachin
 }
 
 func TestRenderCallGraph(t *testing.T) {
-	in := Input{Report: testReport(), DeepAnalyzer: &mockDeepAnalyzer{}}
-	out, err := Render(in, Options{Type: "callgraph"})
+	in := core.Input{Report: testReport(), DeepAnalyzer: &mockDeepAnalyzer{}}
+	out, err := Render(in, core.Options{Type: "callgraph"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -287,8 +288,8 @@ func TestRenderCallGraph(t *testing.T) {
 }
 
 func TestRenderDataflow(t *testing.T) {
-	in := Input{Report: testReport(), DeepAnalyzer: &mockDeepAnalyzer{}}
-	out, err := Render(in, Options{Type: "dataflow", Entry: "main"})
+	in := core.Input{Report: testReport(), DeepAnalyzer: &mockDeepAnalyzer{}}
+	out, err := Render(in, core.Options{Type: "dataflow", Entry: "main"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -299,8 +300,8 @@ func TestRenderDataflow(t *testing.T) {
 }
 
 func TestRenderState(t *testing.T) {
-	in := Input{Report: testReport(), DeepAnalyzer: &mockDeepAnalyzer{}}
-	out, err := Render(in, Options{Type: "state"})
+	in := core.Input{Report: testReport(), DeepAnalyzer: &mockDeepAnalyzer{}}
+	out, err := Render(in, core.Options{Type: "state"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -311,24 +312,24 @@ func TestRenderState(t *testing.T) {
 }
 
 func TestRenderCallGraphNoAnalyzer(t *testing.T) {
-	in := Input{Report: testReport()}
-	_, err := Render(in, Options{Type: "callgraph"})
+	in := core.Input{Report: testReport()}
+	_, err := Render(in, core.Options{Type: "callgraph"})
 	if err == nil {
 		t.Fatal("expected error without DeepAnalyzer")
 	}
 }
 
 func TestRenderDataflowNoAnalyzer(t *testing.T) {
-	in := Input{Report: testReport()}
-	_, err := Render(in, Options{Type: "dataflow"})
+	in := core.Input{Report: testReport()}
+	_, err := Render(in, core.Options{Type: "dataflow"})
 	if err == nil {
 		t.Fatal("expected error without DeepAnalyzer")
 	}
 }
 
 func TestRenderStateNoAnalyzer(t *testing.T) {
-	in := Input{Report: testReport()}
-	_, err := Render(in, Options{Type: "state"})
+	in := core.Input{Report: testReport()}
+	_, err := Render(in, core.Options{Type: "state"})
 	if err == nil {
 		t.Fatal("expected error without DeepAnalyzer")
 	}

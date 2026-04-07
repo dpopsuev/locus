@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/dpopsuev/locus/internal/arch"
+	archgit "github.com/dpopsuev/locus/internal/arch/git"
 	"github.com/dpopsuev/locus/internal/model"
 )
 
@@ -18,7 +19,7 @@ func TestComputeRiskScores_Basic(t *testing.T) {
 		{From: "util", To: "core"},
 		{From: "api", To: "util"},
 	}
-	coverage := []arch.CoverageResult{
+	coverage := []archgit.CoverageResult{
 		{Component: "core", CoveragePct: 80},
 		{Component: "api", CoveragePct: 20},
 	}

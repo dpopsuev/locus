@@ -13,9 +13,10 @@ import (
 
 	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/arch"
-	"github.com/dpopsuev/locus/internal/clinic"
+	clinichexa "github.com/dpopsuev/locus/internal/clinic/hexa"
 	"github.com/dpopsuev/locus/internal/config"
 	"github.com/dpopsuev/locus/internal/diagram"
+	diagramcore "github.com/dpopsuev/locus/internal/diagram/core"
 	gitpkg "github.com/dpopsuev/locus/internal/git"
 	"github.com/dpopsuev/locus/internal/impact"
 	"github.com/dpopsuev/locus/internal/lint"
@@ -866,10 +867,10 @@ func (h *handler) handleRenderDiagram(ctx context.Context, _ *sdkmcp.CallToolReq
 		return nil, nil, err
 	}
 
-	input := diagram.Input{Report: report, Root: path}
+	input := diagramcore.Input{Report: report, Root: path}
 	h.enrichDiagramInput(ctx, path, in.Type, report, &input)
 
-	opts := diagram.Options{
+	opts := diagramcore.Options{
 		Type: in.Type, Scope: in.Scope, Depth: in.Depth,
 		TopN: in.TopN, Entry: in.Entry, ExportedOnly: in.ExportedOnly,
 		Theme: in.Theme, Enrich: in.Enrich,
@@ -906,7 +907,7 @@ func (h *handler) resolveDiagramReport(ctx context.Context, path string, in diag
 	return result.Report, nil
 }
 
-func (h *handler) enrichDiagramInput(ctx context.Context, path, diagramType string, report *arch.ContextReport, input *diagram.Input) {
+func (h *handler) enrichDiagramInput(ctx context.Context, path, diagramType string, report *arch.ContextReport, input *diagramcore.Input) {
 	if path == "" {
 		return
 	}
@@ -918,7 +919,7 @@ func (h *handler) enrichDiagramInput(ctx context.Context, path, diagramType stri
 	if diagramType == DiagramHexa {
 		fa := analysis.NewFallback(path, pool)
 		classes, _ := fa.Classes(path)
-		hexaClass := clinic.ComputeHexaClassification(report.Architecture.Services, report.Architecture.Edges, classes)
+		hexaClass := clinichexa.ComputeHexaClassification(report.Architecture.Services, report.Architecture.Edges, classes)
 		input.HexaRoles = make(map[string]string, len(hexaClass.Components))
 		for _, c := range hexaClass.Components {
 			input.HexaRoles[c.Name] = string(c.Role)

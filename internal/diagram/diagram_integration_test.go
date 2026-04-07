@@ -7,7 +7,8 @@ import (
 
 	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/arch"
-	"github.com/dpopsuev/locus/internal/clinic"
+	clinichexa "github.com/dpopsuev/locus/internal/clinic/hexa"
+	"github.com/dpopsuev/locus/internal/diagram/core"
 )
 
 func integrationRoot(t *testing.T) string {
@@ -37,8 +38,8 @@ func TestIntegration_ClassDiagram(t *testing.T) {
 	report := integrationScan(t)
 	fa := analysis.NewFallback(root, nil)
 
-	input := Input{Report: report, Analyzer: fa, Root: root}
-	out, err := Render(input, Options{Type: "classes"})
+	input := core.Input{Report: report, Analyzer: fa, Root: root}
+	out, err := Render(input, core.Options{Type: "classes"})
 	if err != nil {
 		t.Fatalf("render classes: %v", err)
 	}
@@ -53,8 +54,8 @@ func TestIntegration_InterfacesDiagram(t *testing.T) {
 	report := integrationScan(t)
 	fa := analysis.NewFallback(root, nil)
 
-	input := Input{Report: report, Analyzer: fa, Root: root}
-	out, err := Render(input, Options{Type: "interfaces"})
+	input := core.Input{Report: report, Analyzer: fa, Root: root}
+	out, err := Render(input, core.Options{Type: "interfaces"})
 	if err != nil {
 		t.Fatalf("render interfaces: %v", err)
 	}
@@ -69,15 +70,15 @@ func TestIntegration_HexaDiagram(t *testing.T) {
 	report := integrationScan(t)
 	fa := analysis.NewFallback(root, nil)
 	classes, _ := fa.Classes(root)
-	hexaClass := clinic.ComputeHexaClassification(report.Architecture.Services, report.Architecture.Edges, classes)
+	hexaClass := clinichexa.ComputeHexaClassification(report.Architecture.Services, report.Architecture.Edges, classes)
 
 	roles := make(map[string]string, len(hexaClass.Components))
 	for _, c := range hexaClass.Components {
 		roles[c.Name] = string(c.Role)
 	}
 
-	input := Input{Report: report, Analyzer: fa, Root: root, HexaRoles: roles}
-	out, err := Render(input, Options{Type: "hexa"})
+	input := core.Input{Report: report, Analyzer: fa, Root: root, HexaRoles: roles}
+	out, err := Render(input, core.Options{Type: "hexa"})
 	if err != nil {
 		t.Fatalf("render hexa: %v", err)
 	}
@@ -93,8 +94,8 @@ func TestIntegration_CallgraphDiagram(t *testing.T) {
 	report := integrationScan(t)
 	da := analysis.CachedDeepFallback(root, nil)
 
-	input := Input{Report: report, DeepAnalyzer: da, Root: root}
-	out, err := Render(input, Options{Type: "callgraph"})
+	input := core.Input{Report: report, DeepAnalyzer: da, Root: root}
+	out, err := Render(input, core.Options{Type: "callgraph"})
 	if err != nil {
 		t.Fatalf("render callgraph: %v", err)
 	}

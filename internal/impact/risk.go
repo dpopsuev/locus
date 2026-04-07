@@ -5,6 +5,7 @@ import (
 	"sort"
 
 	"github.com/dpopsuev/locus/internal/arch"
+	archgit "github.com/dpopsuev/locus/internal/arch/git"
 	"github.com/dpopsuev/locus/internal/graph"
 	"github.com/dpopsuev/locus/internal/port"
 )
@@ -38,7 +39,7 @@ const (
 func ComputeRiskScores(
 	services []arch.ArchService,
 	edges []arch.ArchEdge,
-	coverage []arch.CoverageResult,
+	coverage []archgit.CoverageResult,
 ) *RiskReport {
 	if len(services) == 0 {
 		return &RiskReport{Summary: "no components"}

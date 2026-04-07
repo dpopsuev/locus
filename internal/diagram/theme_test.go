@@ -3,26 +3,28 @@ package diagram
 import (
 	"strings"
 	"testing"
+
+	"github.com/dpopsuev/locus/internal/diagram/core"
 )
 
 func TestClassifyHealth(t *testing.T) {
 	tests := []struct {
 		fanIn, churn int
-		want         Health
+		want         core.Health
 	}{
-		{0, 0, Healthy},
-		{2, 7, Healthy},
-		{3, 7, Healthy},
-		{2, 8, Healthy},
-		{3, 8, Sick},
-		{4, 10, Sick},
-		{5, 14, Sick},
-		{4, 15, Sick},
-		{5, 15, Fatal},
-		{10, 20, Fatal},
+		{0, 0, core.Healthy},
+		{2, 7, core.Healthy},
+		{3, 7, core.Healthy},
+		{2, 8, core.Healthy},
+		{3, 8, core.Sick},
+		{4, 10, core.Sick},
+		{5, 14, core.Sick},
+		{4, 15, core.Sick},
+		{5, 15, core.Fatal},
+		{10, 20, core.Fatal},
 	}
 	for _, tt := range tests {
-		got := ClassifyHealth(tt.fanIn, tt.churn)
+		got := core.ClassifyHealth(tt.fanIn, tt.churn)
 		if got != tt.want {
 			t.Errorf("ClassifyHealth(%d, %d) = %d, want %d", tt.fanIn, tt.churn, got, tt.want)
 		}
@@ -30,7 +32,7 @@ func TestClassifyHealth(t *testing.T) {
 }
 
 func TestResolve_AllModes(t *testing.T) {
-	theme := DefaultTheme()
+	theme := core.DefaultTheme()
 	for _, mode := range []string{"dark", "light", "natural"} {
 		rt := theme.Resolve(mode)
 		if rt.Mode != mode {
@@ -45,7 +47,7 @@ func TestResolve_AllModes(t *testing.T) {
 }
 
 func TestResolve_DefaultMode(t *testing.T) {
-	theme := DefaultTheme()
+	theme := core.DefaultTheme()
 	rt := theme.Resolve("")
 	if rt.Mode != "natural" {
 		t.Errorf("empty mode resolved to %q, want natural", rt.Mode)
@@ -53,7 +55,7 @@ func TestResolve_DefaultMode(t *testing.T) {
 }
 
 func TestClassDefs(t *testing.T) {
-	theme := DefaultTheme()
+	theme := core.DefaultTheme()
 	rt := theme.Resolve("dark")
 	defs := rt.ClassDefs()
 
@@ -74,7 +76,7 @@ func TestClassDefs(t *testing.T) {
 }
 
 func TestInitDirective(t *testing.T) {
-	theme := DefaultTheme()
+	theme := core.DefaultTheme()
 	rt := theme.Resolve("dark")
 	dir := rt.InitDirective()
 
@@ -87,23 +89,23 @@ func TestInitDirective(t *testing.T) {
 }
 
 func TestHealthClass(t *testing.T) {
-	theme := DefaultTheme()
+	theme := core.DefaultTheme()
 	rt := theme.Resolve("natural")
-	if rt.HealthClass(Healthy) != "healthy" {
+	if rt.HealthClass(core.Healthy) != "healthy" {
 		t.Error("HealthClass(Healthy) != healthy")
 	}
-	if rt.HealthClass(Sick) != "sick" {
+	if rt.HealthClass(core.Sick) != "sick" {
 		t.Error("HealthClass(Sick) != sick")
 	}
-	if rt.HealthClass(Fatal) != "fatal" {
+	if rt.HealthClass(core.Fatal) != "fatal" {
 		t.Error("HealthClass(Fatal) != fatal")
 	}
 }
 
 func TestNodeSuffix(t *testing.T) {
-	theme := DefaultTheme()
+	theme := core.DefaultTheme()
 	rt := theme.Resolve("natural")
-	if rt.NodeSuffix(Fatal) != ":::fatal" {
-		t.Errorf("NodeSuffix(Fatal) = %q, want :::fatal", rt.NodeSuffix(Fatal))
+	if rt.NodeSuffix(core.Fatal) != ":::fatal" {
+		t.Errorf("NodeSuffix(Fatal) = %q, want :::fatal", rt.NodeSuffix(core.Fatal))
 	}
 }

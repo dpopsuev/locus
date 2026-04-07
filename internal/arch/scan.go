@@ -16,6 +16,8 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dpopsuev/locus/internal/analysis"
+	archanchors "github.com/dpopsuev/locus/internal/arch/anchors"
+	archgit "github.com/dpopsuev/locus/internal/arch/git"
 	"github.com/dpopsuev/locus/internal/graph"
 	"github.com/dpopsuev/locus/internal/model"
 	olang "github.com/dpopsuev/locus/internal/oculus/lang"
@@ -80,10 +82,6 @@ const (
 	DefaultGroupingDepth = 2
 	// MaxDepthSearch is the max depth evaluated for suggested depth.
 	MaxDepthSearch = 5
-	// MaxAuthorsPerPackage is the max authors returned per package.
-	MaxAuthorsPerPackage = 5
-	// MaxFileHotSpots is the max file hotspots returned.
-	MaxFileHotSpots = 50
 	// MaxHotSpotsMarkdown is the max hotspots displayed in markdown output.
 	MaxHotSpotsMarkdown = 10
 )
@@ -105,24 +103,24 @@ type HotSpot struct {
 
 // ContextReport is the full output of a ScanAndBuild invocation.
 type ContextReport struct {
-	Project           *model.Project         `json:"project"`
-	Architecture      ArchModel              `json:"architecture"`
-	ModulePath        string                 `json:"module_path"`
-	Scanner           string                 `json:"scanner"`
-	SuggestedDepth    int                    `json:"suggested_depth,omitempty"`
-	HotSpots          []HotSpot              `json:"hot_spots,omitempty"`
-	Cycles            []graph.Cycle          `json:"cycles,omitempty"`
-	ImportDepth       graph.DepthMap         `json:"import_depth,omitempty"`
-	LayerViolations   []graph.LayerViolation `json:"layer_violations,omitempty"`
-	Coverage          []CoverageResult       `json:"coverage,omitempty"`
-	APISurfaces       []APISurface           `json:"api_surfaces,omitempty"`
-	BoundaryCrossings []BoundaryCrossing     `json:"boundary_crossings,omitempty"`
-	RecentCommits     []PackageCommit        `json:"recent_commits,omitempty"`
-	Authors           map[string][]Author    `json:"authors,omitempty"`
-	FileHotSpots      []HotFile              `json:"file_hot_spots,omitempty"`
-	Anchors           []SemanticAnchor       `json:"anchors,omitempty"`
-	FanIn             graph.CountMap         `json:"fan_in,omitempty"`
-	FanOut            graph.CountMap         `json:"fan_out,omitempty"`
+	Project           *model.Project               `json:"project"`
+	Architecture      ArchModel                    `json:"architecture"`
+	ModulePath        string                       `json:"module_path"`
+	Scanner           string                       `json:"scanner"`
+	SuggestedDepth    int                          `json:"suggested_depth,omitempty"`
+	HotSpots          []HotSpot                    `json:"hot_spots,omitempty"`
+	Cycles            []graph.Cycle                `json:"cycles,omitempty"`
+	ImportDepth       graph.DepthMap               `json:"import_depth,omitempty"`
+	LayerViolations   []graph.LayerViolation       `json:"layer_violations,omitempty"`
+	Coverage          []archgit.CoverageResult     `json:"coverage,omitempty"`
+	APISurfaces       []APISurface                 `json:"api_surfaces,omitempty"`
+	BoundaryCrossings []BoundaryCrossing           `json:"boundary_crossings,omitempty"`
+	RecentCommits     []archgit.PackageCommit      `json:"recent_commits,omitempty"`
+	Authors           map[string][]archgit.Author  `json:"authors,omitempty"`
+	FileHotSpots      []archgit.HotFile            `json:"file_hot_spots,omitempty"`
+	Anchors           []archanchors.SemanticAnchor `json:"anchors,omitempty"`
+	FanIn             graph.CountMap               `json:"fan_in,omitempty"`
+	FanOut            graph.CountMap               `json:"fan_out,omitempty"`
 }
 
 // ScanAndBuild scans any repository and produces a ContextReport.
@@ -186,7 +184,7 @@ func ScanAndBuild(root string, opts ScanOpts) (*ContextReport, error) {
 
 	// Churn is only computed at L2+.
 	if level >= 2 && opts.ChurnDays > 0 {
-		syncOpts.ChurnData = ComputeChurn(root, opts.ChurnDays, modPath)
+		syncOpts.ChurnData = archgit.ComputeChurn(root, opts.ChurnDays, modPath)
 	}
 
 	archModel := ProjectToArchModel(proj, syncOpts)
@@ -243,8 +241,8 @@ func ScanAndBuild(root string, opts ScanOpts) (*ContextReport, error) {
 // runL2Health runs nesting depth, recent commits, and file hotspots in parallel.
 func runL2Health(root, modPath string, opts ScanOpts, archModel *ArchModel, report *ContextReport) {
 	var (
-		commits  []PackageCommit
-		hotFiles []HotFile
+		commits  []archgit.PackageCommit
+		hotFiles []archgit.HotFile
 	)
 	g, _ := errgroup.WithContext(context.Background())
 	g.Go(func() error {
@@ -256,8 +254,8 @@ func runL2Health(root, modPath string, opts ScanOpts, archModel *ArchModel, repo
 		gitDays = opts.ChurnDays
 	}
 	if gitDays > 0 {
-		g.Go(func() error { commits = RecentCommits(root, gitDays, modPath); return nil })
-		g.Go(func() error { hotFiles = FileHotSpots(root, gitDays); return nil })
+		g.Go(func() error { commits = archgit.RecentCommits(root, gitDays, modPath); return nil })
+		g.Go(func() error { hotFiles = archgit.FileHotSpots(root, gitDays); return nil })
 	}
 	_ = g.Wait()
 	report.Architecture = *archModel
@@ -268,16 +266,16 @@ func runL2Health(root, modPath string, opts ScanOpts, archModel *ArchModel, repo
 // runL3Full runs coverage, author ownership, and anchor extraction in parallel.
 func runL3Full(root, modPath string, opts ScanOpts, proj *model.Project, report *ContextReport) {
 	var (
-		coverage []CoverageResult
-		authors  map[string][]Author
-		anchors  []SemanticAnchor
+		coverage []archgit.CoverageResult
+		authors  map[string][]archgit.Author
+		anchors  []archanchors.SemanticAnchor
 	)
 	g, _ := errgroup.WithContext(context.Background())
 	if opts.IncludeCoverage && proj.Language == model.LangGo {
-		g.Go(func() error { coverage, _ = RunGoCoverage(root, modPath); return nil })
+		g.Go(func() error { coverage, _ = archgit.RunGoCoverage(root, modPath); return nil })
 	}
 	if opts.Authors {
-		g.Go(func() error { authors = AuthorOwnership(root, modPath); return nil })
+		g.Go(func() error { authors = archgit.AuthorOwnership(root, modPath); return nil })
 	}
 	if proj.Language == model.LangGo {
 		g.Go(func() error { anchors = extractProjectAnchors(root, proj, modPath); return nil })
@@ -344,16 +342,16 @@ func changedPackages(root, since string) []string {
 	return pkgs
 }
 
-func extractProjectAnchors(root string, proj *model.Project, modPath string) []SemanticAnchor {
+func extractProjectAnchors(root string, proj *model.Project, modPath string) []archanchors.SemanticAnchor {
 	absRoot, _ := filepath.Abs(root)
-	var all []SemanticAnchor
+	var all []archanchors.SemanticAnchor
 	for _, ns := range proj.Namespaces {
 		rel := shortImportPath(modPath, ns.ImportPath)
 		pkgDir := filepath.Join(absRoot, rel)
 		if rel == "." {
 			pkgDir = absRoot
 		}
-		anchors := ExtractAnchors(pkgDir, rel)
+		anchors := archanchors.ExtractAnchors(pkgDir, rel)
 		all = append(all, anchors...)
 	}
 	return all

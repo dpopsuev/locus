@@ -8,6 +8,8 @@ import (
 	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/arch"
 	"github.com/dpopsuev/locus/internal/clinic"
+	clinichexa "github.com/dpopsuev/locus/internal/clinic/hexa"
+	clinicsolid "github.com/dpopsuev/locus/internal/clinic/solid"
 	"github.com/dpopsuev/locus/internal/impact"
 	"github.com/dpopsuev/locus/internal/port"
 )
@@ -65,14 +67,14 @@ func TestDogfood_RoleAwareScanReducesFalsePositives(t *testing.T) {
 	}
 	impls, _ := fa.Implements(root)
 
-	hexaClass := clinic.ComputeHexaClassification(services, edges, classes)
+	hexaClass := clinichexa.ComputeHexaClassification(services, edges, classes)
 
 	// --- WITHOUT roles ---
-	solidWithout := clinic.ComputeSOLIDScan(services, edges, classes, impls, hexaClass, root, nil, nil)
+	solidWithout := clinicsolid.ComputeSOLIDScan(services, edges, classes, impls, hexaClass, root, nil, nil)
 
 	// --- WITH roles ---
-	roles := clinic.ResolveRoles(hexaClass, nil)
-	solidWith := clinic.ComputeSOLIDScan(services, edges, classes, impls, hexaClass, root, roles, nil)
+	roles := clinichexa.ResolveRoles(hexaClass, nil)
+	solidWith := clinicsolid.ComputeSOLIDScan(services, edges, classes, impls, hexaClass, root, roles, nil)
 
 	t.Logf("SOLID violations without roles: %d (score: %.0f)", len(solidWithout.Violations), solidWithout.Score)
 	t.Logf("SOLID violations with    roles: %d (score: %.0f)", len(solidWith.Violations), solidWith.Score)
@@ -97,10 +99,10 @@ func TestDogfood_RoleAwareScanReducesFalsePositives(t *testing.T) {
 }
 
 // countSRPFor counts SRP violations whose Component starts with prefix.
-func countSRPFor(violations []clinic.SOLIDViolation, prefix string) int {
+func countSRPFor(violations []clinicsolid.SOLIDViolation, prefix string) int {
 	n := 0
 	for _, v := range violations {
-		if v.Principle == clinic.PrincipleSRP && len(v.Component) >= len(prefix) && v.Component[:len(prefix)] == prefix {
+		if v.Principle == clinicsolid.PrincipleSRP && len(v.Component) >= len(prefix) && v.Component[:len(prefix)] == prefix {
 			n++
 		}
 	}

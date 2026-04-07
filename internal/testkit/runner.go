@@ -9,7 +9,11 @@ import (
 	"github.com/dpopsuev/locus/internal/arch"
 	"github.com/dpopsuev/locus/internal/cache"
 	"github.com/dpopsuev/locus/internal/clinic"
+	clinichexa "github.com/dpopsuev/locus/internal/clinic/hexa"
+	clinicnaming "github.com/dpopsuev/locus/internal/clinic/naming"
+	clinicsolid "github.com/dpopsuev/locus/internal/clinic/solid"
 	"github.com/dpopsuev/locus/internal/diagram"
+	diagramcore "github.com/dpopsuev/locus/internal/diagram/core"
 	"github.com/dpopsuev/locus/internal/history"
 	"github.com/dpopsuev/locus/internal/protocol"
 	"github.com/dpopsuev/locus/internal/store"
@@ -91,7 +95,7 @@ func checkHexa(t *testing.T, report *arch.ContextReport, m *Manifest) {
 		return
 	}
 	t.Run("hexa", func(t *testing.T) {
-		hr := clinic.ComputeHexaViolations(
+		hr := clinichexa.ComputeHexaViolations(
 			report.Architecture.Services, report.Architecture.Edges, nil,
 		)
 		if len(hr.Violations) > m.ExpectedHexa.MaxViolations {
@@ -116,7 +120,7 @@ func checkSOLID(t *testing.T, report *arch.ContextReport, m *Manifest, root stri
 		return
 	}
 	t.Run("solid", func(t *testing.T) {
-		sr := clinic.ComputeSOLIDScan(
+		sr := clinicsolid.ComputeSOLIDScan(
 			report.Architecture.Services, report.Architecture.Edges,
 			nil, nil, nil, root, nil, nil,
 		)
@@ -133,7 +137,7 @@ func checkSymbols(t *testing.T, report *arch.ContextReport, m *Manifest) {
 		return
 	}
 	t.Run("symbols", func(t *testing.T) {
-		sq := clinic.ComputeSymbolQuality(
+		sq := clinicnaming.ComputeSymbolQuality(
 			report.Architecture.Services, report.Architecture.Edges,
 		)
 		for _, abbr := range m.ExpectedSymbols.Abbreviations {
@@ -158,8 +162,8 @@ func checkDiagrams(t *testing.T, report *arch.ContextReport, m *Manifest, root s
 		for _, dtype := range m.ExpectedDiagrams {
 			t.Run(dtype, func(t *testing.T) {
 				_, err := diagram.Render(
-					diagram.Input{Report: report, Root: root},
-					diagram.Options{Type: dtype},
+					diagramcore.Input{Report: report, Root: root},
+					diagramcore.Options{Type: dtype},
 				)
 				if err != nil {
 					t.Errorf("diagram %s failed: %v", dtype, err)
@@ -206,7 +210,7 @@ func hasDetection(detections []clinic.PatternDetection, id string) bool {
 	return false
 }
 
-func hasIssue(issues []clinic.SymbolIssue, issueType, substr string) bool {
+func hasIssue(issues []clinicnaming.SymbolIssue, issueType, substr string) bool {
 	for _, i := range issues {
 		if i.Issue == issueType && strings.Contains(i.Symbol, substr) {
 			return true

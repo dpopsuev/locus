@@ -7,6 +7,8 @@ import (
 
 	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/arch"
+	"github.com/dpopsuev/locus/internal/clinic/hexa"
+	"github.com/dpopsuev/locus/internal/clinic/solid"
 	"github.com/dpopsuev/locus/internal/graph"
 	"github.com/dpopsuev/locus/internal/port"
 )
@@ -474,7 +476,7 @@ func signalNewFunctions(svc arch.ArchService) (detected bool, confidence float64
 
 func signalSingleMethodInterface(classes []analysis.ClassInfo, pkg string) (detected bool, confidence float64, evidence string) {
 	for _, c := range classes {
-		if c.Package == pkg && c.Kind == classKindInterface && len(c.Methods) == 1 {
+		if c.Package == pkg && c.Kind == hexa.ClassKindInterface && len(c.Methods) == 1 {
 			return true, 0.7, fmt.Sprintf("single-method interface: %s", c.Name)
 		}
 	}
@@ -485,7 +487,7 @@ func signalMultipleImplementors(classes []analysis.ClassInfo, impls []analysis.I
 	// Find interfaces in this package.
 	ifaces := make(map[string]bool)
 	for _, c := range classes {
-		if c.Package == pkg && c.Kind == classKindInterface {
+		if c.Package == pkg && c.Kind == hexa.ClassKindInterface {
 			ifaces[c.Name] = true
 		}
 	}
@@ -872,7 +874,7 @@ func detectMissingPattern(
 		if hasPattern[svc.Name] {
 			continue
 		}
-		if IsAccepted(accepted, svc.Name, "missing_pattern") {
+		if solid.IsAccepted(accepted, svc.Name, "missing_pattern") {
 			continue
 		}
 		conf := float64(svc.Churn) / float64(thresholdShotgunChurn) * 0.5
@@ -905,26 +907,26 @@ func ComputePatternScan(
 	cycles []graph.Cycle,
 	classes []analysis.ClassInfo,
 	impls []analysis.ImplEdge,
-	roles map[string]HexaRole,
+	roles map[string]hexa.HexaRole,
 	accepted []port.AcceptedViolation,
 ) *PatternScanReport {
 	var detections []PatternDetection
 
 	for i := range services {
 		svc := &services[i]
-		mult := RoleMultiplier(roles[svc.Name])
+		mult := hexa.RoleMultiplier(roles[svc.Name])
 		// Evaluate each fingerprint against this service.
 		for _, fp := range fingerprints {
 			det := evaluateFingerprint(fp, *svc, edges, cycles, classes, impls, mult)
 			if det != nil {
-				if !IsAccepted(accepted, det.Component, det.PatternID) {
+				if !solid.IsAccepted(accepted, det.Component, det.PatternID) {
 					detections = append(detections, *det)
 				}
 			}
 		}
 		// Special case: feature envy.
 		if det := evaluateFeatureEnvy(*svc, edges); det != nil {
-			if !IsAccepted(accepted, det.Component, det.PatternID) {
+			if !solid.IsAccepted(accepted, det.Component, det.PatternID) {
 				detections = append(detections, *det)
 			}
 		}

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/dpopsuev/locus/internal/analysis"
+	"github.com/dpopsuev/locus/internal/diagram/core"
 )
 
 func TestRenderInterfaces_WithImplementors(t *testing.T) {
@@ -36,13 +37,13 @@ func TestRenderInterfaces_WithImplementors(t *testing.T) {
 		},
 	}
 
-	in := Input{Analyzer: mock, Root: "/tmp/test"}
-	out, err := renderInterfaces(in, Options{})
+	in := core.Input{Analyzer: mock, Root: "/tmp/test"}
+	out, err := Render(in, core.Options{Type: "interfaces"})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if !strings.HasPrefix(out, "classDiagram") {
+	if !strings.Contains(out, "classDiagram") {
 		t.Error("expected classDiagram prefix")
 	}
 	if !strings.Contains(out, "<<interface>>") {
@@ -83,8 +84,8 @@ func TestRenderInterfaces_OrphanInterface(t *testing.T) {
 		impls: []analysis.ImplEdge{},
 	}
 
-	in := Input{Analyzer: mock, Root: "/tmp/test"}
-	out, err := renderInterfaces(in, Options{})
+	in := core.Input{Analyzer: mock, Root: "/tmp/test"}
+	out, err := Render(in, core.Options{Type: "interfaces"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,8 +125,8 @@ func TestRenderInterfaces_ScopeFiltering(t *testing.T) {
 		},
 	}
 
-	in := Input{Analyzer: mock, Root: "/tmp/test"}
-	out, err := renderInterfaces(in, Options{Scope: "io"})
+	in := core.Input{Analyzer: mock, Root: "/tmp/test"}
+	out, err := Render(in, core.Options{Type: "interfaces", Scope: "io"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,8 +150,8 @@ func TestRenderInterfaces_EmptyInput(t *testing.T) {
 		impls: []analysis.ImplEdge{},
 	}
 
-	in := Input{Analyzer: mock, Root: "/tmp/test"}
-	_, err := renderInterfaces(in, Options{})
+	in := core.Input{Analyzer: mock, Root: "/tmp/test"}
+	_, err := Render(in, core.Options{Type: "interfaces"})
 	if err == nil {
 		t.Fatal("expected error when no interfaces found")
 	}
@@ -160,8 +161,8 @@ func TestRenderInterfaces_EmptyInput(t *testing.T) {
 }
 
 func TestRenderInterfaces_NilAnalyzer(t *testing.T) {
-	in := Input{Root: "/tmp/test"}
-	_, err := renderInterfaces(in, Options{})
+	in := core.Input{Root: "/tmp/test"}
+	_, err := Render(in, core.Options{Type: "interfaces"})
 	if err == nil {
 		t.Fatal("expected error with nil analyzer")
 	}

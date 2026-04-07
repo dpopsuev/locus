@@ -11,6 +11,9 @@ import (
 	"github.com/dpopsuev/locus/internal/analysis"
 	"github.com/dpopsuev/locus/internal/arch"
 	"github.com/dpopsuev/locus/internal/clinic"
+	clinichexa "github.com/dpopsuev/locus/internal/clinic/hexa"
+	clinicnaming "github.com/dpopsuev/locus/internal/clinic/naming"
+	clinicsolid "github.com/dpopsuev/locus/internal/clinic/solid"
 	"github.com/dpopsuev/locus/internal/constraint"
 	"github.com/dpopsuev/locus/internal/graph"
 	"github.com/dpopsuev/locus/internal/oculus/lang"
@@ -91,14 +94,14 @@ func Run(report *arch.ContextReport, opts RunOpts) *Report {
 	cycles := report.Cycles
 
 	// Resolve hexagonal roles (needed by hexa, SOLID, pattern).
-	var hexaClassification *clinic.HexaClassificationReport
-	var roles map[string]clinic.HexaRole
+	var hexaClassification *clinichexa.HexaClassificationReport
+	var roles map[string]clinichexa.HexaRole
 
 	if enabled[CategoryHexa] || enabled[CategorySOLID] || enabled[CategoryPattern] {
 		// Obtain class analysis for hexa classification.
 		classes := safeClasses(opts.Root)
-		hexaClassification = clinic.ComputeHexaClassification(services, edges, classes)
-		roles = clinic.ResolveRoles(hexaClassification, ds.Roles)
+		hexaClassification = clinichexa.ComputeHexaClassification(services, edges, classes)
+		roles = clinichexa.ResolveRoles(hexaClassification, ds.Roles)
 	}
 
 	var violations []Violation
@@ -201,7 +204,7 @@ func safeImpls(root string) []analysis.ImplEdge {
 
 func runHexa(services []arch.ArchService, edges []arch.ArchEdge, root string) []Violation {
 	classes := safeClasses(root)
-	hr := clinic.ComputeHexaViolations(services, edges, classes)
+	hr := clinichexa.ComputeHexaViolations(services, edges, classes)
 	if hr == nil {
 		return nil
 	}
@@ -222,15 +225,15 @@ func runHexa(services []arch.ArchService, edges []arch.ArchEdge, root string) []
 func runSOLID(
 	services []arch.ArchService,
 	edges []arch.ArchEdge,
-	hexaClassification *clinic.HexaClassificationReport,
-	roles map[string]clinic.HexaRole,
+	hexaClassification *clinichexa.HexaClassificationReport,
+	roles map[string]clinichexa.HexaRole,
 	ds *port.DesiredState,
 	root string,
 ) []Violation {
 	classes := safeClasses(root)
 	impls := safeImpls(root)
 
-	sr := clinic.ComputeSOLIDScan(
+	sr := clinicsolid.ComputeSOLIDScan(
 		services, edges,
 		classes, impls,
 		hexaClassification,
@@ -260,7 +263,7 @@ func runPattern(
 	services []arch.ArchService,
 	edges []arch.ArchEdge,
 	cycles []graph.Cycle,
-	roles map[string]clinic.HexaRole,
+	roles map[string]clinichexa.HexaRole,
 	ds *port.DesiredState,
 	root string,
 ) []Violation {
@@ -305,7 +308,7 @@ func runSymbol(services []arch.ArchService, edges []arch.ArchEdge) []Violation {
 		}
 	}
 
-	sr := clinic.ComputeSymbolQuality(services, edges, rules)
+	sr := clinicnaming.ComputeSymbolQuality(services, edges, rules)
 	if sr == nil {
 		return nil
 	}

@@ -6,14 +6,16 @@ import (
 	"testing"
 
 	"github.com/dpopsuev/locus/internal/arch"
+	"github.com/dpopsuev/locus/internal/diagram/core"
+	"github.com/dpopsuev/locus/internal/diagram/metrics"
 )
 
-func hexaTheme() *ResolvedTheme {
-	return DefaultTheme().Resolve(themeNatural)
+func hexaTheme() *core.ResolvedTheme {
+	return core.DefaultTheme().Resolve(core.ThemeNatural)
 }
 
-func hexaTestInput() Input {
-	return Input{
+func hexaTestInput() core.Input {
+	return core.Input{
 		Report: &arch.ContextReport{
 			Architecture: arch.ArchModel{
 				Services: []arch.ArchService{
@@ -43,7 +45,7 @@ func hexaTestInput() Input {
 
 func TestRenderHexa_BasicStructure(t *testing.T) {
 	in := hexaTestInput()
-	out, err := renderHexa(in, Options{})
+	out, err := Render(in, core.Options{Type: "hexa"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +63,7 @@ func TestRenderHexa_BasicStructure(t *testing.T) {
 }
 
 func TestRenderHexa_ViolationEdge(t *testing.T) {
-	in := Input{
+	in := core.Input{
 		Report: &arch.ContextReport{
 			Architecture: arch.ArchModel{
 				Services: []arch.ArchService{
@@ -80,56 +82,52 @@ func TestRenderHexa_ViolationEdge(t *testing.T) {
 		ResolvedTheme: hexaTheme(),
 	}
 
-	out, err := renderHexa(in, Options{})
+	out, err := Render(in, core.Options{Type: "hexa"})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// domain -> adapter is a violation: must use dashed arrow.
 	assertContains(t, out, "-.->")
 	assertContains(t, out, "violation")
 }
 
 func TestRenderHexa_EmptyRoles(t *testing.T) {
-	in := Input{
+	in := core.Input{
 		Report: &arch.ContextReport{
 			Architecture: arch.ArchModel{},
 		},
 		HexaRoles: nil,
 	}
 
-	_, err := renderHexa(in, Options{})
+	_, err := Render(in, core.Options{Type: "hexa"})
 	if err == nil {
 		t.Fatal("expected error for nil HexaRoles")
 	}
-	if !errors.Is(err, ErrHexaRolesRequired) {
+	if !errors.Is(err, core.ErrHexaRolesRequired) {
 		t.Errorf("expected ErrHexaRolesRequired, got: %v", err)
 	}
 }
 
 func TestRenderHexa_NormalEdge(t *testing.T) {
 	in := hexaTestInput()
-	out, err := renderHexa(in, Options{})
+	out, err := Render(in, core.Options{Type: "hexa"})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// adapter/http -> port/store is a valid dependency (adapter -> port is fine).
 	assertContains(t, out, "adapter_http --> port_store")
 }
 
 func TestRenderHexa_ScopeFilter(t *testing.T) {
 	in := hexaTestInput()
-	out, err := renderHexa(in, Options{Scope: "adapter"})
+	out, err := Render(in, core.Options{Type: "hexa", Scope: "adapter"})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Adapter components should be present.
 	assertContains(t, out, "adapter_http")
 	assertContains(t, out, "adapter_postgres")
 
-	// Domain components should be excluded.
 	if strings.Contains(out, "domain_model") {
 		t.Error("expected domain/model to be excluded by scope filter")
 	}
@@ -139,7 +137,7 @@ func TestRenderHexa_ScopeFilter(t *testing.T) {
 }
 
 func TestRenderHexa_PortToAdapterViolation(t *testing.T) {
-	in := Input{
+	in := core.Input{
 		Report: &arch.ContextReport{
 			Architecture: arch.ArchModel{
 				Services: []arch.ArchService{
@@ -158,12 +156,11 @@ func TestRenderHexa_PortToAdapterViolation(t *testing.T) {
 		ResolvedTheme: hexaTheme(),
 	}
 
-	out, err := renderHexa(in, Options{})
+	out, err := Render(in, core.Options{Type: "hexa"})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// port -> adapter is a violation.
 	assertContains(t, out, "-.->")
 	assertContains(t, out, "violation")
 }
@@ -189,9 +186,9 @@ func TestIsHexaViolation(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.from+"->"+tt.to, func(t *testing.T) {
-			got := isHexaViolation(tt.from, tt.to)
+			got := metrics.IsHexaViolation(tt.from, tt.to)
 			if got != tt.want {
-				t.Errorf("isHexaViolation(%q, %q) = %v, want %v", tt.from, tt.to, got, tt.want)
+				t.Errorf("IsHexaViolation(%q, %q) = %v, want %v", tt.from, tt.to, got, tt.want)
 			}
 		})
 	}
