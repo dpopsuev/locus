@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/dpopsuev/locus/internal/testkit"
+	"github.com/dpopsuev/locus/internal/testkit/harness"
 )
 
 func TestAllFixtures(t *testing.T) {
@@ -31,7 +31,7 @@ func TestAllFixtures(t *testing.T) {
 
 		t.Run(lang, func(t *testing.T) {
 			fixtureDir := filepath.Join(testkitDir, lang)
-			testkit.RunFixture(t, fixtureDir)
+			harness.RunFixture(t, fixtureDir)
 		})
 	}
 }

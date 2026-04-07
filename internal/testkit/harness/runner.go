@@ -1,4 +1,7 @@
-package testkit
+// Package harness provides the test runner that wires Locus store/cache with
+// the analysis engine. Separated from testkit so the fixture/manifest helpers
+// can drain to Oculus without pulling in Locus-only dependencies.
+package harness
 
 import (
 	"context"
@@ -17,6 +20,7 @@ import (
 	"github.com/dpopsuev/locus/internal/history"
 	"github.com/dpopsuev/locus/internal/protocol"
 	"github.com/dpopsuev/locus/internal/store"
+	"github.com/dpopsuev/locus/internal/testkit"
 )
 
 // RunFixture loads a manifest and validates the fixture against Locus analysis.
@@ -24,7 +28,7 @@ func RunFixture(t *testing.T, fixtureDir string) {
 	t.Helper()
 
 	manifestPath := filepath.Join(fixtureDir, "manifest.json")
-	manifest, err := LoadManifest(manifestPath)
+	manifest, err := testkit.LoadManifest(manifestPath)
 	if err != nil {
 		t.Fatalf("load manifest: %v", err)
 	}
@@ -50,7 +54,7 @@ func RunFixture(t *testing.T, fixtureDir string) {
 	checkPresets(t, manifest, fixtureDir, intent)
 }
 
-func checkStructure(t *testing.T, report *arch.ContextReport, m *Manifest) {
+func checkStructure(t *testing.T, report *arch.ContextReport, m *testkit.Manifest) {
 	t.Helper()
 	t.Run("components", func(t *testing.T) {
 		if len(report.Architecture.Services) < m.ExpectedComponentsMin {
@@ -66,7 +70,7 @@ func checkStructure(t *testing.T, report *arch.ContextReport, m *Manifest) {
 	})
 }
 
-func checkPatternScan(t *testing.T, report *arch.ContextReport, m *Manifest) {
+func checkPatternScan(t *testing.T, report *arch.ContextReport, m *testkit.Manifest) {
 	t.Helper()
 	if len(m.ExpectedSmells) == 0 && len(m.ExpectedPatterns) == 0 {
 		return
@@ -89,7 +93,7 @@ func checkPatternScan(t *testing.T, report *arch.ContextReport, m *Manifest) {
 	})
 }
 
-func checkHexa(t *testing.T, report *arch.ContextReport, m *Manifest) {
+func checkHexa(t *testing.T, report *arch.ContextReport, m *testkit.Manifest) {
 	t.Helper()
 	if m.ExpectedHexa == nil {
 		return
@@ -114,7 +118,7 @@ func checkHexa(t *testing.T, report *arch.ContextReport, m *Manifest) {
 	})
 }
 
-func checkSOLID(t *testing.T, report *arch.ContextReport, m *Manifest, root string) {
+func checkSOLID(t *testing.T, report *arch.ContextReport, m *testkit.Manifest, root string) {
 	t.Helper()
 	if m.ExpectedSOLID == nil {
 		return
@@ -131,7 +135,7 @@ func checkSOLID(t *testing.T, report *arch.ContextReport, m *Manifest, root stri
 	})
 }
 
-func checkSymbols(t *testing.T, report *arch.ContextReport, m *Manifest) {
+func checkSymbols(t *testing.T, report *arch.ContextReport, m *testkit.Manifest) {
 	t.Helper()
 	if m.ExpectedSymbols == nil {
 		return
@@ -153,7 +157,7 @@ func checkSymbols(t *testing.T, report *arch.ContextReport, m *Manifest) {
 	})
 }
 
-func checkDiagrams(t *testing.T, report *arch.ContextReport, m *Manifest, root string) {
+func checkDiagrams(t *testing.T, report *arch.ContextReport, m *testkit.Manifest, root string) {
 	t.Helper()
 	if len(m.ExpectedDiagrams) == 0 {
 		return
@@ -173,7 +177,7 @@ func checkDiagrams(t *testing.T, report *arch.ContextReport, m *Manifest, root s
 	})
 }
 
-func checkPresets(t *testing.T, m *Manifest, root, intent string) {
+func checkPresets(t *testing.T, m *testkit.Manifest, root, intent string) {
 	t.Helper()
 	if len(m.ExpectedPresets) == 0 {
 		return

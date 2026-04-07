@@ -112,6 +112,12 @@ func ComputeSRPViolations(services []arch.ArchService, edges []arch.ArchEdge, ro
 			continue
 		}
 
+		// Entrypoints (composition roots) naturally aggregate many domains.
+		// High fan-out and domain diversity is their job, not an SRP violation.
+		if roles[svc.Name] == hexa.HexaRoleEntry {
+			continue
+		}
+
 		fo := fanOut[svc.Name]
 		fi := fanIn[svc.Name]
 		mult := hexa.RoleMultiplier(roles[svc.Name])

@@ -203,15 +203,18 @@ func isLowTypeSurface(svc *arch.ArchService, pkg string, totalCounts map[string]
 	if pkg != "" {
 		exportedTypes = totalCounts[pkg]
 	}
-	// Fallback: if class analysis produced no results (no LSP/tree-sitter),
-	// count exported struct/interface/type symbols from the scanner output.
-	if exportedTypes == 0 {
-		for i := range svc.Symbols {
-			k := svc.Symbols[i].Kind
-			if k == model.SymbolStruct || k == model.SymbolInterface || k == model.SymbolClass || k == model.SymbolEnum {
-				exportedTypes++
-			}
+	// Always cross-check with scanner symbol kinds. Class analysis may
+	// undercount (e.g. tree-sitter misses some Go structs), while the
+	// scanner reliably sets SymbolStruct via go/ast. Take the max.
+	symbolTypes := 0
+	for i := range svc.Symbols {
+		k := svc.Symbols[i].Kind
+		if k == model.SymbolStruct || k == model.SymbolInterface || k == model.SymbolClass || k == model.SymbolEnum {
+			symbolTypes++
 		}
+	}
+	if symbolTypes > exportedTypes {
+		exportedTypes = symbolTypes
 	}
 	return exportedTypes <= infraTypeThreshold
 }

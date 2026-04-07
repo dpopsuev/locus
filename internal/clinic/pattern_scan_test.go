@@ -458,7 +458,7 @@ func TestCoverageGap_WithIntegration(t *testing.T) {
 }
 
 func TestFragileContract(t *testing.T) {
-	// Component with fan-in > 5 but no New* constructor → fragile_contract.
+	// Component with fan-in > 5, stateful type, but no New* constructor → fragile_contract.
 	services := []arch.ArchService{
 		{Name: "pkg/config", Package: "example.com/pkg/config", LOC: 300, Symbols: model.SymbolsFromNames("Load", "Save", "Validate", "Parse")},
 	}
@@ -466,8 +466,11 @@ func TestFragileContract(t *testing.T) {
 	for i := range 8 {
 		edges = append(edges, arch.ArchEdge{From: fmtPkg(i), To: "pkg/config"})
 	}
+	classes := []oculus.ClassInfo{
+		{Package: "example.com/pkg/config", Name: "Config", Kind: "struct", Fields: []oculus.FieldInfo{{Name: "path", Type: "string"}}},
+	}
 
-	report := ComputePatternScan(services, edges, nil, nil, nil, nil, nil)
+	report := ComputePatternScan(services, edges, nil, classes, nil, nil, nil)
 
 	found := false
 	for _, d := range report.Detections {

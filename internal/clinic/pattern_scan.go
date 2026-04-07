@@ -531,7 +531,19 @@ func signalLowFanIn(svcName string, edges []arch.ArchEdge, threshold int) (detec
 }
 
 // signalNoConstructor checks whether a service has no New* constructor among its symbols.
-func signalNoConstructor(svc arch.ArchService) (detected bool, confidence float64, evidence string) {
+// Only flags if the package has stateful types (structs with fields) that need initialization.
+// Stateless utility packages (pure functions, interfaces) don't need constructors.
+func signalNoConstructor(svc arch.ArchService, classes []oculus.ClassInfo) (detected bool, confidence float64, evidence string) {
+	hasStatefulType := false
+	for _, c := range classes {
+		if c.Package == svc.Package && c.Kind == "struct" && len(c.Fields) > 0 {
+			hasStatefulType = true
+			break
+		}
+	}
+	if !hasStatefulType {
+		return false, 0, ""
+	}
 	for _, sym := range svc.Symbols {
 		if strings.HasPrefix(sym.Name, "New") {
 			return false, 0, ""
@@ -743,7 +755,7 @@ func evaluateSignal(
 	case "lowFanIn":
 		return signalLowFanIn(svc.Name, edges, rule.threshold)
 	case "noConstructor":
-		return signalNoConstructor(svc)
+		return signalNoConstructor(svc, classes)
 	case "noExternalTestImporter":
 		return signalNoExternalTestImporter(svc.Name, edges)
 	case "stateField":
