@@ -20,7 +20,7 @@ import (
 
 	"github.com/dpopsuev/locus/internal/config"
 	locusmcp "github.com/dpopsuev/locus/internal/mcp"
-	"github.com/dpopsuev/oculus"
+	"github.com/dpopsuev/oculus/analyzer"
 	"github.com/dpopsuev/oculus/arch"
 	"github.com/dpopsuev/oculus/diagram"
 	diagramcore "github.com/dpopsuev/oculus/diagram/core"
@@ -388,9 +388,9 @@ Examples:
 
 		switch diagramFlags.diagramType {
 		case "classes", "sequence", "er":
-			in.Analyzer = oculus.NewFallback(path, nil)
+			in.Analyzer = analyzer.NewFallback(path, nil)
 		case "dataflow", "callgraph", "state":
-			in.DeepAnalyzer = oculus.NewDeepFallback(path, nil)
+			in.DeepAnalyzer = analyzer.NewDeepFallback(path, nil)
 		}
 
 		theme := diagramFlags.theme

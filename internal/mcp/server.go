@@ -13,7 +13,7 @@ import (
 
 	"github.com/dpopsuev/locus/internal/config"
 	"github.com/dpopsuev/locus/internal/store"
-	"github.com/dpopsuev/oculus"
+	"github.com/dpopsuev/oculus/analyzer"
 	"github.com/dpopsuev/oculus/arch"
 	clinichexa "github.com/dpopsuev/oculus/clinic/hexa"
 	"github.com/dpopsuev/oculus/diagram"
@@ -914,10 +914,10 @@ func (h *handler) enrichDiagramInput(ctx context.Context, path, diagramType stri
 	pool := h.proto.Pool()
 	switch diagramType {
 	case DiagramClasses, DiagramSequence, DiagramER, DiagramInterfaces, DiagramHexa:
-		input.Analyzer = oculus.NewFallback(path, pool)
+		input.Analyzer = analyzer.NewFallback(path, pool)
 	}
 	if diagramType == DiagramHexa {
-		fa := oculus.NewFallback(path, pool)
+		fa := analyzer.NewFallback(path, pool)
 		classes, _ := fa.Classes(path)
 		hexaClass := clinichexa.ComputeHexaClassification(report.Architecture.Services, report.Architecture.Edges, classes)
 		input.HexaRoles = make(map[string]string, len(hexaClass.Components))
@@ -930,7 +930,7 @@ func (h *handler) enrichDiagramInput(ctx context.Context, path, diagramType stri
 	}
 	switch diagramType {
 	case DiagramDataflow, DiagramCallgraph, DiagramState:
-		input.DeepAnalyzer = oculus.CachedDeepFallback(path, pool)
+		input.DeepAnalyzer = analyzer.CachedDeepFallback(path, pool)
 	}
 }
 
