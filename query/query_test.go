@@ -7,10 +7,10 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/dpopsuev/locus/internal/arch"
-	"github.com/dpopsuev/locus/internal/cache"
 	"github.com/dpopsuev/locus/internal/store"
 	"github.com/dpopsuev/locus/query"
+	"github.com/dpopsuev/oculus/arch"
+	"github.com/dpopsuev/oculus/cache"
 )
 
 func locusRoot(t *testing.T) string {

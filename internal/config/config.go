@@ -3,9 +3,9 @@ package config
 import (
 	"os"
 
-	"github.com/dpopsuev/locus/internal/cache"
-	"github.com/dpopsuev/locus/internal/history"
 	"github.com/dpopsuev/locus/internal/store"
+	"github.com/dpopsuev/oculus/cache"
+	"github.com/dpopsuev/oculus/history"
 )
 
 const (

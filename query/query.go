@@ -7,23 +7,23 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/dpopsuev/locus/internal/protocol"
+	"github.com/dpopsuev/oculus/engine"
 	"github.com/dpopsuev/oculus/lsp"
 )
 
 // Type aliases for backward compatibility.
 type (
-	Request  = protocol.BatchRequest
-	Action   = protocol.BatchAction
-	Response = protocol.BatchResponse
-	Result   = protocol.BatchResult
+	Request  = engine.BatchRequest
+	Action   = engine.BatchAction
+	Response = engine.BatchResponse
+	Result   = engine.BatchResult
 )
 
 // Re-export sentinel errors.
 var (
-	ErrPathRequired     = protocol.ErrBatchPathRequired
-	ErrUnknownAction    = protocol.ErrUnknownAction
-	ErrUnsupportedBatch = protocol.ErrUnsupportedBatch
+	ErrPathRequired     = engine.ErrBatchPathRequired
+	ErrUnknownAction    = engine.ErrUnknownAction
+	ErrUnsupportedBatch = engine.ErrUnsupportedBatch
 )
 
 // Ensure json is used (referenced by Result.Data type alias).
@@ -31,12 +31,12 @@ var _ json.RawMessage
 
 // Client wraps Protocol for backward-compatible batch queries.
 type Client struct {
-	proto *protocol.Protocol
+	proto *engine.Engine
 }
 
 // New creates a Client backed by the given store and workspace roots.
-func New(s protocol.ProtocolStore, workspaces []string, pool ...lsp.Pool) *Client {
-	return &Client{proto: protocol.New(s, workspaces, pool...)}
+func New(s engine.Store, workspaces []string, pool ...lsp.Pool) *Client {
+	return &Client{proto: engine.New(s, workspaces, pool...)}
 }
 
 // Query executes a batch of actions, sharing a single scan/cache.

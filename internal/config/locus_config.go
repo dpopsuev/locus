@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/dpopsuev/locus/internal/port"
+	"github.com/dpopsuev/oculus/port"
 	"gopkg.in/yaml.v3"
 )
 

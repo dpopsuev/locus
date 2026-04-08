@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/dpopsuev/locus/internal/arch"
+	"github.com/dpopsuev/oculus/arch"
 )
 
 // ErrEmptySHA is returned when Put is called with an empty SHA.

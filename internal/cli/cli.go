@@ -18,17 +18,17 @@ import (
 
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/dpopsuev/locus/internal/arch"
 	"github.com/dpopsuev/locus/internal/config"
-	"github.com/dpopsuev/locus/internal/diagram"
-	diagramcore "github.com/dpopsuev/locus/internal/diagram/core"
-	gitpkg "github.com/dpopsuev/locus/internal/git"
-	"github.com/dpopsuev/locus/internal/lint"
 	locusmcp "github.com/dpopsuev/locus/internal/mcp"
-	"github.com/dpopsuev/locus/internal/protocol"
-	"github.com/dpopsuev/locus/internal/triage"
 	"github.com/dpopsuev/oculus"
+	"github.com/dpopsuev/oculus/arch"
+	"github.com/dpopsuev/oculus/diagram"
+	diagramcore "github.com/dpopsuev/oculus/diagram/core"
+	"github.com/dpopsuev/oculus/engine"
+	gitpkg "github.com/dpopsuev/oculus/git"
+	"github.com/dpopsuev/oculus/lint"
 	"github.com/dpopsuev/oculus/lsp"
+	"github.com/dpopsuev/oculus/triage"
 )
 
 // version is set by Execute and used by commands.
@@ -52,8 +52,8 @@ const (
 	logKeyLevel     = "level"
 )
 
-func newProto() *protocol.Protocol {
-	return protocol.New(config.NewStore(), nil)
+func newProto() *engine.Engine {
+	return engine.New(config.NewStore(), nil)
 }
 
 func envOr(key, fallback string) string {
@@ -105,7 +105,7 @@ var scanCmd = &cobra.Command{
 			path = args[0]
 		}
 		proto := newProto()
-		result, err := proto.ScanProject(cmd.Context(), path, protocol.ScanOpts{
+		result, err := proto.ScanProject(cmd.Context(), path, engine.ScanOpts{
 			Scanner:         scanFlags.scanner,
 			Depth:           scanFlags.depth,
 			ChurnDays:       scanFlags.churnDays,
@@ -192,7 +192,7 @@ Supports GitHub HTTPS, SSH, and shorthand URLs:
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		proto := newProto()
-		result, err := proto.CodographRemote(cmd.Context(), args[0], protocol.RemoteOpts{
+		result, err := proto.CodographRemote(cmd.Context(), args[0], engine.RemoteOpts{
 			Ref:    codographFlags.ref,
 			Keep:   codographFlags.keep,
 			Depth:  codographFlags.depth,
@@ -370,7 +370,7 @@ Examples:
 			path = "."
 		}
 		proto := newProto()
-		result, err := proto.ScanProject(cmd.Context(), path, protocol.ScanOpts{
+		result, err := proto.ScanProject(cmd.Context(), path, engine.ScanOpts{
 			Scanner:   diagramFlags.scanner,
 			Depth:     diagramFlags.depth,
 			ChurnDays: diagramFlags.churnDays,
@@ -599,7 +599,7 @@ Checks hexagonal architecture, SOLID principles, pattern smells, and symbol qual
 		}
 
 		proto := newProto()
-		result, err := proto.ScanProject(cmd.Context(), path, protocol.ScanOpts{
+		result, err := proto.ScanProject(cmd.Context(), path, engine.ScanOpts{
 			Intent: string(arch.IntentHealth),
 		})
 		if err != nil {

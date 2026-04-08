@@ -6,7 +6,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/dpopsuev/locus/internal/arch"
+	"github.com/dpopsuev/oculus/arch"
 )
 
 const DefaultLRUCapacity = 16

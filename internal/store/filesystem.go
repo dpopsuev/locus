@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dpopsuev/locus/internal/arch"
-	"github.com/dpopsuev/locus/internal/cache"
-	"github.com/dpopsuev/locus/internal/history"
+	"github.com/dpopsuev/oculus/arch"
+	"github.com/dpopsuev/oculus/cache"
+	"github.com/dpopsuev/oculus/history"
 )
 
 // FilesystemStore implements Store by delegating to the existing

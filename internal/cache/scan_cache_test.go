@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/dpopsuev/locus/internal/arch"
+	"github.com/dpopsuev/oculus/arch"
 )
 
 func tempCache(t *testing.T) *ScanCache {

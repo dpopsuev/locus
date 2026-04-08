@@ -11,19 +11,19 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dpopsuev/locus/internal/arch"
-	clinichexa "github.com/dpopsuev/locus/internal/clinic/hexa"
 	"github.com/dpopsuev/locus/internal/config"
-	"github.com/dpopsuev/locus/internal/diagram"
-	diagramcore "github.com/dpopsuev/locus/internal/diagram/core"
-	gitpkg "github.com/dpopsuev/locus/internal/git"
-	"github.com/dpopsuev/locus/internal/impact"
-	"github.com/dpopsuev/locus/internal/lint"
-	"github.com/dpopsuev/locus/internal/protocol"
 	"github.com/dpopsuev/locus/internal/store"
-	"github.com/dpopsuev/locus/internal/triage"
 	"github.com/dpopsuev/oculus"
+	"github.com/dpopsuev/oculus/arch"
+	clinichexa "github.com/dpopsuev/oculus/clinic/hexa"
+	"github.com/dpopsuev/oculus/diagram"
+	diagramcore "github.com/dpopsuev/oculus/diagram/core"
+	"github.com/dpopsuev/oculus/engine"
+	gitpkg "github.com/dpopsuev/oculus/git"
+	"github.com/dpopsuev/oculus/impact"
+	"github.com/dpopsuev/oculus/lint"
 	"github.com/dpopsuev/oculus/lsp"
+	"github.com/dpopsuev/oculus/triage"
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -167,7 +167,7 @@ var DiagramMinIntent = map[string]string{
 // --- Server ---
 
 func NewServer(s store.Store, workspaceRoots []string, version string, pool ...lsp.Pool) (*sdkmcp.Server, *triage.Registry) {
-	proto := protocol.New(s, workspaceRoots, pool...)
+	proto := engine.New(s, workspaceRoots, pool...)
 	srv := sdkmcp.NewServer(
 		&sdkmcp.Implementation{Name: "locus", Version: version},
 		&sdkmcp.ServerOptions{
@@ -278,7 +278,7 @@ func NewServer(s store.Store, workspaceRoots []string, version string, pool ...l
 }
 
 type handler struct {
-	proto    *protocol.Protocol
+	proto    *engine.Engine
 	reg      *triage.Registry
 	binStart time.Time // mtime of binary at startup, for stale detection
 	binPath  string    // path to running binary
@@ -718,7 +718,7 @@ func (h *handler) handleRefactor(ctx context.Context, _ *sdkmcp.CallToolRequest,
 // --- Codograph sub-handlers ---
 
 func (h *handler) handleScanProject(ctx context.Context, in *codographActionInput) (*sdkmcp.CallToolResult, any, error) {
-	result, err := h.proto.ScanProject(ctx, in.Path, protocol.ScanOpts{
+	result, err := h.proto.ScanProject(ctx, in.Path, engine.ScanOpts{
 		Depth: in.Depth, ChurnDays: in.ChurnDays,
 		IncludeExternal: in.IncludeExternal, IncludeTests: in.IncludeTests,
 		IncludeCoverage: in.IncludeCoverage, Budget: in.Budget,
@@ -738,12 +738,12 @@ func (h *handler) handleScanProject(ctx context.Context, in *codographActionInpu
 		return text(string(data)), nil, nil
 	default:
 		driftInfo := h.proto.CheckDriftOnScan(ctx, in.Path, result.Report)
-		return text(protocol.RenderScanSummary(result, driftInfo)), nil, nil
+		return text(engine.RenderScanSummary(result, driftInfo)), nil, nil
 	}
 }
 
 func (h *handler) handleCodographRemote(ctx context.Context, in *codographActionInput) (*sdkmcp.CallToolResult, any, error) {
-	result, err := h.proto.CodographRemote(ctx, in.URL, protocol.RemoteOpts{
+	result, err := h.proto.CodographRemote(ctx, in.URL, engine.RemoteOpts{
 		Ref: in.Ref, Keep: in.Keep, Depth: in.Depth,
 		ChurnDays: in.ChurnDays, Budget: in.Budget, Intent: in.Intent,
 	})
@@ -841,7 +841,7 @@ func (h *handler) handleViolations(ctx context.Context, path string, layers []st
 const maxSummaryCycles = 3
 const maxSummaryViolations = 3
 
-func renderCyclesSummary(r *protocol.CycleReport) string {
+func renderCyclesSummary(r *engine.CycleReport) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%d cycle(s), %d violation(s)\n", len(r.Cycles), len(r.LayerViolations))
 	n := min(len(r.Cycles), maxSummaryCycles)
@@ -900,7 +900,7 @@ func (h *handler) resolveDiagramReport(ctx context.Context, path string, in diag
 		return h.proto.GetCachedReport(in.CacheKey)
 	}
 	intent := DiagramMinIntent[in.Type]
-	result, err := h.proto.ScanProject(ctx, path, protocol.ScanOpts{Depth: in.Depth, Intent: intent})
+	result, err := h.proto.ScanProject(ctx, path, engine.ScanOpts{Depth: in.Depth, Intent: intent})
 	if err != nil {
 		return nil, err
 	}
@@ -973,7 +973,7 @@ func (h *handler) handleLint(ctx context.Context, _ *sdkmcp.CallToolRequest, in 
 		}
 		report = r
 	} else {
-		result, err := h.proto.ScanProject(ctx, path, protocol.ScanOpts{
+		result, err := h.proto.ScanProject(ctx, path, engine.ScanOpts{
 			Intent: string(arch.IntentHealth),
 		})
 		if err != nil {

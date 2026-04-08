@@ -9,18 +9,18 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dpopsuev/locus/internal/arch"
-	"github.com/dpopsuev/locus/internal/cache"
-	"github.com/dpopsuev/locus/internal/clinic"
-	clinichexa "github.com/dpopsuev/locus/internal/clinic/hexa"
-	clinicnaming "github.com/dpopsuev/locus/internal/clinic/naming"
-	clinicsolid "github.com/dpopsuev/locus/internal/clinic/solid"
-	"github.com/dpopsuev/locus/internal/diagram"
-	diagramcore "github.com/dpopsuev/locus/internal/diagram/core"
-	"github.com/dpopsuev/locus/internal/history"
-	"github.com/dpopsuev/locus/internal/protocol"
 	"github.com/dpopsuev/locus/internal/store"
-	"github.com/dpopsuev/locus/internal/testkit"
+	"github.com/dpopsuev/oculus/arch"
+	"github.com/dpopsuev/oculus/cache"
+	"github.com/dpopsuev/oculus/clinic"
+	clinichexa "github.com/dpopsuev/oculus/clinic/hexa"
+	clinicnaming "github.com/dpopsuev/oculus/clinic/naming"
+	clinicsolid "github.com/dpopsuev/oculus/clinic/solid"
+	"github.com/dpopsuev/oculus/diagram"
+	diagramcore "github.com/dpopsuev/oculus/diagram/core"
+	"github.com/dpopsuev/oculus/engine"
+	"github.com/dpopsuev/oculus/history"
+	"github.com/dpopsuev/oculus/testkit"
 )
 
 // RunFixture loads a manifest and validates the fixture against Locus analysis.
@@ -185,9 +185,9 @@ func checkPresets(t *testing.T, m *testkit.Manifest, root, intent string) {
 	t.Run("presets", func(t *testing.T) {
 		sc := cache.New(t.TempDir())
 		db := store.NewFilesystem(sc, history.DefaultHistoryDir())
-		proto := protocol.New(db, nil)
+		proto := engine.New(db, nil)
 		ctx := context.Background()
-		if _, err := proto.ScanProject(ctx, root, protocol.ScanOpts{Intent: intent}); err != nil {
+		if _, err := proto.ScanProject(ctx, root, engine.ScanOpts{Intent: intent}); err != nil {
 			t.Fatalf("scan for presets: %v", err)
 		}
 		for _, preset := range m.ExpectedPresets {
