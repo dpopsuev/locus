@@ -344,6 +344,7 @@ type analysisInput struct {
 	Hops      int      `json:"hops,omitempty" jsonschema:"neighborhood radius in hops (mesh neighborhood)"`
 	From      string   `json:"from,omitempty" jsonschema:"source symbol FQN (mesh distance)"`
 	To        string   `json:"to,omitempty" jsonschema:"target symbol FQN (mesh distance)"`
+	MinWeight float64  `json:"min_weight,omitempty" jsonschema:"minimum edge weight filter (mesh boundaries/neighborhood, default 0.1)"`
 }
 
 type clinicInput struct {
@@ -571,14 +572,18 @@ func (h *handler) handleMesh(ctx context.Context, in *analysisInput) (*sdkmcp.Ca
 		if hops <= 0 {
 			hops = 1
 		}
-		return jsonResult(mesh.Neighborhood(in.FQN, hops))
+		return jsonResult(mesh.NeighborhoodWeighted(in.FQN, hops))
 	case "distance":
 		if in.From == "" || in.To == "" {
 			return nil, nil, ErrMeshFromToRequired
 		}
 		return jsonResult(mesh.Distance(in.From, in.To))
 	case "boundaries":
-		return jsonResult(mesh.Boundaries())
+		minW := in.MinWeight
+		if minW <= 0 {
+			minW = 0.1 // default: exclude stdlib plumbing
+		}
+		return jsonResult(mesh.BoundariesMinWeight(minW))
 	case "aggregate":
 		level := oculus.MeshPackage // default
 		switch in.Level {
