@@ -28,6 +28,7 @@ import (
 	gitpkg "github.com/dpopsuev/oculus/git"
 	"github.com/dpopsuev/oculus/lint"
 	"github.com/dpopsuev/oculus/lsp"
+	"github.com/dpopsuev/oculus/lsp/testcontainer"
 	"github.com/dpopsuev/oculus/triage"
 )
 
@@ -148,7 +149,16 @@ Tools: scan_project, get_dependencies, get_impact, get_coupling_table,
 		s := config.NewStore()
 		defer s.Close()
 
-		pool := lsp.NewPool()
+		var pool lsp.Pool
+		if img := os.Getenv("LOCUS_LSP_IMAGE"); img != "" {
+			if err := testcontainer.Available(img); err != nil {
+				return fmt.Errorf("container pool: %w", err)
+			}
+			pool = testcontainer.NewPool(img)
+			slog.LogAttrs(cmd.Context(), slog.LevelInfo, "using container LSP pool", slog.String(logKeyTransport, "docker"))
+		} else {
+			pool = lsp.NewPool()
+		}
 
 		ctx, stop := signal.NotifyContext(cmd.Context(), syscall.SIGTERM, syscall.SIGINT)
 		defer stop()
