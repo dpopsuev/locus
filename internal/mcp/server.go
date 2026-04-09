@@ -73,6 +73,8 @@ const (
 	ActionSymbolSearch = "symbol_search"
 	ActionCallees      = "callees"
 	ActionCallPath     = "call_path"
+	ActionSymbolGraph  = "symbol_graph"
+	ActionPipelines    = "pipelines"
 )
 
 // Clinic actions.
@@ -143,6 +145,7 @@ const (
 	DiagramZones      = "zones"
 	DiagramInterfaces = "interfaces"
 	DiagramHexa       = "hexa"
+	DiagramSymbolDSM  = "symbol_dsm"
 )
 
 // DiagramMinIntent maps diagram types to minimum scan intent needed.
@@ -162,6 +165,7 @@ var DiagramMinIntent = map[string]string{
 	DiagramZones:      string(arch.IntentCoupling),
 	DiagramInterfaces: string(arch.IntentHealth),
 	DiagramHexa:       string(arch.IntentCoupling),
+	DiagramSymbolDSM:  string(arch.IntentHealth),
 }
 
 // --- Server ---
@@ -207,7 +211,7 @@ func NewServer(s store.Store, workspaceRoots []string, version string, pool ...l
 	triage.AddTool(reg, srv, triage.ToolMeta{
 		Name: "analysis",
 		Description: "Core dependency analysis. " +
-			"Actions: deps, impact, coupling, cycles, violations, callers, component, search, query, preset, scan_diff.",
+			"Actions: deps, impact, coupling, cycles, violations, callers, component, search, query, preset, scan_diff, symbol_graph, pipelines.",
 		Keywords:   []string{"depend", "import", "impact", "blast", "coupling", "fan", "cycle", "circular"},
 		Categories: []string{"dependencies", "architecture"},
 		Rationale:  map[string]string{"dependencies": "Component-level dependency analysis and cycle detection"},
@@ -313,7 +317,7 @@ type codographActionInput struct {
 }
 
 type analysisInput struct {
-	Action    string   `json:"action" jsonschema:"required,deps | impact | coupling | cycles | violations | callers | component | search | query | preset | scan_diff | risk_scores | symbol_search | callees | call_path"`
+	Action    string   `json:"action" jsonschema:"required,deps | impact | coupling | cycles | violations | callers | component | search | query | preset | scan_diff | risk_scores | symbol_search | callees | call_path | symbol_graph | pipelines"`
 	Path      string   `json:"path,omitempty" jsonschema:"absolute path to local repository"`
 	CacheKey  string   `json:"cache_key,omitempty" jsonschema:"cache key from scan_remote"`
 	Component string   `json:"component,omitempty" jsonschema:"component path for deps/impact/coupling"`
@@ -328,6 +332,7 @@ type analysisInput struct {
 	Query     string   `json:"query,omitempty" jsonschema:"natural language question"`
 	BeforeSHA string   `json:"before_sha,omitempty" jsonschema:"earlier SHA (scan_diff)"`
 	AfterSHA  string   `json:"after_sha,omitempty" jsonschema:"later SHA (scan_diff)"`
+	MinLength int      `json:"min_length,omitempty" jsonschema:"minimum pipeline length (pipelines)"`
 }
 
 type clinicInput struct {
@@ -475,7 +480,7 @@ func (h *handler) handleAnalysis(ctx context.Context, _ *sdkmcp.CallToolRequest,
 			return nil, nil, err
 		}
 		return jsonResult(r)
-	case ActionRiskScores, ActionSymbolSearch, ActionCallees, ActionCallPath:
+	case ActionRiskScores, ActionSymbolSearch, ActionCallees, ActionCallPath, ActionSymbolGraph, ActionPipelines:
 		return h.dispatchAnalysisExtended(ctx, &in)
 	default:
 		return nil, nil, fmt.Errorf("%w %q", ErrUnknownAction, in.Action)
@@ -504,12 +509,30 @@ func (h *handler) dispatchAnalysisExtended(ctx context.Context, in *analysisInpu
 			return nil, nil, err
 		}
 		return jsonResult(r)
-	default: // ActionCallPath
+	case ActionCallPath:
 		r, err := h.proto.GetCallPath(ctx, in.Path, in.Symbol, in.Query, in.CacheKey)
 		if err != nil {
 			return nil, nil, err
 		}
 		return jsonResult(r)
+	case ActionSymbolGraph:
+		r, err := h.proto.GetSymbolGraph(ctx, in.Path, in.CacheKey)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
+	case ActionPipelines:
+		minLen := in.MinLength
+		if minLen <= 0 {
+			minLen = 3
+		}
+		r, err := h.proto.DetectPipelines(ctx, in.Path, minLen, in.CacheKey)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
+	default:
+		return nil, nil, fmt.Errorf("%w %q", ErrUnknownAction, in.Action)
 	}
 }
 
@@ -931,12 +954,14 @@ func (h *handler) enrichDiagramInput(ctx context.Context, path, diagramType stri
 	switch diagramType {
 	case DiagramDataflow, DiagramCallgraph, DiagramState:
 		input.DeepAnalyzer = analyzer.CachedDeepFallback(path, pool)
+	case DiagramSymbolDSM:
+		input.SymbolGraph, _ = h.proto.GetSymbolGraph(ctx, path)
 	}
 }
 
 type diagramInput struct {
 	Path         string `json:"path" jsonschema:"required,absolute path to local repository"`
-	Type         string `json:"type" jsonschema:"required,diagram type: dependency, c4, coupling, churn, layers, tree, classes, sequence, er, interfaces, hexa, zones"`
+	Type         string `json:"type" jsonschema:"required,diagram type: dependency, c4, coupling, churn, layers, tree, classes, sequence, er, interfaces, hexa, zones, symbol_dsm"`
 	Scope        string `json:"scope,omitempty" jsonschema:"limit to sub-package"`
 	Depth        int    `json:"depth,omitempty" jsonschema:"grouping depth"`
 	TopN         int    `json:"top_n,omitempty" jsonschema:"limit to top N components"`
