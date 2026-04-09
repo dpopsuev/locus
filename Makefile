@@ -1,4 +1,4 @@
-.PHONY: build version test test-e2e vet fmt lint preflight install-hooks
+.PHONY: build version test test-e2e vet fmt lint preflight install-hooks docker test-container
 
 VERSION ?= $(shell git describe --tags --always --dirty)
 
@@ -34,9 +34,17 @@ install-hooks:
 	@chmod +x .git/hooks/pre-commit
 	@echo "pre-commit hook installed (runs make lint-new)"
 
-release:
+docker: build
+	docker build -t locus .
+
+test-container: docker
+	go test -tags=e2e -run TestContainer_E2E -timeout 300s -v .
+
+release: docker
 	@test -n "$(V)" || (echo "usage: make release V=v0.8.0" && exit 1)
 	sed -i 's|quay.io/dpopsuev/locus:[^ "]*|quay.io/dpopsuev/locus:$(V)|g' README.md
 	git add -A && git commit -m "release: $(V)" || true
 	git tag $(V)
 	git push origin main --tags
+	docker tag locus quay.io/dpopsuev/locus:$(V)
+	docker push quay.io/dpopsuev/locus:$(V)
