@@ -38,10 +38,13 @@ func NewVersioned(root, version string) *ScanCache {
 
 func (c *ScanCache) Root() string { return c.root }
 
-// DefaultCacheDir returns ~/.locus/cache.
+// DefaultCacheDir returns $XDG_CACHE_HOME/locus (falls back to ~/.cache/locus).
 func DefaultCacheDir() string {
+	if xdg := os.Getenv("XDG_CACHE_HOME"); xdg != "" {
+		return filepath.Join(xdg, "locus")
+	}
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".locus", "cache")
+	return filepath.Join(home, ".cache", "locus")
 }
 
 // Get returns a cached report for the given repo at the given SHA.
