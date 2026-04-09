@@ -13,6 +13,7 @@ import (
 
 	"github.com/dpopsuev/locus/internal/config"
 	"github.com/dpopsuev/locus/internal/store"
+	oculus "github.com/dpopsuev/oculus"
 	"github.com/dpopsuev/oculus/analyzer"
 	"github.com/dpopsuev/oculus/arch"
 	clinichexa "github.com/dpopsuev/oculus/clinic/hexa"
@@ -39,6 +40,9 @@ var (
 	ErrUnknownCodographAction = errors.New("unknown codograph action")
 	ErrUnknownAction          = errors.New("unknown action")
 	ErrIntentRequired         = errors.New("intent is required")
+	ErrMeshFQNRequired        = errors.New("fqn is required for mesh neighborhood")
+	ErrMeshFromToRequired     = errors.New("from and to are required for mesh distance")
+	ErrUnknownMeshView        = errors.New("unknown mesh view")
 )
 
 // --- Action constants ---
@@ -75,6 +79,7 @@ const (
 	ActionCallPath     = "call_path"
 	ActionSymbolGraph  = "symbol_graph"
 	ActionPipelines    = "pipelines"
+	ActionMesh         = "mesh"
 )
 
 // Clinic actions.
@@ -317,7 +322,7 @@ type codographActionInput struct {
 }
 
 type analysisInput struct {
-	Action    string   `json:"action" jsonschema:"required,deps | impact | coupling | cycles | violations | callers | component | search | query | preset | scan_diff | risk_scores | symbol_search | callees | call_path | symbol_graph | pipelines"`
+	Action    string   `json:"action" jsonschema:"required,deps | impact | coupling | cycles | violations | callers | component | search | query | preset | scan_diff | risk_scores | symbol_search | callees | call_path | symbol_graph | pipelines | mesh"`
 	Path      string   `json:"path,omitempty" jsonschema:"absolute path to local repository"`
 	CacheKey  string   `json:"cache_key,omitempty" jsonschema:"cache key from scan_remote"`
 	Component string   `json:"component,omitempty" jsonschema:"component path for deps/impact/coupling"`
@@ -333,6 +338,12 @@ type analysisInput struct {
 	BeforeSHA string   `json:"before_sha,omitempty" jsonschema:"earlier SHA (scan_diff)"`
 	AfterSHA  string   `json:"after_sha,omitempty" jsonschema:"later SHA (scan_diff)"`
 	MinLength int      `json:"min_length,omitempty" jsonschema:"minimum pipeline length (pipelines)"`
+	MeshView  string   `json:"mesh_view,omitempty" jsonschema:"mesh view: full, neighborhood, distance, boundaries, aggregate (mesh)"`
+	Level     string   `json:"level,omitempty" jsonschema:"aggregation level: symbol, file, package, component (mesh aggregate)"`
+	FQN       string   `json:"fqn,omitempty" jsonschema:"fully qualified symbol name (mesh neighborhood)"`
+	Hops      int      `json:"hops,omitempty" jsonschema:"neighborhood radius in hops (mesh neighborhood)"`
+	From      string   `json:"from,omitempty" jsonschema:"source symbol FQN (mesh distance)"`
+	To        string   `json:"to,omitempty" jsonschema:"target symbol FQN (mesh distance)"`
 }
 
 type clinicInput struct {
@@ -480,7 +491,7 @@ func (h *handler) handleAnalysis(ctx context.Context, _ *sdkmcp.CallToolRequest,
 			return nil, nil, err
 		}
 		return jsonResult(r)
-	case ActionRiskScores, ActionSymbolSearch, ActionCallees, ActionCallPath, ActionSymbolGraph, ActionPipelines:
+	case ActionRiskScores, ActionSymbolSearch, ActionCallees, ActionCallPath, ActionSymbolGraph, ActionPipelines, ActionMesh:
 		return h.dispatchAnalysisExtended(ctx, &in)
 	default:
 		return nil, nil, fmt.Errorf("%w %q", ErrUnknownAction, in.Action)
@@ -531,8 +542,58 @@ func (h *handler) dispatchAnalysisExtended(ctx context.Context, in *analysisInpu
 			return nil, nil, err
 		}
 		return jsonResult(r)
+	case ActionMesh:
+		return h.handleMesh(ctx, in)
 	default:
 		return nil, nil, fmt.Errorf("%w %q", ErrUnknownAction, in.Action)
+	}
+}
+
+func (h *handler) handleMesh(ctx context.Context, in *analysisInput) (*sdkmcp.CallToolResult, any, error) {
+	mesh, err := h.proto.GetMesh(ctx, in.Path, in.CacheKey)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	view := in.MeshView
+	if view == "" {
+		view = "full"
+	}
+
+	switch view {
+	case "full":
+		return jsonResult(mesh)
+	case "neighborhood":
+		if in.FQN == "" {
+			return nil, nil, ErrMeshFQNRequired
+		}
+		hops := in.Hops
+		if hops <= 0 {
+			hops = 1
+		}
+		return jsonResult(mesh.Neighborhood(in.FQN, hops))
+	case "distance":
+		if in.From == "" || in.To == "" {
+			return nil, nil, ErrMeshFromToRequired
+		}
+		return jsonResult(mesh.Distance(in.From, in.To))
+	case "boundaries":
+		return jsonResult(mesh.Boundaries())
+	case "aggregate":
+		level := oculus.MeshPackage // default
+		switch in.Level {
+		case "symbol":
+			level = oculus.MeshSymbol
+		case "file":
+			level = oculus.MeshFile
+		case "package":
+			level = oculus.MeshPackage
+		case "component":
+			level = oculus.MeshComponent
+		}
+		return jsonResult(mesh.Aggregate(level))
+	default:
+		return nil, nil, fmt.Errorf("%w %q (use: full, neighborhood, distance, boundaries, aggregate)", ErrUnknownMeshView, view)
 	}
 }
 

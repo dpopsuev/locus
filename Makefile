@@ -1,4 +1,4 @@
-.PHONY: build version test test-e2e vet fmt lint preflight install-hooks docker test-container
+.PHONY: build version test test-e2e vet fmt lint preflight install-hooks docker test-container install
 
 VERSION ?= $(shell git describe --tags --always --dirty)
 
@@ -7,6 +7,10 @@ version:
 
 build:
 	CGO_ENABLED=1 go build -trimpath -ldflags="-s -w -X main.Version=$(VERSION)" -o locus ./cmd/locus
+
+install: build
+	-pkill -f 'locus serve' 2>/dev/null || true
+	install -m 755 locus $(GOPATH)/bin/locus
 
 test:
 	go test ./... -count=1
