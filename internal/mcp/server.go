@@ -579,7 +579,7 @@ func (h *handler) handleMesh(ctx context.Context, in *analysisInput) (*sdkmcp.Ca
 		}
 		return jsonResult(mesh.Distance(in.From, in.To))
 	case "boundaries":
-		minW := 0.1 // default: exclude stdlib plumbing
+		minW := 0.5 // default: internal edges only (cross-component + same-component)
 		if in.MinWeight != nil {
 			minW = *in.MinWeight
 		}
