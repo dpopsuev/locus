@@ -48,7 +48,7 @@ func DefaultCacheDir() string {
 }
 
 // Get returns a cached report for the given repo at the given SHA.
-func (c *ScanCache) Get(repoPath, sha string) (*arch.ContextReport, bool, error) {
+func (c *ScanCache) Get(repoPath, sha string) (report *arch.ContextReport, found bool, err error) {
 	if sha == "" {
 		return nil, false, nil
 	}
@@ -68,11 +68,11 @@ func (c *ScanCache) Get(repoPath, sha string) (*arch.ContextReport, bool, error)
 	}
 	defer gz.Close()
 
-	var report arch.ContextReport
-	if err := json.NewDecoder(gz).Decode(&report); err != nil {
+	var r arch.ContextReport
+	if err := json.NewDecoder(gz).Decode(&r); err != nil {
 		return nil, false, nil
 	}
-	return &report, true, nil
+	return &r, true, nil
 }
 
 // GetCurrent resolves HEAD for the repo and returns the cached report if present.

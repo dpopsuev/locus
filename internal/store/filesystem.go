@@ -29,7 +29,7 @@ func NewFilesystem(sc *cache.ScanCache, histDir string) *FilesystemStore {
 	return &FilesystemStore{sc: sc, histDir: histDir}
 }
 
-func (f *FilesystemStore) GetReport(_ context.Context, project, sha string) (*arch.ContextReport, bool, error) {
+func (f *FilesystemStore) GetReport(_ context.Context, project, sha string) (report *arch.ContextReport, found bool, err error) {
 	return f.sc.Get(project, sha)
 }
 

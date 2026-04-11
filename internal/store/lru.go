@@ -43,7 +43,7 @@ func lruKey(project, sha string) string {
 	return project + "\x00" + sha
 }
 
-func (s *LRUStore) GetReport(ctx context.Context, project, sha string) (*arch.ContextReport, bool, error) {
+func (s *LRUStore) GetReport(ctx context.Context, project, sha string) (report *arch.ContextReport, found bool, err error) {
 	key := lruKey(project, sha)
 
 	s.mu.Lock()

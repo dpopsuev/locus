@@ -528,7 +528,7 @@ func (h *handler) dispatchAnalysisExtended(ctx context.Context, in *analysisInpu
 		}
 		return jsonResult(r)
 	case ActionSymbolGraph:
-		r, err := h.proto.GetSymbolGraph(ctx, in.Path, in.CacheKey)
+		r, err := h.proto.GetSymbolGraph(ctx, in.Path)
 		if err != nil {
 			return nil, nil, err
 		}
