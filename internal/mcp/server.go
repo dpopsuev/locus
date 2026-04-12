@@ -1157,13 +1157,14 @@ func noOut[In any](h func(context.Context, *sdkmcp.CallToolRequest, In) (*sdkmcp
 		if req != nil {
 			tool = req.Params.Name
 		}
+		slog.LogAttrs(ctx, slog.LevelInfo, "tool call started", slog.String(logKeyTool, tool))
 		start := time.Now()
 		result, out, err := h(ctx, req, in)
 		elapsed := time.Since(start)
 		if err != nil {
 			slog.LogAttrs(ctx, slog.LevelError, "tool call failed", slog.String(logKeyTool, tool), slog.Duration(logKeyElapsed, elapsed), slog.Any(logKeyError, err))
 		} else {
-			slog.LogAttrs(ctx, slog.LevelDebug, "tool call", slog.String(logKeyTool, tool), slog.Duration(logKeyElapsed, elapsed))
+			slog.LogAttrs(ctx, slog.LevelInfo, "tool call done", slog.String(logKeyTool, tool), slog.Duration(logKeyElapsed, elapsed))
 		}
 		return result, out, err
 	}

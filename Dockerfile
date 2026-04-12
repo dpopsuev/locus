@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates curl git xz-utils \
     gcc g++ make cmake \
     python3 python3-venv \
-    clangd-18 \
+    clangd-18 universal-ctags \
     && ln -sf /usr/bin/clangd-18 /usr/bin/clangd \
     && rm -rf /var/lib/apt/lists/*
 
@@ -34,6 +34,9 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
 ENV PATH="/root/.cargo/bin:${PATH}"
 
 COPY locus /usr/local/bin/locus
+
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+  CMD ["locus", "version"]
 
 ENTRYPOINT ["locus"]
 CMD ["serve"]
