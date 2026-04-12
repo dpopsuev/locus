@@ -1007,7 +1007,7 @@ func (h *handler) enrichDiagramInput(ctx context.Context, path, diagramType stri
 	}
 	if diagramType == DiagramHexa {
 		fa := analyzer.NewFallback(path, pool)
-		classes, _ := fa.Classes(path)
+		classes, _ := fa.Classes(ctx, path)
 		hexaClass := clinichexa.ComputeHexaClassification(report.Architecture.Services, report.Architecture.Edges, classes)
 		input.HexaRoles = make(map[string]string, len(hexaClass.Components))
 		for _, c := range hexaClass.Components {
