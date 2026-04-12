@@ -19,7 +19,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ARG GO_VERSION=1.22.5
 RUN ARCH=$(dpkg --print-architecture) && \
     curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-${ARCH}.tar.gz" | tar -C /usr/local -xz
-ENV PATH="/usr/local/go/bin:/root/go/bin:${PATH}"
+ENV GOBIN=/usr/local/bin
+ENV PATH="/usr/local/go/bin:${PATH}"
 RUN go install golang.org/x/tools/gopls@latest
 
 ARG NODE_VERSION=20.18.1
@@ -29,9 +30,15 @@ RUN ARCH=$(dpkg --print-architecture) && \
     tar -C /usr/local --strip-components=1 -xJ
 RUN npm install -g typescript typescript-language-server pyright
 
+ENV RUSTUP_HOME=/usr/local/rustup CARGO_HOME=/usr/local/cargo
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
     --default-toolchain stable --profile minimal --component rust-analyzer
-ENV PATH="/root/.cargo/bin:${PATH}"
+ENV PATH="/usr/local/cargo/bin:${PATH}"
+
+# Run as non-root — LSP servers don't need root, and orphaned child
+# processes from killed containers shouldn't run as root on the host.
+RUN useradd -m -s /bin/bash locus
+USER locus
 
 COPY locus /usr/local/bin/locus
 
