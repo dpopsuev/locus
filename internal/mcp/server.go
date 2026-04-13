@@ -187,7 +187,7 @@ func NewServer(s store.Store, workspaceRoots []string, version string, pool ...l
 				"Use intent param for scan depth: architecture (fast), coupling, health (default), full. " +
 				"Output: default ~50 token summary; format=json for full; format=summary for <500 tokens; format=facts for assertions. " +
 				"Key actions: analysis coupling view=hot_spots (risk), analysis violations (layer checks), " +
-				"analysis drift (desired-state validation), analysis search (find by keyword), " +
+				"analysis drift (desired-state validation), analysis search (find components by name — NOT source grep), " +
 				"analysis preset=architecture_review (one-call summary). " +
 				"codograph set_desired_state to persist architecture rules. render_diagram type=zones for zone overview.",
 		},
@@ -216,7 +216,10 @@ func NewServer(s store.Store, workspaceRoots []string, version string, pool ...l
 	triage.AddTool(reg, srv, triage.ToolMeta{
 		Name: "analysis",
 		Description: "Core dependency analysis. " +
-			"Actions: deps, impact, coupling, cycles, violations, callers, component, search, query, preset, scan_diff, symbol_graph, pipelines.",
+			"Actions: deps, impact, coupling, cycles, violations, callers, component, search, query, preset, scan_diff, symbol_graph, pipelines. " +
+			"NOTE: search finds components by name (architecture-level, NOT source code grep). " +
+			"Use symbol_search for finding functions/types by name pattern. " +
+			"For source code text search, use your own grep tool — Locus does not do text search.",
 		Keywords:   []string{"depend", "import", "impact", "blast", "coupling", "fan", "cycle", "circular"},
 		Categories: []string{"dependencies", "architecture"},
 		Rationale:  map[string]string{"dependencies": "Component-level dependency analysis and cycle detection"},
@@ -326,7 +329,7 @@ type analysisInput struct {
 	Path      string   `json:"path,omitempty" jsonschema:"absolute path to local repository"`
 	CacheKey  string   `json:"cache_key,omitempty" jsonschema:"cache key from scan_remote"`
 	Component string   `json:"component,omitempty" jsonschema:"component path for deps/impact/coupling"`
-	Symbol    string   `json:"symbol,omitempty" jsonschema:"symbol name for callers"`
+	Symbol    string   `json:"symbol,omitempty" jsonschema:"symbol name for callers/symbol_search (function or type name pattern)"`
 	SortBy    string   `json:"sort_by,omitempty" jsonschema:"sort field for coupling table"`
 	TopN      int      `json:"top_n,omitempty" jsonschema:"limit results to top N"`
 	View      string   `json:"view,omitempty" jsonschema:"coupling view: hot_spots, edges"`
@@ -334,7 +337,7 @@ type analysisInput struct {
 	Layers    []string `json:"layers,omitempty" jsonschema:"ordered layer names (cycles)"`
 	Format    string   `json:"format,omitempty" jsonschema:"output format: json, summary"`
 	Preset    string   `json:"preset,omitempty" jsonschema:"preset: architecture_review, health_check, onboarding, pre_pr, full_clinic, code_health"`
-	Query     string   `json:"query,omitempty" jsonschema:"natural language question"`
+	Query     string   `json:"query,omitempty" jsonschema:"search: component name substring. query: natural language question. NOT for source code text search."`
 	BeforeSHA string   `json:"before_sha,omitempty" jsonschema:"earlier SHA (scan_diff)"`
 	AfterSHA  string   `json:"after_sha,omitempty" jsonschema:"later SHA (scan_diff)"`
 	MinLength int      `json:"min_length,omitempty" jsonschema:"minimum pipeline length (pipelines)"`
