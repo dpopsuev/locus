@@ -11,8 +11,6 @@ require (
 	golang.org/x/tools v0.42.0 // indirect
 )
 
-require github.com/dpopsuev/battery v0.0.0-00010101000000-000000000000
-
 require github.com/dpopsuev/oculus v0.1.0
 
 require (
@@ -28,7 +26,5 @@ require (
 	gonum.org/v1/gonum v0.17.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1
 )
-
-replace github.com/dpopsuev/battery => ../battery
 
 replace github.com/dpopsuev/oculus => ../oculus

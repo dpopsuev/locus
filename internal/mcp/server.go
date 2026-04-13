@@ -207,7 +207,7 @@ func NewServer(s store.Store, workspaceRoots []string, version string, pool ...l
 		Description: "Scan and compare repository architectures. " +
 			"Actions: scan_local, scan_remote, history, diff, status, set_desired_state, get_desired_state, accept_violation. " +
 			"Scan returns cache_key for downstream tools.",
-		Keywords:   []string{"scan", "architecture", "overview", "remote", "github", "history", "diff", "branch", "compare"},
+		Keywords:   []string{"scan", "architecture", "overview", "remote", "github", "history", "diff", "branch", "compare", "cache", "flush", "rescan", "stale", "status", "desired", "rules", "layers"},
 		Categories: []string{"architecture", "onboarding", "comparison"},
 		Rationale:  map[string]string{"architecture": "Full codebase overview", "onboarding": "Best first step"},
 		Priority:   1,
@@ -220,7 +220,7 @@ func NewServer(s store.Store, workspaceRoots []string, version string, pool ...l
 			"NOTE: search finds components by name (architecture-level, NOT source code grep). " +
 			"Use symbol_search for finding functions/types by name pattern. " +
 			"For source code text search, use your own grep tool — Locus does not do text search.",
-		Keywords:   []string{"depend", "import", "impact", "blast", "coupling", "fan", "cycle", "circular"},
+		Keywords:   []string{"depend", "import", "impact", "coupling", "fan", "cycle", "circular", "caller", "callee", "call", "who", "symbol", "function", "find", "component", "pipeline", "data flow", "chain", "risk", "risky", "dangerous", "health", "review", "onboarding", "preset", "mesh", "zoom"},
 		Categories: []string{"dependencies", "architecture"},
 		Rationale:  map[string]string{"dependencies": "Component-level dependency analysis and cycle detection"},
 		Priority:   2,
@@ -230,7 +230,7 @@ func NewServer(s store.Store, workspaceRoots []string, version string, pool ...l
 		Name: "clinic",
 		Description: "Code quality and design pattern analysis. " +
 			"Actions: pattern_scan, pattern_catalog, hexa_validate, solid_scan, symbol_quality, vocab_map.",
-		Keywords:   []string{"pattern", "smell", "solid", "hexagonal", "quality", "symbol", "naming"},
+		Keywords:   []string{"pattern", "smell", "solid", "hexagonal", "quality", "symbol", "naming", "bloat", "large", "long function", "god", "vocabulary", "vocab"},
 		Categories: []string{"quality", "refactoring"},
 		Rationale:  map[string]string{"quality": "SOLID, hexagonal, pattern/smell detection"},
 		Priority:   2,
@@ -241,7 +241,7 @@ func NewServer(s store.Store, workspaceRoots []string, version string, pool ...l
 		Description: "Architecture enforcement and health metrics. " +
 			"Actions: blast_radius, import_direction, trust_boundaries, budgets, mod_dependencies, " +
 			"symbol_blast, interface_metrics, leverage, coverage, api_surface, conventions, gaps.",
-		Keywords:   []string{"constraint", "boundary", "budget", "coverage", "leverage", "trust", "direction"},
+		Keywords:   []string{"constraint", "boundary", "budget", "coverage", "leverage", "trust", "direction", "blast", "interface", "method", "ISP", "fat", "gap", "missing", "api", "public", "exported", "consolidate", "merge", "redundant", "convention"},
 		Categories: []string{"enforcement", "health"},
 		Rationale:  map[string]string{"enforcement": "Architecture rules, budgets, and boundary checks"},
 		Priority:   2,
@@ -260,7 +260,7 @@ func NewServer(s store.Store, workspaceRoots []string, version string, pool ...l
 	triage.AddTool(reg, srv, triage.ToolMeta{
 		Name:        "render_diagram",
 		Description: "Render a Mermaid diagram. Types: dependency, c4, coupling, churn, layers, tree, classes, sequence, er, interfaces, hexa, zones.",
-		Keywords:    []string{"diagram", "visual", "mermaid", "chart", "graph", "class", "sequence", "er"},
+		Keywords:    []string{"diagram", "visual", "mermaid", "chart", "graph", "class", "sequence", "er", "draw", "render", "dataflow", "callgraph", "state", "layers", "c4", "tree", "hexa", "zones", "dsm"},
 		Categories:  []string{"visualization"},
 		Rationale:   map[string]string{"visualization": "Generate Mermaid charts from architecture data"},
 		Priority:    1,
