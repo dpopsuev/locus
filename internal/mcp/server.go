@@ -989,7 +989,7 @@ func (h *handler) handleRenderDiagram(ctx context.Context, _ *sdkmcp.CallToolReq
 
 func (h *handler) resolveDiagramReport(ctx context.Context, path string, in diagramInput) (*arch.ContextReport, error) {
 	if in.CacheKey != "" {
-		return h.proto.GetCachedReport(in.CacheKey)
+		return h.proto.GetCachedReport(ctx, in.CacheKey)
 	}
 	intent := DiagramMinIntent[in.Type]
 	result, err := h.proto.ScanProject(ctx, path, engine.ScanOpts{Depth: in.Depth, Intent: intent})
@@ -1061,7 +1061,7 @@ func (h *handler) handleLint(ctx context.Context, _ *sdkmcp.CallToolRequest, in 
 	// Resolve the scan report.
 	var report *arch.ContextReport
 	if in.CacheKey != "" {
-		r, err := h.proto.GetCachedReport(in.CacheKey)
+		r, err := h.proto.GetCachedReport(ctx, in.CacheKey)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1097,7 +1097,7 @@ func (h *handler) handleLint(ctx context.Context, _ *sdkmcp.CallToolRequest, in 
 		}
 	}
 
-	lintReport := lint.Run(report, lint.RunOpts{
+	lintReport := lint.Run(ctx, report, lint.RunOpts{
 		EnabledLinters:    categories,
 		DesiredState:      ds,
 		Root:              path,

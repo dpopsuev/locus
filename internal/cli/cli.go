@@ -632,7 +632,7 @@ Checks hexagonal architecture, SOLID principles, pattern smells, and symbol qual
 			}
 		}
 
-		lintReport := lint.Run(result.Report, lint.RunOpts{
+		lintReport := lint.Run(cmd.Context(), result.Report, lint.RunOpts{
 			EnabledLinters:    categories,
 			DesiredState:      ds,
 			Root:              path,

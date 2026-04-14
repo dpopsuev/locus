@@ -38,7 +38,7 @@ func RunFixture(t *testing.T, fixtureDir string) {
 		intent = "health"
 	}
 
-	report, err := arch.ScanAndBuild(fixtureDir, arch.ScanOpts{
+	report, err := arch.ScanAndBuild(context.Background(), fixtureDir, arch.ScanOpts{
 		Intent: arch.ScanIntent(intent),
 	})
 	if err != nil {
