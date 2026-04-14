@@ -11,9 +11,13 @@ require (
 	golang.org/x/tools v0.42.0 // indirect
 )
 
-require github.com/dpopsuev/oculus/v3 v3.17.0
+require (
+	github.com/dpopsuev/battery v0.7.0
+	github.com/dpopsuev/oculus/v3 v3.17.0
+)
 
 replace github.com/dpopsuev/oculus/v3 => ../oculus
+
 
 require (
 	github.com/google/jsonschema-go v0.4.2 // indirect

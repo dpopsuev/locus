@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dpopsuev/battery/mcpserver"
 	"github.com/dpopsuev/locus/internal/config"
 	"github.com/dpopsuev/locus/internal/store"
 	oculus "github.com/dpopsuev/oculus/v3"
@@ -175,23 +176,20 @@ var DiagramMinIntent = map[string]string{
 
 // --- Server ---
 
-func NewServer(s store.Store, workspaceRoots []string, version string, pool ...lsp.Pool) (*sdkmcp.Server, *triage.Registry) {
+func NewServer(s store.Store, workspaceRoots []string, version string, pool ...lsp.Pool) (*mcpserver.Server, *triage.Registry) {
 	proto := engine.New(s, workspaceRoots, pool...)
-	srv := sdkmcp.NewServer(
-		&sdkmcp.Implementation{Name: "locus", Version: version},
-		&sdkmcp.ServerOptions{
-			Instructions: "Locus is a spatial context bus for AI agents. Point it at any repository to get architecture, " +
-				"dependency graph, churn, hot spots, and symbols. Results are cached by git HEAD SHA. " +
-				"Workflow: codograph status to check cache, then scan_local (or scan_remote) which returns a cache_key. " +
-				"Pass cache_key to analysis and render_diagram to avoid re-scanning. " +
-				"Use intent param for scan depth: architecture (fast), coupling, health (default), full. " +
-				"Output: default ~50 token summary; format=json for full; format=summary for <500 tokens; format=facts for assertions. " +
-				"Key actions: analysis coupling view=hot_spots (risk), analysis violations (layer checks), " +
-				"analysis drift (desired-state validation), analysis search (find components by name — NOT source grep), " +
-				"analysis preset=architecture_review (one-call summary). " +
-				"codograph set_desired_state to persist architecture rules. render_diagram type=zones for zone overview.",
-		},
-	)
+	bsrv := mcpserver.NewServer("locus", version).
+		WithInstructions("Locus is a spatial context bus for AI agents. Point it at any repository to get architecture, " +
+			"dependency graph, churn, hot spots, and symbols. Results are cached by git HEAD SHA. " +
+			"Workflow: codograph status to check cache, then scan_local (or scan_remote) which returns a cache_key. " +
+			"Pass cache_key to analysis and render_diagram to avoid re-scanning. " +
+			"Use intent param for scan depth: architecture (fast), coupling, health (default), full. " +
+			"Output: default ~50 token summary; format=json for full; format=summary for <500 tokens; format=facts for assertions. " +
+			"Key actions: analysis coupling view=hot_spots (risk), analysis violations (layer checks), " +
+			"analysis drift (desired-state validation), analysis search (find components by name — NOT source grep), " +
+			"analysis preset=architecture_review (one-call summary). " +
+			"codograph set_desired_state to persist architecture rules. render_diagram type=zones for zone overview.")
+	srv := bsrv.SDK()
 	h := &handler{proto: proto}
 	// Record binary mtime at startup for stale binary detection (BUG-33).
 	if exe, err := os.Executable(); err == nil {
@@ -286,7 +284,7 @@ func NewServer(s store.Store, workspaceRoots []string, version string, pool ...l
 		Priority:    1,
 	}, noOut(h.handleTriage))
 
-	return srv, reg
+	return bsrv, reg
 }
 
 type handler struct {
