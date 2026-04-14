@@ -20,15 +20,15 @@ import (
 
 	"github.com/dpopsuev/locus/internal/config"
 	locusmcp "github.com/dpopsuev/locus/internal/mcp"
-	"github.com/dpopsuev/oculus/analyzer"
-	"github.com/dpopsuev/oculus/arch"
-	"github.com/dpopsuev/oculus/diagram"
-	diagramcore "github.com/dpopsuev/oculus/diagram/core"
-	"github.com/dpopsuev/oculus/engine"
-	gitpkg "github.com/dpopsuev/oculus/git"
-	"github.com/dpopsuev/oculus/lint"
-	"github.com/dpopsuev/oculus/lsp"
-	"github.com/dpopsuev/oculus/triage"
+	"github.com/dpopsuev/oculus/v3/analyzer"
+	"github.com/dpopsuev/oculus/v3/arch"
+	"github.com/dpopsuev/oculus/v3/diagram"
+	diagramcore "github.com/dpopsuev/oculus/v3/diagram/core"
+	"github.com/dpopsuev/oculus/v3/engine"
+	gitpkg "github.com/dpopsuev/oculus/v3/git"
+	"github.com/dpopsuev/oculus/v3/lint"
+	"github.com/dpopsuev/oculus/v3/lsp"
+	"github.com/dpopsuev/oculus/v3/triage"
 )
 
 // version is set by Execute and used by commands.

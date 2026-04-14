@@ -3,7 +3,7 @@
 // This package re-exports port types as aliases for backward compatibility.
 package store
 
-import "github.com/dpopsuev/oculus/port"
+import "github.com/dpopsuev/oculus/v3/port"
 
 // Type aliases — re-export port types for backward compatibility.
 // Consumers should migrate to importing port directly over time.

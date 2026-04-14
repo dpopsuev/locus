@@ -7,8 +7,8 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/dpopsuev/oculus/engine"
-	"github.com/dpopsuev/oculus/lsp"
+	"github.com/dpopsuev/oculus/v3/engine"
+	"github.com/dpopsuev/oculus/v3/lsp"
 )
 
 // Type aliases for backward compatibility.

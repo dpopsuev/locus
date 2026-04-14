@@ -4,8 +4,8 @@ import (
 	"os"
 
 	"github.com/dpopsuev/locus/internal/store"
-	"github.com/dpopsuev/oculus/cache"
-	"github.com/dpopsuev/oculus/history"
+	"github.com/dpopsuev/oculus/v3/cache"
+	"github.com/dpopsuev/oculus/v3/history"
 )
 
 const (

@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/dpopsuev/locus/internal/store"
-	"github.com/dpopsuev/oculus/arch"
-	"github.com/dpopsuev/oculus/cache"
+	"github.com/dpopsuev/oculus/v3/arch"
+	"github.com/dpopsuev/oculus/v3/cache"
 )
 
 func TestLRU_HitAvoidsDisk(t *testing.T) {

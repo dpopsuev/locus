@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/dpopsuev/oculus/port"
+	"github.com/dpopsuev/oculus/v3/port"
 	"gopkg.in/yaml.v3"
 )
 

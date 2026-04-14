@@ -10,17 +10,17 @@ import (
 	"testing"
 
 	"github.com/dpopsuev/locus/internal/store"
-	"github.com/dpopsuev/oculus/arch"
-	"github.com/dpopsuev/oculus/cache"
-	"github.com/dpopsuev/oculus/clinic"
-	clinichexa "github.com/dpopsuev/oculus/clinic/hexa"
-	clinicnaming "github.com/dpopsuev/oculus/clinic/naming"
-	clinicsolid "github.com/dpopsuev/oculus/clinic/solid"
-	"github.com/dpopsuev/oculus/diagram"
-	diagramcore "github.com/dpopsuev/oculus/diagram/core"
-	"github.com/dpopsuev/oculus/engine"
-	"github.com/dpopsuev/oculus/history"
-	"github.com/dpopsuev/oculus/testkit"
+	"github.com/dpopsuev/oculus/v3/arch"
+	"github.com/dpopsuev/oculus/v3/cache"
+	"github.com/dpopsuev/oculus/v3/clinic"
+	clinichexa "github.com/dpopsuev/oculus/v3/clinic/hexa"
+	clinicnaming "github.com/dpopsuev/oculus/v3/clinic/naming"
+	clinicsolid "github.com/dpopsuev/oculus/v3/clinic/solid"
+	"github.com/dpopsuev/oculus/v3/diagram"
+	diagramcore "github.com/dpopsuev/oculus/v3/diagram/core"
+	"github.com/dpopsuev/oculus/v3/engine"
+	"github.com/dpopsuev/oculus/v3/history"
+	"github.com/dpopsuev/oculus/v3/testkit"
 )
 
 // RunFixture loads a manifest and validates the fixture against Locus analysis.
