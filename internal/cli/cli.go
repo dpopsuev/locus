@@ -170,6 +170,17 @@ Tools: scan_project, get_dependencies, get_impact, get_coupling_table,
 			return server.ListenAndServe()
 		}
 		slog.LogAttrs(ctx, slog.LevelInfo, "locus server starting", slog.String(logKeyVersion, version), slog.String(logKeyTransport, "stdio"))
+
+		// Watchdog: exit if no MCP session within 30s (LCS-BUG-50).
+		go func() {
+			time.Sleep(30 * time.Second)
+			for range srv.Sessions() {
+				return // at least one session — all good
+			}
+			slog.LogAttrs(ctx, slog.LevelError, "init watchdog: no MCP session after 30s, exiting")
+			os.Exit(1)
+		}()
+
 		return srv.Run(ctx, &sdkmcp.StdioTransport{})
 	},
 }
