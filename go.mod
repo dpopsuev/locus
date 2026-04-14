@@ -11,7 +11,7 @@ require (
 	golang.org/x/tools v0.42.0 // indirect
 )
 
-require github.com/dpopsuev/oculus v0.1.0
+require github.com/dpopsuev/oculus v1.1.1-0.20260414081340-9757af47b4fa
 
 require (
 	github.com/google/jsonschema-go v0.4.2 // indirect
@@ -26,5 +26,3 @@ require (
 	gonum.org/v1/gonum v0.17.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1
 )
-
-replace github.com/dpopsuev/oculus => ../oculus
