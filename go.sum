@@ -5,6 +5,8 @@ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/dpopsuev/battery v0.7.0 h1:lpBZNRaPSGPi4NLF2eZ4zMdsG9NRi0CPIa9+Bi41NV0=
 github.com/dpopsuev/battery v0.7.0/go.mod h1:XYI+WScQ2fMwPFuXRYwLzU8tGhS3OnpaIZNmHCpvWps=
+github.com/dpopsuev/battery v0.9.0 h1:BoqQ/g1HkQYMAH3KzGEIYorp9VGtBOCtxYv5v3OHCGM=
+github.com/dpopsuev/battery v0.9.0/go.mod h1:wbm7TeW4aAKWe8qQDwonJar8vM8jrpqc5V/cjKqZ7XI=
 github.com/golang-jwt/jwt/v5 v5.3.1 h1:kYf81DTWFe7t+1VvL7eS+jKFVWaUnK9cB1qbwn63YCY=
 github.com/golang-jwt/jwt/v5 v5.3.1/go.mod h1:fxCRLWMO43lRc8nhHWY6LGqRcf+1gQWArsqaEUEa5bE=
 github.com/google/go-cmp v0.7.0 h1:wk8382ETsv4JYUZwIsn6YpYiWiBsYLSJiTsyBybVuN8=
