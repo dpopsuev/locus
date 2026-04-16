@@ -1,8 +1,8 @@
 # Locus MCP Server — on-demand analysis container
 #
-#   make docker
-#   docker run --rm -i -v /path/to/repo:/path/to/repo:ro,z \
-#     -w /path/to/repo locus serve --workspace /path/to/repo
+#   make deploy
+#   podman run --rm -i -v /path/to/repo:/path/to/repo:rbind \
+#     locus:$(VERSION) serve --transport http --addr :8081
 
 FROM ubuntu:24.04
 

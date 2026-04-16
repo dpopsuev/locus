@@ -1,6 +1,8 @@
-.PHONY: build version test test-e2e vet fmt lint preflight install-hooks docker test-container install
+.PHONY: build version test test-e2e vet fmt lint preflight install-hooks image test-container install deploy
 
 VERSION ?= $(shell git describe --tags --always --dirty)
+IMAGE   ?= locus:$(VERSION)
+CONTAINER_RT ?= podman
 
 version:
 	@echo $(VERSION)
@@ -8,7 +10,7 @@ version:
 build:
 	CGO_ENABLED=1 go build -trimpath -ldflags="-s -w -X main.Version=$(VERSION)" -o locus ./cmd/locus
 
-install: docker
+install: image
 
 test:
 	go test ./... -count=1
@@ -36,17 +38,26 @@ install-hooks:
 	@chmod +x .git/hooks/pre-commit
 	@echo "pre-commit hook installed (runs make lint-new)"
 
-docker: build
-	docker build -t locus .
+image: build
+	$(CONTAINER_RT) build -t $(IMAGE) .
 
-test-container: docker
+deploy: image
+	-$(CONTAINER_RT) stop locus 2>/dev/null
+	-$(CONTAINER_RT) rm locus 2>/dev/null
+	$(CONTAINER_RT) run -d --name locus \
+		-p 8081:8081 \
+		-v $(HOME):$(HOME):rbind \
+		$(IMAGE) \
+		serve --transport http --addr :8081
+
+test-container: image
 	go test -tags=e2e -run TestContainer_E2E -timeout 300s -v .
 
-release: docker
+release: image
 	@test -n "$(V)" || (echo "usage: make release V=v0.8.0" && exit 1)
 	sed -i 's|quay.io/dpopsuev/locus:[^ "]*|quay.io/dpopsuev/locus:$(V)|g' README.md
 	git add -A && git commit -m "release: $(V)" || true
 	git tag $(V)
 	git push origin main --tags
-	docker tag locus quay.io/dpopsuev/locus:$(V)
-	docker push quay.io/dpopsuev/locus:$(V)
+	$(CONTAINER_RT) tag $(IMAGE) quay.io/dpopsuev/locus:$(V)
+	$(CONTAINER_RT) push quay.io/dpopsuev/locus:$(V)
