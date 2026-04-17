@@ -45,6 +45,8 @@ deploy: image
 	-$(CONTAINER_RT) stop locus 2>/dev/null
 	-$(CONTAINER_RT) rm locus 2>/dev/null
 	$(CONTAINER_RT) run -d --name locus \
+		--userns=keep-id \
+		--user $(shell id -u):$(shell id -g) \
 		-p 8081:8081 \
 		-v $(HOME):$(HOME):rbind \
 		$(IMAGE) \
