@@ -13,7 +13,7 @@ require (
 
 require (
 	github.com/dpopsuev/battery v0.9.0
-	github.com/dpopsuev/oculus/v3 v3.17.0
+	github.com/dpopsuev/oculus/v3 v3.26.0
 )
 
 require (
@@ -37,8 +37,6 @@ require (
 	golang.org/x/net v0.50.0 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 )
-
-replace github.com/dpopsuev/oculus/v3 => ../oculus
 
 require (
 	github.com/google/jsonschema-go v0.4.2 // indirect
