@@ -7,12 +7,10 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/dpopsuev/battery/mcpserver"
-	"github.com/dpopsuev/locus/internal/config"
 	"github.com/dpopsuev/locus/internal/store"
 	oculus "github.com/dpopsuev/oculus/v3"
 	"github.com/dpopsuev/oculus/v3/analyzer"
@@ -21,9 +19,7 @@ import (
 	"github.com/dpopsuev/oculus/v3/diagram"
 	diagramcore "github.com/dpopsuev/oculus/v3/diagram/core"
 	"github.com/dpopsuev/oculus/v3/engine"
-	gitpkg "github.com/dpopsuev/oculus/v3/git"
 	"github.com/dpopsuev/oculus/v3/impact"
-	"github.com/dpopsuev/oculus/v3/lint"
 	"github.com/dpopsuev/oculus/v3/lsp"
 	"github.com/dpopsuev/oculus/v3/triage"
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -91,7 +87,6 @@ const (
 	ActionSOLIDScan      = "solid_scan"
 	ActionSymbolQuality  = "symbol_quality"
 	ActionVocabMap       = "vocab_map"
-	ActionBloaterScan    = "bloater_scan"
 )
 
 // Constraint actions.
@@ -349,7 +344,7 @@ type analysisInput struct {
 }
 
 type clinicInput struct {
-	Action   string `json:"action" jsonschema:"required,pattern_scan | pattern_catalog | hexa_validate | solid_scan | symbol_quality | vocab_map | bloater_scan"`
+	Action   string `json:"action" jsonschema:"required,pattern_scan | pattern_catalog | hexa_validate | solid_scan | symbol_quality | vocab_map"`
 	Path     string `json:"path,omitempty" jsonschema:"absolute path to local repository"`
 	CacheKey string `json:"cache_key,omitempty" jsonschema:"cache key from scan_remote"`
 	Filter   string `json:"filter,omitempty" jsonschema:"filter for pattern_catalog: pattern, smell, or name"`
@@ -633,12 +628,6 @@ func (h *handler) handleClinic(ctx context.Context, _ *sdkmcp.CallToolRequest, i
 		return jsonResult(r)
 	case ActionVocabMap:
 		r, err := h.proto.GetVocabMap(ctx, in.Path, in.CacheKey)
-		if err != nil {
-			return nil, nil, err
-		}
-		return jsonResult(r)
-	case ActionBloaterScan:
-		r, err := h.proto.GetBloaterScan(ctx, in.Path, in.CacheKey)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1043,11 +1032,9 @@ type diagramInput struct {
 // --- Lint handler ---
 
 type lintInput struct {
-	Path     string   `json:"path" jsonschema:"required,absolute path to local repository"`
-	CacheKey string   `json:"cache_key,omitempty" jsonschema:"cache key from scan_remote"`
-	Linters  []string `json:"linters,omitempty" jsonschema:"linter categories to enable: hexa, solid, pattern, symbol, layer, budget"`
-	Since    string   `json:"since,omitempty" jsonschema:"git ref for incremental mode"`
-	Format   string   `json:"format,omitempty" jsonschema:"output format: json, summary"`
+	Path   string `json:"path" jsonschema:"required,absolute path to local repository"`
+	Preset string `json:"preset,omitempty" jsonschema:"preset name: full_clinic, code_health, architecture_review"`
+	Format string `json:"format,omitempty" jsonschema:"output format: json, summary"`
 }
 
 func (h *handler) handleLint(ctx context.Context, _ *sdkmcp.CallToolRequest, in lintInput) (*sdkmcp.CallToolResult, any, error) { //nolint:gocritic
@@ -1056,73 +1043,17 @@ func (h *handler) handleLint(ctx context.Context, _ *sdkmcp.CallToolRequest, in 
 		path = h.proto.Workspaces()[0]
 	}
 
-	// Resolve the scan report.
-	var report *arch.ContextReport
-	if in.CacheKey != "" {
-		r, err := h.proto.GetCachedReport(ctx, in.CacheKey)
-		if err != nil {
-			return nil, nil, err
-		}
-		report = r
-	} else {
-		result, err := h.proto.ScanProject(ctx, path, engine.ScanOpts{
-			Intent: string(arch.IntentHealth),
-		})
-		if err != nil {
-			return nil, nil, err
-		}
-		report = result.Report
+	preset := in.Preset
+	if preset == "" {
+		preset = "full_clinic"
 	}
 
-	// Load optional .locus.yaml config.
-	ds, _ := config.LoadLocusConfig(path)
-
-	// Parse linter categories.
-	var categories []lint.Category
-	for _, s := range in.Linters {
-		s = strings.TrimSpace(s)
-		if s != "" {
-			categories = append(categories, lint.Category(s))
-		}
+	result, err := h.proto.RunPreset(ctx, path, preset)
+	if err != nil {
+		return nil, nil, err
 	}
 
-	// Resolve changed components for incremental mode.
-	var changed []string
-	if in.Since != "" {
-		files, gitErr := gitpkg.ChangedFilesSince(path, in.Since)
-		if gitErr == nil {
-			changed = lintFilesToComponents(files)
-		}
-	}
-
-	lintReport := lint.Run(ctx, report, lint.RunOpts{
-		EnabledLinters:    categories,
-		DesiredState:      ds,
-		Root:              path,
-		ChangedComponents: changed,
-	})
-
-	if in.Format == FormatSummary {
-		return text(lintReport.Summary), nil, nil
-	}
-	return jsonResult(lintReport)
-}
-
-// lintFilesToComponents deduplicates file paths into component directories.
-func lintFilesToComponents(files []string) []string {
-	seen := make(map[string]bool, len(files))
-	var result []string
-	for _, f := range files {
-		dir := filepath.Dir(f)
-		if dir == "." {
-			continue
-		}
-		if !seen[dir] {
-			seen[dir] = true
-			result = append(result, dir)
-		}
-	}
-	return result
+	return text(result), nil, nil
 }
 
 // --- Triage handler ---

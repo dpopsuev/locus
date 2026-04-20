@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -25,8 +24,6 @@ import (
 	"github.com/dpopsuev/oculus/v3/diagram"
 	diagramcore "github.com/dpopsuev/oculus/v3/diagram/core"
 	"github.com/dpopsuev/oculus/v3/engine"
-	gitpkg "github.com/dpopsuev/oculus/v3/git"
-	"github.com/dpopsuev/oculus/v3/lint"
 	"github.com/dpopsuev/oculus/v3/lsp"
 	"github.com/dpopsuev/oculus/v3/triage"
 )
@@ -577,21 +574,17 @@ Examples:
 }
 
 var lintFlags struct {
-	format  string
-	since   string
-	linters string
+	preset string
 }
 
 var lintCmd = &cobra.Command{
 	Use:   "lint [path]",
-	Short: "Run architectural linters",
-	Long: `Scan a repository and run architectural linters to detect violations.
-Checks hexagonal architecture, SOLID principles, pattern smells, and symbol quality.
+	Short: "Run architectural analysis",
+	Long: `Scan a repository and run architectural analysis via presets.
 
   locus lint .
-  locus lint /path/to/repo --format json
-  locus lint . --linters hexa,solid
-  locus lint . --since HEAD~5`,
+  locus lint /path/to/repo
+  locus lint . --preset code_health`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		path := "."
@@ -600,110 +593,19 @@ Checks hexagonal architecture, SOLID principles, pattern smells, and symbol qual
 		}
 
 		proto := newProto()
-		result, err := proto.ScanProject(cmd.Context(), path, engine.ScanOpts{
-			Intent: string(arch.IntentHealth),
-		})
+		preset := lintFlags.preset
+		if preset == "" {
+			preset = "full_clinic"
+		}
+
+		result, err := proto.RunPreset(cmd.Context(), path, preset)
 		if err != nil {
 			return err
 		}
 
-		// Load optional .locus.yaml config.
-		ds, err := config.LoadLocusConfig(path)
-		if err != nil {
-			return fmt.Errorf("config: %w", err)
-		}
-
-		// Parse --linters flag into categories.
-		var categories []lint.Category
-		if lintFlags.linters != "" {
-			for _, s := range strings.Split(lintFlags.linters, ",") {
-				s = strings.TrimSpace(s)
-				if s != "" {
-					categories = append(categories, lint.Category(s))
-				}
-			}
-		}
-
-		// Resolve changed components for incremental mode.
-		var changed []string
-		if lintFlags.since != "" {
-			files, gitErr := gitpkg.ChangedFilesSince(path, lintFlags.since)
-			if gitErr == nil {
-				changed = filesToComponents(files)
-			}
-		}
-
-		lintReport := lint.Run(cmd.Context(), result.Report, lint.RunOpts{
-			EnabledLinters:    categories,
-			DesiredState:      ds,
-			Root:              path,
-			ChangedComponents: changed,
-		})
-
-		switch lintFlags.format {
-		case formatJSON:
-			return printJSON(lintReport)
-		case "table":
-			return printLintTable(lintReport)
-		default:
-			return printLintSummary(lintReport)
-		}
+		fmt.Print(result)
+		return nil
 	},
-}
-
-// printLintSummary prints a concise human-readable summary.
-func printLintSummary(r *lint.Report) error {
-	fmt.Printf("Locus Lint: %d violations (score: %.1f)\n", len(r.Violations), r.Score)
-
-	if len(r.ByCategory) > 0 {
-		fmt.Println()
-		for _, cat := range []lint.Category{
-			lint.CategoryHexa, lint.CategorySOLID, lint.CategoryPattern,
-			lint.CategorySymbol, lint.CategoryLayer, lint.CategoryBudget,
-		} {
-			if n, ok := r.ByCategory[cat]; ok && n > 0 {
-				fmt.Printf("  %-10s %d\n", string(cat)+":", n)
-			}
-		}
-	}
-
-	if !r.Clean {
-		os.Exit(1)
-	}
-	return nil
-}
-
-// printLintTable prints violations as an aligned table.
-func printLintTable(r *lint.Report) error {
-	fmt.Printf("%-10s %-8s %-30s %s\n", "CATEGORY", "SEVERITY", "COMPONENT", "RULE")
-	fmt.Println(strings.Repeat("-", 80))
-	for _, v := range r.Violations {
-		fmt.Printf("%-10s %-8s %-30s %s\n", v.Category, v.Severity, v.Component, v.Rule)
-	}
-	fmt.Printf("\n%d violations, score: %.1f\n", len(r.Violations), r.Score)
-
-	if !r.Clean {
-		os.Exit(1)
-	}
-	return nil
-}
-
-// filesToComponents deduplicates file paths into component directories.
-// It strips the file basename, keeping only the directory portion.
-func filesToComponents(files []string) []string {
-	seen := make(map[string]bool, len(files))
-	var result []string
-	for _, f := range files {
-		dir := filepath.Dir(f)
-		if dir == "." {
-			continue
-		}
-		if !seen[dir] {
-			seen[dir] = true
-			result = append(result, dir)
-		}
-	}
-	return result
 }
 
 func init() {
@@ -754,9 +656,7 @@ func init() {
 	triageCmd.Flags().BoolVar(&triageFlags.list, "list", false, "List all registered tools grouped by category")
 	triageCmd.Flags().StringVar(&triageFlags.category, "category", "", "Show tools in a specific category")
 
-	lintCmd.Flags().StringVar(&lintFlags.format, "format", "summary", "Output format: summary, table, json")
-	lintCmd.Flags().StringVar(&lintFlags.since, "since", "", "Git ref for incremental mode (only violations in changed files)")
-	lintCmd.Flags().StringVar(&lintFlags.linters, "linters", "", "Comma-separated linter categories: hexa,solid,pattern,symbol,layer,budget")
+	lintCmd.Flags().StringVar(&lintFlags.preset, "preset", "full_clinic", "Analysis preset: full_clinic, code_health, architecture_review")
 }
 
 func renderReport(report *arch.ContextReport, format string) error {
