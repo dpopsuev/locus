@@ -41,6 +41,9 @@ var (
 	ErrUnknownMeshView        = errors.New("unknown mesh view")
 	ErrSymbolRequired         = errors.New("symbol is required")
 	ErrConvergenceMinSymbols  = errors.New("convergence requires at least 2 symbols")
+	ErrExplainEdgeParams      = errors.New("explain_edge requires symbol (source FQN) and query (target FQN)")
+	ErrSymbolDiffParams       = errors.New("symbol_diff requires before_sha and after_sha")
+	ErrUnknownContextAction   = errors.New("unknown context action")
 )
 
 // --- Action constants ---
@@ -82,6 +85,10 @@ const (
 	ActionScenario     = "scenario"
 	ActionConvergence  = "convergence"
 	ActionIsolate      = "isolate"
+	ActionDiagnose     = "diagnose"
+	ActionIslands      = "islands"
+	ActionExplainEdge  = "explain_edge"
+	ActionSymbolDiff   = "symbol_diff"
 )
 
 // Coupling view names.
@@ -143,16 +150,14 @@ var DiagramMinIntent = map[string]string{
 func NewServer(s store.Store, workspaceRoots []string, version string, pool ...lsp.Pool) (*mcpserver.Server, *triage.Registry) {
 	proto := engine.New(s, workspaceRoots, pool...)
 	bsrv := mcpserver.NewServer("locus", version).
-		WithInstructions("Locus is a spatial context bus for AI agents. Point it at any repository to get architecture, " +
-			"dependency graph, churn, hot spots, and symbols. Results are cached by git HEAD SHA. " +
-			"Workflow: codograph status to check cache, then scan_local (or scan_remote) which returns a cache_key. " +
-			"Pass cache_key to analysis and render_diagram to avoid re-scanning. " +
-			"Use intent param for scan depth: architecture (fast), coupling, health (default), full. " +
-			"Output: default ~50 token summary; format=json for full; format=summary for <500 tokens; format=facts for assertions. " +
-			"Key actions: analysis coupling view=hot_spots (risk), analysis violations (layer checks), " +
-			"analysis drift (desired-state validation), analysis search (find components by name — NOT source grep), " +
-			"analysis preset=architecture_review (one-call summary). " +
-			"codograph set_desired_state to persist architecture rules. render_diagram type=zones for zone overview.")
+		WithInstructions("Locus is a Graph Walker for AI agents. Scan any repository, then walk the symbol graph with 4 primitives: " +
+			"probe (all vitals for one symbol), scenario (trace upstream/downstream to system boundaries), " +
+			"convergence (where N symbols meet), isolate (what disconnects if removed). " +
+			"Use the book tool to query diagnostic knowledge (smells, patterns, principles, metrics). " +
+			"Use diagnose for one-call probe+book. " +
+			"Workflow: codograph scan_local → analysis probe/scenario/convergence/isolate → book query → diagnose. " +
+			"Results cached by git HEAD SHA. Pass cache_key to avoid re-scanning. " +
+			"Intent param controls scan depth: architecture (fast), coupling, health (default), full.")
 	srv := bsrv.SDK()
 	h := &handler{proto: proto}
 	// Record binary mtime at startup for stale binary detection (BUG-33).
@@ -177,14 +182,11 @@ func NewServer(s store.Store, workspaceRoots []string, version string, pool ...l
 
 	triage.AddTool(reg, srv, triage.ToolMeta{
 		Name: "analysis",
-		Description: "Core dependency analysis. " +
-			"Actions: deps, impact, coupling, cycles, violations, callers, component, search, query, preset, scan_diff, symbol_graph, pipelines, mesh, " +
-			"probe, scenario, convergence, isolate. " +
-			"Symbol primitives: probe (all vitals for one symbol), scenario (trace upstream/downstream to boundaries), " +
-			"convergence (where N symbols meet), isolate (what disconnects if removed). " +
-			"NOTE: search finds components by name (architecture-level, NOT source code grep). " +
-			"Use symbol_search for finding functions/types by name pattern.",
-		Keywords:   []string{"depend", "import", "impact", "coupling", "fan", "cycle", "circular", "caller", "callee", "call", "who", "symbol", "function", "find", "component", "pipeline", "data flow", "chain", "risk", "risky", "dangerous", "health", "review", "onboarding", "preset", "mesh", "zoom", "probe", "scenario", "trace", "convergence", "meet", "isolate", "disconnect", "break"},
+		Description: "Symbol graph analysis with 4 primitives. " +
+			"Actions: probe, scenario, convergence, isolate, diagnose, islands, explain_edge, symbol_diff, " +
+			"deps, coupling, cycles, violations, callers, callees, call_path, " +
+			"component, search, symbol_search, symbol_graph, pipelines, mesh, preset.",
+		Keywords:   []string{"depend", "import", "impact", "coupling", "fan", "cycle", "circular", "caller", "callee", "call", "who", "symbol", "function", "find", "component", "pipeline", "data flow", "chain", "risk", "risky", "dangerous", "health", "review", "onboarding", "preset", "mesh", "zoom", "probe", "scenario", "trace", "convergence", "meet", "isolate", "disconnect", "break", "diagnose", "islands", "dead code", "unreachable", "explain", "snippet", "diff", "changed"},
 		Categories: []string{"dependencies", "architecture"},
 		Rationale:  map[string]string{"dependencies": "Component-level dependency analysis and cycle detection"},
 		Priority:   2,
@@ -207,6 +209,15 @@ func NewServer(s store.Store, workspaceRoots []string, version string, pool ...l
 		Rationale:   map[string]string{"knowledge": "Interpret signals with diagnostic knowledge"},
 		Priority:    1,
 	}, noOut(h.handleBook))
+
+	triage.AddTool(reg, srv, triage.ToolMeta{
+		Name:        "context",
+		Description: "Read and write project-specific knowledge. Actions: read, write. Per-project memory stored under XDG, git-aware staleness detection.",
+		Keywords:    []string{"context", "memory", "note", "remember", "knowledge", "project", "module", "file", "symbol", "stale"},
+		Categories:  []string{"knowledge"},
+		Rationale:   map[string]string{"knowledge": "Agent's project-specific memory"},
+		Priority:    1,
+	}, noOut(h.handleContext))
 
 	h.reg = reg
 	triage.AddTool(reg, srv, triage.ToolMeta{
@@ -257,7 +268,7 @@ type codographActionInput struct {
 }
 
 type analysisInput struct {
-	Action    string   `json:"action" jsonschema:"required,deps | impact | coupling | cycles | violations | callers | component | search | query | preset | scan_diff | risk_scores | symbol_search | callees | call_path | symbol_graph | pipelines | mesh | probe | scenario | convergence | isolate"`
+	Action    string   `json:"action" jsonschema:"required,deps | impact | coupling | cycles | violations | callers | component | search | query | preset | scan_diff | risk_scores | symbol_search | callees | call_path | symbol_graph | pipelines | mesh | probe | scenario | convergence | isolate | diagnose | islands | explain_edge | symbol_diff"`
 	Symbols   []string `json:"symbols,omitempty" jsonschema:"symbol FQNs for convergence (multiple symbols)"`
 	Stress    bool     `json:"stress,omitempty" jsonschema:"enrich scenario nodes with fan-out and downstream count"`
 	Path      string   `json:"path,omitempty" jsonschema:"absolute path to local repository"`
@@ -401,7 +412,8 @@ func (h *handler) handleAnalysis(ctx context.Context, _ *sdkmcp.CallToolRequest,
 		}
 		return jsonResult(r)
 	case ActionRiskScores, ActionSymbolSearch, ActionCallees, ActionCallPath, ActionSymbolGraph, ActionPipelines, ActionMesh,
-		"probe", "scenario", "convergence", "isolate":
+		ActionProbe, ActionScenario, ActionConvergence, ActionIsolate,
+		ActionDiagnose, ActionIslands, ActionExplainEdge, ActionSymbolDiff:
 		return h.dispatchAnalysisExtended(ctx, &in)
 	default:
 		return nil, nil, fmt.Errorf("%w %q", ErrUnknownAction, in.Action)
@@ -454,6 +466,8 @@ func (h *handler) dispatchAnalysisExtended(ctx context.Context, in *analysisInpu
 		return h.handleMesh(ctx, in)
 	case ActionProbe, ActionScenario, ActionConvergence, ActionIsolate:
 		return h.dispatchPrimitives(ctx, in)
+	case ActionDiagnose, ActionIslands, ActionExplainEdge, ActionSymbolDiff:
+		return h.dispatchAnalysisOps(ctx, in)
 	default:
 		return nil, nil, fmt.Errorf("%w %q", ErrUnknownAction, in.Action)
 	}
@@ -497,6 +511,52 @@ func (h *handler) dispatchPrimitives(ctx context.Context, in *analysisInput) (*s
 			return nil, nil, ErrSymbolRequired
 		}
 		r, err := h.proto.IsolateSymbol(ctx, in.Path, in.Symbol)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
+	default:
+		return nil, nil, fmt.Errorf("%w %q", ErrUnknownAction, in.Action)
+	}
+}
+
+func (h *handler) dispatchAnalysisOps(ctx context.Context, in *analysisInput) (*sdkmcp.CallToolResult, any, error) {
+	switch in.Action {
+	case ActionDiagnose:
+		if in.Symbol == "" {
+			return nil, nil, ErrSymbolRequired
+		}
+		r, err := h.proto.Diagnose(ctx, in.Path, in.Symbol)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
+	case ActionIslands:
+		r, err := h.proto.FindIslands(ctx, in.Path, in.Symbols)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
+	case ActionExplainEdge:
+		if in.Symbol == "" || in.Query == "" {
+			return nil, nil, ErrExplainEdgeParams
+		}
+		sg, err := h.proto.GetSymbolGraph(ctx, in.Path)
+		if err != nil {
+			return nil, nil, err
+		}
+		for i := range sg.Edges {
+			if sg.Edges[i].SourceFQN == in.Symbol && sg.Edges[i].TargetFQN == in.Query {
+				snippet := oculus.ExplainEdge(in.Path, sg.Edges[i], 3)
+				return text(snippet), nil, nil
+			}
+		}
+		return text("edge not found"), nil, nil
+	case ActionSymbolDiff:
+		if in.BeforeSHA == "" || in.AfterSHA == "" {
+			return nil, nil, ErrSymbolDiffParams
+		}
+		r, err := h.proto.DiffSymbolGraphs(ctx, in.BeforeSHA, in.AfterSHA)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -847,6 +907,34 @@ func (h *handler) handleTriage(_ context.Context, _ *sdkmcp.CallToolRequest, in 
 		return nil, nil, ErrIntentRequired
 	}
 	return jsonResult(h.reg.Triage(in.Intent, in.Path))
+}
+
+// --- Context handler ---
+
+type contextInput struct {
+	Action  string `json:"action" jsonschema:"required,read | write"`
+	Path    string `json:"path" jsonschema:"required,repository path"`
+	Scope   string `json:"scope" jsonschema:"required,project | module | file | symbol"`
+	Target  string `json:"target,omitempty" jsonschema:"target name (package, file path, or FQN)"`
+	Content string `json:"content,omitempty" jsonschema:"content to write (write action only)"`
+}
+
+func (h *handler) handleContext(ctx context.Context, _ *sdkmcp.CallToolRequest, in contextInput) (*sdkmcp.CallToolResult, any, error) { //nolint:gocritic
+	path := in.Path
+	if path == "" && len(h.proto.Workspaces()) > 0 {
+		path = h.proto.Workspaces()[0]
+	}
+	// For now, return a placeholder until engine wiring is complete
+	// The context package exists in Oculus but isn't wired through engine yet
+	_ = path
+	switch in.Action {
+	case "read":
+		return text("context read not yet wired to engine"), nil, nil
+	case "write":
+		return text("context write not yet wired to engine"), nil, nil
+	default:
+		return nil, nil, fmt.Errorf("%w: %s", ErrUnknownContextAction, in.Action)
+	}
 }
 
 // --- Helpers ---
