@@ -19,7 +19,6 @@ import (
 	"github.com/dpopsuev/oculus/v3/diagram"
 	diagramcore "github.com/dpopsuev/oculus/v3/diagram/core"
 	"github.com/dpopsuev/oculus/v3/engine"
-	"github.com/dpopsuev/oculus/v3/impact"
 	"github.com/dpopsuev/oculus/v3/lsp"
 	"github.com/dpopsuev/oculus/v3/triage"
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -40,6 +39,8 @@ var (
 	ErrMeshFQNRequired        = errors.New("fqn is required for mesh neighborhood")
 	ErrMeshFromToRequired     = errors.New("from and to are required for mesh distance")
 	ErrUnknownMeshView        = errors.New("unknown mesh view")
+	ErrSymbolRequired         = errors.New("symbol is required")
+	ErrConvergenceMinSymbols  = errors.New("convergence requires at least 2 symbols")
 )
 
 // --- Action constants ---
@@ -77,42 +78,10 @@ const (
 	ActionSymbolGraph  = "symbol_graph"
 	ActionPipelines    = "pipelines"
 	ActionMesh         = "mesh"
-)
-
-// Clinic actions.
-const (
-	ActionPatternScan    = "pattern_scan"
-	ActionPatternCatalog = "pattern_catalog"
-	ActionHexaValidate   = "hexa_validate"
-	ActionSOLIDScan      = "solid_scan"
-	ActionSymbolQuality  = "symbol_quality"
-	ActionVocabMap       = "vocab_map"
-)
-
-// Constraint actions.
-const (
-	ActionBlastRadius      = "blast_radius"
-	ActionImportDirection  = "import_direction"
-	ActionTrustBoundaries  = "trust_boundaries"
-	ActionBudgets          = "budgets"
-	ActionModDependencies  = "mod_dependencies"
-	ActionSymbolBlast      = "symbol_blast"
-	ActionInterfaceMetrics = "interface_metrics"
-	ActionLeverage         = "leverage"
-	ActionCoverage         = "coverage"
-	ActionAPISurface       = "api_surface"
-	ActionConventions      = "conventions"
-	ActionGaps             = "gaps"
-	ActionConsolidate      = "consolidate"
-)
-
-// Refactor actions.
-const (
-	ActionCrossRepo        = "cross_repo"
-	ActionDrift            = "drift"
-	ActionSuggestArch      = "suggest_architecture"
-	ActionWhatIf           = "what_if"
-	ActionDiffIntelligence = "diff_intelligence"
+	ActionProbe        = "probe"
+	ActionScenario     = "scenario"
+	ActionConvergence  = "convergence"
+	ActionIsolate      = "isolate"
 )
 
 // Coupling view names.
@@ -209,46 +178,17 @@ func NewServer(s store.Store, workspaceRoots []string, version string, pool ...l
 	triage.AddTool(reg, srv, triage.ToolMeta{
 		Name: "analysis",
 		Description: "Core dependency analysis. " +
-			"Actions: deps, impact, coupling, cycles, violations, callers, component, search, query, preset, scan_diff, symbol_graph, pipelines. " +
+			"Actions: deps, impact, coupling, cycles, violations, callers, component, search, query, preset, scan_diff, symbol_graph, pipelines, mesh, " +
+			"probe, scenario, convergence, isolate. " +
+			"Symbol primitives: probe (all vitals for one symbol), scenario (trace upstream/downstream to boundaries), " +
+			"convergence (where N symbols meet), isolate (what disconnects if removed). " +
 			"NOTE: search finds components by name (architecture-level, NOT source code grep). " +
-			"Use symbol_search for finding functions/types by name pattern. " +
-			"For source code text search, use your own grep tool — Locus does not do text search.",
-		Keywords:   []string{"depend", "import", "impact", "coupling", "fan", "cycle", "circular", "caller", "callee", "call", "who", "symbol", "function", "find", "component", "pipeline", "data flow", "chain", "risk", "risky", "dangerous", "health", "review", "onboarding", "preset", "mesh", "zoom"},
+			"Use symbol_search for finding functions/types by name pattern.",
+		Keywords:   []string{"depend", "import", "impact", "coupling", "fan", "cycle", "circular", "caller", "callee", "call", "who", "symbol", "function", "find", "component", "pipeline", "data flow", "chain", "risk", "risky", "dangerous", "health", "review", "onboarding", "preset", "mesh", "zoom", "probe", "scenario", "trace", "convergence", "meet", "isolate", "disconnect", "break"},
 		Categories: []string{"dependencies", "architecture"},
 		Rationale:  map[string]string{"dependencies": "Component-level dependency analysis and cycle detection"},
 		Priority:   2,
 	}, noOut(h.handleAnalysis))
-
-	triage.AddTool(reg, srv, triage.ToolMeta{
-		Name: "clinic",
-		Description: "Code quality and design pattern analysis. " +
-			"Actions: pattern_scan, pattern_catalog, hexa_validate, solid_scan, symbol_quality, vocab_map.",
-		Keywords:   []string{"pattern", "smell", "solid", "hexagonal", "quality", "symbol", "naming", "bloat", "large", "long function", "god", "vocabulary", "vocab"},
-		Categories: []string{"quality", "refactoring"},
-		Rationale:  map[string]string{"quality": "SOLID, hexagonal, pattern/smell detection"},
-		Priority:   2,
-	}, noOut(h.handleClinic))
-
-	triage.AddTool(reg, srv, triage.ToolMeta{
-		Name: "constraint",
-		Description: "Architecture enforcement and health metrics. " +
-			"Actions: blast_radius, import_direction, trust_boundaries, budgets, mod_dependencies, " +
-			"symbol_blast, interface_metrics, leverage, coverage, api_surface, conventions, gaps.",
-		Keywords:   []string{"constraint", "boundary", "budget", "coverage", "leverage", "trust", "direction", "blast", "interface", "method", "ISP", "fat", "gap", "missing", "api", "public", "exported", "consolidate", "merge", "redundant", "convention"},
-		Categories: []string{"enforcement", "health"},
-		Rationale:  map[string]string{"enforcement": "Architecture rules, budgets, and boundary checks"},
-		Priority:   2,
-	}, noOut(h.handleConstraint))
-
-	triage.AddTool(reg, srv, triage.ToolMeta{
-		Name: "refactor",
-		Description: "Refactoring intelligence and what-if simulation. " +
-			"Actions: cross_repo, drift, suggest_architecture, what_if, diff_intelligence.",
-		Keywords:   []string{"refactor", "what-if", "drift", "suggest", "diff", "cross-repo"},
-		Categories: []string{"refactoring", "comparison"},
-		Rationale:  map[string]string{"refactoring": "Simulate refactors, detect drift, compare repos"},
-		Priority:   2,
-	}, noOut(h.handleRefactor))
 
 	triage.AddTool(reg, srv, triage.ToolMeta{
 		Name:        "render_diagram",
@@ -260,14 +200,13 @@ func NewServer(s store.Store, workspaceRoots []string, version string, pool ...l
 	}, noOut(h.handleRenderDiagram))
 
 	triage.AddTool(reg, srv, triage.ToolMeta{
-		Name: "lint",
-		Description: "Run architectural linters. " +
-			"Checks hexagonal architecture, SOLID, pattern smells, symbol quality, layer purity, and budget constraints.",
-		Keywords:   []string{"lint", "quality", "violations", "check", "architecture", "solid", "hexa"},
-		Categories: []string{"quality", "enforcement"},
-		Rationale:  map[string]string{"quality": "Unified architectural lint pass", "enforcement": "Check all rules in one call"},
-		Priority:   1,
-	}, noOut(h.handleLint))
+		Name:        "book",
+		Description: "Query the Architect's Book — knowledge graph for diagnostic reasoning. Input: keywords + hops. Returns knowledge entries with typed edges (violates, measured_by, confused_with, remediation).",
+		Keywords:    []string{"book", "knowledge", "diagnose", "interpret", "smell", "pattern", "principle", "metric", "fan-in", "god", "solid", "coupling"},
+		Categories:  []string{"knowledge", "diagnosis"},
+		Rationale:   map[string]string{"knowledge": "Interpret signals with diagnostic knowledge"},
+		Priority:    1,
+	}, noOut(h.handleBook))
 
 	h.reg = reg
 	triage.AddTool(reg, srv, triage.ToolMeta{
@@ -318,7 +257,9 @@ type codographActionInput struct {
 }
 
 type analysisInput struct {
-	Action    string   `json:"action" jsonschema:"required,deps | impact | coupling | cycles | violations | callers | component | search | query | preset | scan_diff | risk_scores | symbol_search | callees | call_path | symbol_graph | pipelines | mesh"`
+	Action    string   `json:"action" jsonschema:"required,deps | impact | coupling | cycles | violations | callers | component | search | query | preset | scan_diff | risk_scores | symbol_search | callees | call_path | symbol_graph | pipelines | mesh | probe | scenario | convergence | isolate"`
+	Symbols   []string `json:"symbols,omitempty" jsonschema:"symbol FQNs for convergence (multiple symbols)"`
+	Stress    bool     `json:"stress,omitempty" jsonschema:"enrich scenario nodes with fan-out and downstream count"`
 	Path      string   `json:"path,omitempty" jsonschema:"absolute path to local repository"`
 	CacheKey  string   `json:"cache_key,omitempty" jsonschema:"cache key from scan_remote"`
 	Component string   `json:"component,omitempty" jsonschema:"component path for deps/impact/coupling"`
@@ -341,35 +282,6 @@ type analysisInput struct {
 	From      string   `json:"from,omitempty" jsonschema:"source symbol FQN (mesh distance)"`
 	To        string   `json:"to,omitempty" jsonschema:"target symbol FQN (mesh distance)"`
 	MinWeight *float64 `json:"min_weight,omitempty" jsonschema:"minimum edge weight filter (mesh boundaries/neighborhood, default 0.1)"`
-}
-
-type clinicInput struct {
-	Action   string `json:"action" jsonschema:"required,pattern_scan | pattern_catalog | hexa_validate | solid_scan | symbol_quality | vocab_map"`
-	Path     string `json:"path,omitempty" jsonschema:"absolute path to local repository"`
-	CacheKey string `json:"cache_key,omitempty" jsonschema:"cache key from scan_remote"`
-	Filter   string `json:"filter,omitempty" jsonschema:"filter for pattern_catalog: pattern, smell, or name"`
-}
-
-type constraintInput struct {
-	Action    string   `json:"action" jsonschema:"required,blast_radius | import_direction | trust_boundaries | budgets | mod_dependencies | symbol_blast | interface_metrics | leverage | coverage | api_surface | conventions | gaps | consolidate"`
-	Path      string   `json:"path,omitempty" jsonschema:"absolute path to local repository"`
-	CacheKey  string   `json:"cache_key,omitempty" jsonschema:"cache key from scan_remote"`
-	Component string   `json:"component,omitempty" jsonschema:"component for leverage"`
-	Symbol    string   `json:"symbol,omitempty" jsonschema:"symbol for symbol_blast"`
-	Files     []string `json:"files,omitempty" jsonschema:"changed files for blast_radius"`
-	Since     string   `json:"since,omitempty" jsonschema:"git ref for blast_radius"`
-	Threshold float64  `json:"threshold,omitempty" jsonschema:"coverage threshold"`
-	Trusted   []string `json:"trusted,omitempty" jsonschema:"trusted prefixes (api_surface)"`
-}
-
-type refactorInput struct {
-	Action    string            `json:"action" jsonschema:"required,cross_repo | drift | suggest_architecture | what_if | diff_intelligence"`
-	Path      string            `json:"path,omitempty" jsonschema:"absolute path to local repository"`
-	CacheKey  string            `json:"cache_key,omitempty" jsonschema:"cache key from scan_remote"`
-	PathB     string            `json:"path_b,omitempty" jsonschema:"second repo path (cross_repo)"`
-	CacheKeyB string            `json:"cache_key_b,omitempty" jsonschema:"second cache key (cross_repo)"`
-	Moves     []impact.FileMove `json:"moves,omitempty" jsonschema:"component moves for what_if"`
-	Since     string            `json:"since,omitempty" jsonschema:"git ref for diff_intelligence"`
 }
 
 // staleBinaryWarning returns a warning string if the on-disk binary has been
@@ -488,14 +400,13 @@ func (h *handler) handleAnalysis(ctx context.Context, _ *sdkmcp.CallToolRequest,
 			return nil, nil, err
 		}
 		return jsonResult(r)
-	case ActionRiskScores, ActionSymbolSearch, ActionCallees, ActionCallPath, ActionSymbolGraph, ActionPipelines, ActionMesh:
+	case ActionRiskScores, ActionSymbolSearch, ActionCallees, ActionCallPath, ActionSymbolGraph, ActionPipelines, ActionMesh,
+		"probe", "scenario", "convergence", "isolate":
 		return h.dispatchAnalysisExtended(ctx, &in)
 	default:
 		return nil, nil, fmt.Errorf("%w %q", ErrUnknownAction, in.Action)
 	}
 }
-
-// --- Clinic handler (table-driven) ---
 
 func (h *handler) dispatchAnalysisExtended(ctx context.Context, in *analysisInput) (*sdkmcp.CallToolResult, any, error) {
 	switch in.Action {
@@ -541,6 +452,55 @@ func (h *handler) dispatchAnalysisExtended(ctx context.Context, in *analysisInpu
 		return jsonResult(r)
 	case ActionMesh:
 		return h.handleMesh(ctx, in)
+	case ActionProbe, ActionScenario, ActionConvergence, ActionIsolate:
+		return h.dispatchPrimitives(ctx, in)
+	default:
+		return nil, nil, fmt.Errorf("%w %q", ErrUnknownAction, in.Action)
+	}
+}
+
+func (h *handler) dispatchPrimitives(ctx context.Context, in *analysisInput) (*sdkmcp.CallToolResult, any, error) {
+	switch in.Action {
+	case ActionProbe:
+		if in.Symbol == "" {
+			return nil, nil, ErrSymbolRequired
+		}
+		r, err := h.proto.ProbeSymbol(ctx, in.Path, in.Symbol)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
+	case ActionScenario:
+		if in.Symbol == "" {
+			return nil, nil, ErrSymbolRequired
+		}
+		depth := in.Hops
+		if depth <= 0 {
+			depth = 10
+		}
+		r, err := h.proto.GetScenario(ctx, in.Path, in.Symbol, depth, in.Stress)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
+	case ActionConvergence:
+		if len(in.Symbols) < 2 {
+			return nil, nil, ErrConvergenceMinSymbols
+		}
+		r, err := h.proto.GetConvergence(ctx, in.Path, in.Symbols)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
+	case ActionIsolate:
+		if in.Symbol == "" {
+			return nil, nil, ErrSymbolRequired
+		}
+		r, err := h.proto.IsolateSymbol(ctx, in.Path, in.Symbol)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
 	default:
 		return nil, nil, fmt.Errorf("%w %q", ErrUnknownAction, in.Action)
 	}
@@ -598,47 +558,6 @@ func (h *handler) handleMesh(ctx context.Context, in *analysisInput) (*sdkmcp.Ca
 	}
 }
 
-func (h *handler) handleClinic(ctx context.Context, _ *sdkmcp.CallToolRequest, in clinicInput) (*sdkmcp.CallToolResult, any, error) { //nolint:gocritic
-	switch in.Action {
-	case ActionPatternScan:
-		r, err := h.proto.GetPatternScan(ctx, in.Path, in.CacheKey)
-		if err != nil {
-			return nil, nil, err
-		}
-		return jsonResult(r)
-	case ActionPatternCatalog:
-		return jsonResult(h.proto.GetPatternCatalog(in.Filter))
-	case ActionHexaValidate:
-		r, err := h.proto.GetHexaValidation(ctx, in.Path, in.CacheKey)
-		if err != nil {
-			return nil, nil, err
-		}
-		return jsonResult(r)
-	case ActionSOLIDScan:
-		r, err := h.proto.GetSOLIDScan(ctx, in.Path, in.CacheKey)
-		if err != nil {
-			return nil, nil, err
-		}
-		return jsonResult(r)
-	case ActionSymbolQuality:
-		r, err := h.proto.GetSymbolQuality(ctx, in.Path, in.CacheKey)
-		if err != nil {
-			return nil, nil, err
-		}
-		return jsonResult(r)
-	case ActionVocabMap:
-		r, err := h.proto.GetVocabMap(ctx, in.Path, in.CacheKey)
-		if err != nil {
-			return nil, nil, err
-		}
-		return jsonResult(r)
-	default:
-		return nil, nil, fmt.Errorf("%w %q", ErrUnknownAction, in.Action)
-	}
-}
-
-// --- Constraint handler (table-driven) ---
-
 func (h *handler) dispatchAnalysisLookup(ctx context.Context, in *analysisInput) (*sdkmcp.CallToolResult, any, error) {
 	switch in.Action {
 	case ActionComponent:
@@ -659,138 +578,6 @@ func (h *handler) dispatchAnalysisLookup(ctx context.Context, in *analysisInput)
 			return nil, nil, err
 		}
 		return jsonResult(r)
-	}
-}
-
-func (h *handler) handleConstraint(ctx context.Context, _ *sdkmcp.CallToolRequest, in constraintInput) (*sdkmcp.CallToolResult, any, error) { //nolint:gocritic
-	switch in.Action {
-	case ActionBlastRadius:
-		r, err := h.proto.GetBlastRadius(ctx, in.Path, in.Files, in.Since, in.CacheKey)
-		if err != nil {
-			return nil, nil, err
-		}
-		return jsonResult(r)
-	case ActionImportDirection, ActionTrustBoundaries, ActionBudgets,
-		ActionModDependencies, ActionInterfaceMetrics:
-		return h.dispatchConstraintSimple(ctx, &in)
-	case ActionSymbolBlast:
-		r, err := h.proto.GetSymbolBlastRadius(ctx, in.Path, in.Symbol, in.CacheKey)
-		if err != nil {
-			return nil, nil, err
-		}
-		return jsonResult(r)
-	case ActionLeverage:
-		r, err := h.proto.GetLeverage(ctx, in.Path, in.Component, in.CacheKey)
-		if err != nil {
-			return nil, nil, err
-		}
-		return jsonResult(r)
-	case ActionCoverage:
-		r, err := h.proto.GetCoverage(ctx, in.Path, in.Threshold)
-		if err != nil {
-			return nil, nil, err
-		}
-		return jsonResult(r)
-	case ActionAPISurface:
-		r, err := h.proto.GetAPISurface(ctx, in.Path, in.Trusted, in.CacheKey)
-		if err != nil {
-			return nil, nil, err
-		}
-		return jsonResult(r)
-	case ActionConventions:
-		r, err := h.proto.GetConventions(ctx, in.Path)
-		if err != nil {
-			return nil, nil, err
-		}
-		return jsonResult(r)
-	case ActionGaps:
-		r, err := h.proto.GetGaps(ctx, in.Path)
-		if err != nil {
-			return nil, nil, err
-		}
-		return jsonResult(r)
-	case ActionConsolidate:
-		r, err := h.proto.GetConsolidation(ctx, in.Path, in.CacheKey)
-		if err != nil {
-			return nil, nil, err
-		}
-		return jsonResult(r)
-	default:
-		return nil, nil, fmt.Errorf("%w %q", ErrUnknownAction, in.Action)
-	}
-}
-
-// --- Refactor handler ---
-
-func (h *handler) dispatchConstraintSimple(ctx context.Context, in *constraintInput) (*sdkmcp.CallToolResult, any, error) {
-	switch in.Action {
-	case ActionImportDirection:
-		r, err := h.proto.GetImportDirection(ctx, in.Path, in.CacheKey)
-		if err != nil {
-			return nil, nil, err
-		}
-		return jsonResult(r)
-	case ActionTrustBoundaries:
-		r, err := h.proto.GetTrustBoundaries(ctx, in.Path, in.CacheKey)
-		if err != nil {
-			return nil, nil, err
-		}
-		return jsonResult(r)
-	case ActionBudgets:
-		r, err := h.proto.GetBudgets(ctx, in.Path, in.CacheKey)
-		if err != nil {
-			return nil, nil, err
-		}
-		return jsonResult(r)
-	case ActionModDependencies:
-		r, err := h.proto.GetModuleDependencies(ctx, in.Path, in.CacheKey)
-		if err != nil {
-			return nil, nil, err
-		}
-		return jsonResult(r)
-	default: // ActionInterfaceMetrics
-		r, err := h.proto.GetInterfaceMetrics(ctx, in.Path, in.CacheKey)
-		if err != nil {
-			return nil, nil, err
-		}
-		return jsonResult(r)
-	}
-}
-
-func (h *handler) handleRefactor(ctx context.Context, _ *sdkmcp.CallToolRequest, in refactorInput) (*sdkmcp.CallToolResult, any, error) { //nolint:gocritic
-	switch in.Action {
-	case ActionCrossRepo:
-		r, err := h.proto.GetCrossRepo(ctx, in.Path, in.PathB, in.CacheKey, in.CacheKeyB)
-		if err != nil {
-			return nil, nil, err
-		}
-		return jsonResult(r)
-	case ActionDrift:
-		r, err := h.proto.GetDrift(ctx, in.Path, in.CacheKey)
-		if err != nil {
-			return nil, nil, err
-		}
-		return jsonResult(r)
-	case ActionSuggestArch:
-		r, err := h.proto.SuggestArchitecture(ctx, in.Path, in.CacheKey)
-		if err != nil {
-			return nil, nil, err
-		}
-		return jsonResult(r)
-	case ActionWhatIf:
-		r, err := h.proto.GetWhatIf(ctx, in.Path, in.Moves, in.CacheKey)
-		if err != nil {
-			return nil, nil, err
-		}
-		return jsonResult(r)
-	case ActionDiffIntelligence:
-		r, err := h.proto.GetDiffIntelligence(ctx, in.Path, in.Since, in.CacheKey)
-		if err != nil {
-			return nil, nil, err
-		}
-		return jsonResult(r)
-	default:
-		return nil, nil, fmt.Errorf("%w %q", ErrUnknownAction, in.Action)
 	}
 }
 
@@ -1029,31 +816,23 @@ type diagramInput struct {
 	CacheKey     string `json:"cache_key,omitempty" jsonschema:"cache key from scan_remote"`
 }
 
-// --- Lint handler ---
+// --- Book handler ---
 
-type lintInput struct {
-	Path   string `json:"path" jsonschema:"required,absolute path to local repository"`
-	Preset string `json:"preset,omitempty" jsonschema:"preset name: full_clinic, code_health, architecture_review"`
-	Format string `json:"format,omitempty" jsonschema:"output format: json, summary"`
+type bookInput struct {
+	Keywords []string `json:"keywords" jsonschema:"required,keywords for knowledge graph query"`
+	Hops     int      `json:"hops,omitempty" jsonschema:"neighborhood radius in hops (default 2)"`
 }
 
-func (h *handler) handleLint(ctx context.Context, _ *sdkmcp.CallToolRequest, in lintInput) (*sdkmcp.CallToolResult, any, error) { //nolint:gocritic
-	path := in.Path
-	if path == "" && len(h.proto.Workspaces()) > 0 {
-		path = h.proto.Workspaces()[0]
+func (h *handler) handleBook(_ context.Context, _ *sdkmcp.CallToolRequest, in bookInput) (*sdkmcp.CallToolResult, any, error) { //nolint:gocritic
+	hops := in.Hops
+	if hops <= 0 {
+		hops = 2
 	}
-
-	preset := in.Preset
-	if preset == "" {
-		preset = "full_clinic"
-	}
-
-	result, err := h.proto.RunPreset(ctx, path, preset)
+	r, err := h.proto.QueryBook(in.Keywords, hops)
 	if err != nil {
 		return nil, nil, err
 	}
-
-	return text(result), nil, nil
+	return jsonResult(r)
 }
 
 // --- Triage handler ---
