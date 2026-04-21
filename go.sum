@@ -21,8 +21,8 @@ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/dpopsuev/battery v0.9.0 h1:BoqQ/g1HkQYMAH3KzGEIYorp9VGtBOCtxYv5v3OHCGM=
 github.com/dpopsuev/battery v0.9.0/go.mod h1:wbm7TeW4aAKWe8qQDwonJar8vM8jrpqc5V/cjKqZ7XI=
-github.com/dpopsuev/oculus/v3 v3.26.0 h1:V9H9t81JWhgOD0jAVs4nCB+nP0Q84cfNWJe7hH6+Hq8=
-github.com/dpopsuev/oculus/v3 v3.26.0/go.mod h1:egrjmMyl0UQRcl6XiJN8A7fEJItbLxM+bj7FmhVsMBk=
+github.com/dpopsuev/oculus/v3 v3.27.0 h1:PbfWvrCrf2Vw0XFn7Dkkeh8WVXyegagsI5H2zaxIzck=
+github.com/dpopsuev/oculus/v3 v3.27.0/go.mod h1:egrjmMyl0UQRcl6XiJN8A7fEJItbLxM+bj7FmhVsMBk=
 github.com/elazarl/goproxy v1.7.2 h1:Y2o6urb7Eule09PjlhQRGNsqRfPmYI3KKQLFpCAV3+o=
 github.com/elazarl/goproxy v1.7.2/go.mod h1:82vkLNir0ALaW14Rc399OTTjyNREgmdL2cVoIbS6XaE=
 github.com/emirpasic/gods v1.18.1 h1:FXtiHYKDGKCW2KzwZKx0iC0PQmdlorYgdFG9jPXJ1Bc=
