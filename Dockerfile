@@ -35,6 +35,20 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
     --default-toolchain stable --profile minimal --component rust-analyzer
 ENV PATH="/usr/local/cargo/bin:${PATH}"
 
+# Core LSP servers (installed above):
+#   gopls           — Go
+#   rust-analyzer   — Rust
+#   pyright         — Python
+#   typescript-language-server — TypeScript/JavaScript
+#   clangd          — C/C++
+#
+# Optional LSP servers (install manually for additional language support):
+#   jdtls           — Java (Eclipse JDT Language Server)
+#   kotlin-language-server — Kotlin
+#   omnisharp       — C#
+#   sourcekit-lsp   — Swift (requires Xcode)
+#   zls             — Zig
+
 # Run as non-root — LSP servers don't need root, and orphaned child
 # processes from killed containers shouldn't run as root on the host.
 RUN useradd -m -s /bin/bash locus
