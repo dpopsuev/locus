@@ -13,7 +13,7 @@ require (
 
 require (
 	github.com/dpopsuev/battery v0.9.0
-	github.com/dpopsuev/oculus/v3 v3.27.0
+	github.com/dpopsuev/oculus/v3 v3.28.0
 )
 
 require (
