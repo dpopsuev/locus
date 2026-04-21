@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && ln -sf /usr/bin/clangd-18 /usr/bin/clangd \
     && rm -rf /var/lib/apt/lists/*
 
-ARG GO_VERSION=1.22.5
+ARG GO_VERSION=1.25.8
 RUN ARCH=$(dpkg --print-architecture) && \
     curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-${ARCH}.tar.gz" | tar -C /usr/local -xz
 ENV GOBIN=/usr/local/bin
@@ -53,6 +53,11 @@ ENV PATH="/usr/local/cargo/bin:${PATH}"
 # processes from killed containers shouldn't run as root on the host.
 RUN useradd -m -s /bin/bash locus
 USER locus
+
+# Runtime cargo/rust paths must be writable by the running user.
+# The install-time CARGO_HOME (/usr/local/cargo) is root-owned.
+# Override at runtime to user-writable location.
+ENV CARGO_HOME=/tmp/cargo RUSTUP_HOME=/tmp/rustup
 
 COPY locus /usr/local/bin/locus
 
