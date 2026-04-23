@@ -23,6 +23,8 @@ github.com/dpopsuev/battery v0.9.0 h1:BoqQ/g1HkQYMAH3KzGEIYorp9VGtBOCtxYv5v3OHCG
 github.com/dpopsuev/battery v0.9.0/go.mod h1:wbm7TeW4aAKWe8qQDwonJar8vM8jrpqc5V/cjKqZ7XI=
 github.com/dpopsuev/oculus/v3 v3.39.0 h1:wUc+XmO+NT9w2rdIqyjLRbb4kb4FAtoh/uwV6WOGl4w=
 github.com/dpopsuev/oculus/v3 v3.39.0/go.mod h1:egrjmMyl0UQRcl6XiJN8A7fEJItbLxM+bj7FmhVsMBk=
+github.com/dpopsuev/oculus/v3 v3.41.0 h1:FeRjfAwot79c4lVt9dW+8EF9RbyekOvTjX5yMSTp5a0=
+github.com/dpopsuev/oculus/v3 v3.41.0/go.mod h1:NVYyxhesN/Z1WPIQDPDJu9NZopWOTC+XzQ1x3aw6seA=
 github.com/elazarl/goproxy v1.7.2 h1:Y2o6urb7Eule09PjlhQRGNsqRfPmYI3KKQLFpCAV3+o=
 github.com/elazarl/goproxy v1.7.2/go.mod h1:82vkLNir0ALaW14Rc399OTTjyNREgmdL2cVoIbS6XaE=
 github.com/emirpasic/gods v1.18.1 h1:FXtiHYKDGKCW2KzwZKx0iC0PQmdlorYgdFG9jPXJ1Bc=
