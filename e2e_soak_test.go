@@ -42,25 +42,23 @@ func TestSoak_MemorySLA(t *testing.T) {
 	}
 	t.Logf("soak repos (%d): %v", len(repos), repos)
 
-	// Start container with memory visibility
+	// Start named container for both MCP and memory monitoring
 	containerName := "locus-soak-test"
 	cleanup := startSoakContainer(t, containerName, repos)
 	defer cleanup()
 
+	// Wait for HTTP server to be ready
+	time.Sleep(3 * time.Second)
+
 	ctx, cancel := context.WithTimeout(context.Background(), soakDuration+30*time.Second)
 	defer cancel()
 
-	// Connect MCP client
+	// Connect MCP client via HTTP to the named container
 	client := sdkmcp.NewClient(
 		&sdkmcp.Implementation{Name: "soak-test", Version: "1.0"},
 		nil,
 	)
-	transport := &sdkmcp.CommandTransport{
-		Command: exec.Command("docker", "run", "--rm", "-i",
-			"-v", "/home/dpopsuev:/home/dpopsuev:ro,z",
-			containerImage,
-			"serve", "--workspace", "/"),
-	}
+	transport := &sdkmcp.StreamableClientTransport{Endpoint: "http://localhost:18081/mcp"}
 	session, err := client.Connect(ctx, transport, nil)
 	if err != nil {
 		t.Fatalf("connect: %v", err)
@@ -133,10 +131,22 @@ func TestSoak_MemorySLA(t *testing.T) {
 				Name:      "analysis",
 				Arguments: map[string]any{"action": "cycles", "path": r},
 			})
+
+			// Probe — triggers gopls spawn (the memory-heavy path)
+			t.Logf("  probe %s...", r)
+			_, err = session.CallTool(ctx, &sdkmcp.CallToolParams{
+				Name:      "analysis",
+				Arguments: map[string]any{"action": "probe", "path": r, "symbol": "main"},
+			})
+			if err != nil {
+				t.Logf("  probe %s: %v (expected — pool cap or timeout)", r, err)
+			}
 		}(repo)
 	}
 
 	wg.Wait()
+	// Give monitor one final poll before stopping
+	time.Sleep(pollInterval + 1*time.Second)
 	cancel()
 	<-monitorDone
 
