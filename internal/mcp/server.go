@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dpopsuev/battery/mcpserver"
+	batterymcp "github.com/dpopsuev/battery/mcp"
 	"github.com/dpopsuev/locus/internal/store"
 	oculus "github.com/dpopsuev/oculus/v3"
 	"github.com/dpopsuev/oculus/v3/analyzer"
@@ -147,9 +147,9 @@ var DiagramMinIntent = map[string]string{
 
 // --- Server ---
 
-func NewServer(s store.Store, workspaceRoots []string, version string, pool ...lsp.Pool) (*mcpserver.Server, *triage.Registry) {
+func NewServer(s store.Store, workspaceRoots []string, version string, pool ...lsp.Pool) (*batterymcp.Server, *triage.Registry) {
 	proto := engine.New(s, workspaceRoots, pool...)
-	bsrv := mcpserver.NewServer("locus", version).
+	bsrv := batterymcp.NewServer("locus", version).
 		WithInstructions("Locus is a Graph Walker for AI agents. Scan any repository, then walk the symbol graph with 4 primitives: " +
 			"probe (all vitals for one symbol), scenario (trace upstream/downstream to system boundaries), " +
 			"convergence (where N symbols meet), isolate (what disconnects if removed). " +
