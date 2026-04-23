@@ -29,6 +29,8 @@ github.com/dpopsuev/oculus/v3 v3.41.0 h1:FeRjfAwot79c4lVt9dW+8EF9RbyekOvTjX5yMST
 github.com/dpopsuev/oculus/v3 v3.41.0/go.mod h1:NVYyxhesN/Z1WPIQDPDJu9NZopWOTC+XzQ1x3aw6seA=
 github.com/dpopsuev/oculus/v3 v3.43.0 h1:ppvrpvEsVq2AUd3spntqKuPKhG8y08zBfJnmDZ49Nuw=
 github.com/dpopsuev/oculus/v3 v3.43.0/go.mod h1:NVYyxhesN/Z1WPIQDPDJu9NZopWOTC+XzQ1x3aw6seA=
+github.com/dpopsuev/oculus/v3 v3.44.0 h1:xGaCLcOAKDt5LYUe51a2isZr/emMLnqwTJf7eEhir5Y=
+github.com/dpopsuev/oculus/v3 v3.44.0/go.mod h1:NVYyxhesN/Z1WPIQDPDJu9NZopWOTC+XzQ1x3aw6seA=
 github.com/elazarl/goproxy v1.7.2 h1:Y2o6urb7Eule09PjlhQRGNsqRfPmYI3KKQLFpCAV3+o=
 github.com/elazarl/goproxy v1.7.2/go.mod h1:82vkLNir0ALaW14Rc399OTTjyNREgmdL2cVoIbS6XaE=
 github.com/emirpasic/gods v1.18.1 h1:FXtiHYKDGKCW2KzwZKx0iC0PQmdlorYgdFG9jPXJ1Bc=
