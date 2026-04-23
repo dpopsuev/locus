@@ -59,6 +59,7 @@ const (
 	ActionAcceptViolation = "accept_violation"
 	ActionStatus          = "status"
 	ActionFlush           = "flush"
+	ActionWarm            = "warm"
 )
 
 // Analysis actions.
@@ -172,7 +173,7 @@ func NewServer(s store.Store, workspaceRoots []string, version string, pool ...l
 	triage.AddTool(reg, srv, triage.ToolMeta{
 		Name: "codograph",
 		Description: "Scan and compare repository architectures. " +
-			"Actions: scan_local, scan_remote, history, diff, status, set_desired_state, get_desired_state, accept_violation. " +
+			"Actions: scan_local, scan_remote, history, diff, status, set_desired_state, get_desired_state, accept_violation, warm. " +
 			"Scan returns cache_key for downstream tools.",
 		Keywords:   []string{"scan", "architecture", "overview", "remote", "github", "history", "diff", "branch", "compare", "cache", "flush", "rescan", "stale", "status", "desired", "rules", "layers"},
 		Categories: []string{"architecture", "onboarding", "comparison"},
@@ -242,7 +243,7 @@ type handler struct {
 // --- Input structs (per-tool, only relevant fields) ---
 
 type codographActionInput struct {
-	Action string `json:"action" jsonschema:"required,scan_local | scan_remote | history | diff | set_desired_state | get_desired_state | accept_violation | status"`
+	Action string `json:"action" jsonschema:"required,scan_local | scan_remote | history | diff | set_desired_state | get_desired_state | accept_violation | status | warm"`
 
 	Path            string   `json:"path,omitempty" jsonschema:"absolute path to local repository"`
 	Depth           int      `json:"depth,omitempty" jsonschema:"directory grouping depth"`
@@ -360,6 +361,11 @@ func (h *handler) handleCodograph(ctx context.Context, req *sdkmcp.CallToolReque
 			return nil, nil, err
 		}
 		return text(fmt.Sprintf("flushed %d project cache(s)", n)), nil, nil
+	case ActionWarm:
+		if err := h.proto.WarmLSP(ctx, in.Path); err != nil {
+			return nil, nil, err
+		}
+		return text("LSP index warmed for " + in.Path), nil, nil
 	default:
 		return nil, nil, fmt.Errorf("%w %q", ErrUnknownCodographAction, in.Action)
 	}
