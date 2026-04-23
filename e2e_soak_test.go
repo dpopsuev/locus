@@ -196,18 +196,42 @@ func startSoakContainer(t *testing.T, name string, repos []string) func() {
 
 func getContainerRSS(t *testing.T, name string) int64 {
 	t.Helper()
-	// Read cgroup memory.current for total container memory
-	out, err := exec.Command("docker", "exec", name, "cat", "/sys/fs/cgroup/memory.current").CombinedOutput()
+	out, err := exec.Command("docker", "stats", "--no-stream", "--format", "{{.MemUsage}}", name).CombinedOutput()
 	if err != nil {
-		// Fallback to /proc/1/status
-		out, err = exec.Command("docker", "exec", name, "sh", "-c",
-			"awk '/VmRSS/{print $2}' /proc/1/status").CombinedOutput()
-		if err != nil {
-			return 0
-		}
-		kb, _ := strconv.ParseInt(strings.TrimSpace(string(out)), 10, 64)
-		return kb * 1024
+		return 0
 	}
-	bytes, _ := strconv.ParseInt(strings.TrimSpace(string(out)), 10, 64)
-	return bytes
+	// Format: "123.4MiB / 62.5GiB" — parse the first value
+	s := strings.TrimSpace(string(out))
+	parts := strings.SplitN(s, "/", 2)
+	if len(parts) == 0 {
+		return 0
+	}
+	return parseMemUsage(strings.TrimSpace(parts[0]))
+}
+
+func parseMemUsage(s string) int64 {
+	s = strings.TrimSpace(s)
+	suffixes := []struct {
+		suffix string
+		mult   float64
+	}{
+		{"GiB", 1024 * 1024 * 1024},
+		{"MiB", 1024 * 1024},
+		{"KiB", 1024},
+		{"GB", 1e9},
+		{"MB", 1e6},
+		{"KB", 1e3},
+		{"B", 1},
+	}
+	for _, sf := range suffixes {
+		if strings.HasSuffix(s, sf.suffix) {
+			v := strings.TrimSpace(strings.TrimSuffix(s, sf.suffix))
+			f, err := strconv.ParseFloat(v, 64)
+			if err != nil {
+				return 0
+			}
+			return int64(f * sf.mult)
+		}
+	}
+	return 0
 }
