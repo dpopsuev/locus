@@ -210,7 +210,7 @@ type handler struct {
 // --- Input structs (per-tool, only relevant fields) ---
 
 type codographActionInput struct {
-	Action string `json:"action" jsonschema:"required,scan_local | scan_remote | history | diff | set_desired_state | get_desired_state | accept_violation | status | warm"`
+	Action string `json:"action" jsonschema:"required,scan_local | scan_remote | history | diff | set_desired_state | get_desired_state | accept_violation | status | flush | warm"`
 
 	Path            string   `json:"path,omitempty"`
 	Depth           int      `json:"depth,omitempty"`
