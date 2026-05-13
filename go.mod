@@ -52,6 +52,3 @@ require (
 	gonum.org/v1/gonum v0.17.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1
 )
-
-
-replace github.com/dpopsuev/oculus/v3 => ../oculus
