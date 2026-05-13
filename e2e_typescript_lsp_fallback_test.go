@@ -14,24 +14,24 @@ import (
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// TestBug56_TypeScriptMissingLanguageServer verifies the LCS-BUG-56 fix.
-//
-// Expected behavior after the fix:
+// TestTypeScriptScan_SucceedsWithoutLanguageServer verifies that component-level
+// and symbol-level analysis both succeed when typescript-language-server is not
+// on PATH. Expected behavior:
 //   - component-level analysis succeeds (scan_local + coupling)
 //   - symbol-level analysis also succeeds via non-LSP fallback when
 //     typescript-language-server is not on PATH.
-func TestBug56_TypeScriptMissingLanguageServer(t *testing.T) {
+func TestTypeScriptScan_SucceedsWithoutLanguageServer(t *testing.T) {
 	binary := "./locus"
 	if _, err := exec.LookPath(binary); err != nil {
 		t.Skip("locus binary not found (run 'make build')")
 	}
 
-	repo := setupBug56TypeScriptFixture(t)
+	repo := setupTypeScriptFixture(t)
 	emptyPath := t.TempDir() // intentionally no typescript-language-server
 
 	ctx := context.Background()
 	client := sdkmcp.NewClient(
-		&sdkmcp.Implementation{Name: "bug56-repro", Version: "1.0"},
+		&sdkmcp.Implementation{Name: "ts-lsp-fallback", Version: "1.0"},
 		nil,
 	)
 	cmd := exec.Command(binary, "serve", "--workspace", repo)
@@ -105,13 +105,13 @@ func callToolOutcome(t *testing.T, s *sdkmcp.ClientSession, ctx context.Context,
 	return toolOutcome{text: tc.Text, isError: result.IsError}
 }
 
-func setupBug56TypeScriptFixture(t *testing.T) string {
+func setupTypeScriptFixture(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 
 	files := map[string]string{
 		"package.json": `{
-  "name": "bug56-repro",
+  "name": "ts-lsp-fallback",
   "version": "1.0.0",
   "private": true
 }

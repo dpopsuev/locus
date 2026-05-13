@@ -18,12 +18,12 @@ test:
 test-e2e:
 	go test -tags=e2e ./internal/testkit/... -count=1 -v
 	$(MAKE) build
-	go test -tags=e2e -run 'TestBug56_TypeScriptMissingLanguageServer' -count=1 -v .
+	go test -tags=e2e -run 'TestTypeScriptScan_SucceedsWithoutLanguageServer' -count=1 -v .
 	@if command -v docker >/dev/null 2>&1; then \
 		docker image inspect locus >/dev/null 2>&1 || docker build -t locus .; \
-		go test -tags=e2e -run 'TestBug56_TypeScriptMonorepoNoProject' -count=1 -v .; \
+		go test -tags=e2e -run 'TestTypeScriptMonorepo_ScanSucceedsWithoutRootProject' -count=1 -v .; \
 	else \
-		echo "docker not found; skipping TestBug56_TypeScriptMonorepoNoProject"; \
+		echo "docker not found; skipping TestTypeScriptMonorepo_ScanSucceedsWithoutRootProject"; \
 	fi
 
 fmt:

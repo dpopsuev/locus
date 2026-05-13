@@ -11,17 +11,16 @@ import (
 	"testing"
 )
 
-// TestBug56_TypeScriptMonorepoNoProject verifies the LCS-BUG-56 fix in a layout
-// similar to Alef: repository root has no tsconfig, while TypeScript code
-// lives in nested package directories.
-//
-// Expected behavior after the fix: symbol-level analysis uses fallback and
-// succeeds instead of failing with generic missing-LSP guidance.
-func TestBug56_TypeScriptMonorepoNoProject(t *testing.T) {
+// TestTypeScriptMonorepo_ScanSucceedsWithoutRootProject verifies that a monorepo
+// layout with no tsconfig at the root (TypeScript code lives in nested package
+// directories, similar to Alef) succeeds for scan_local, coupling, and mesh.
+// Symbol-level analysis must use the fallback path rather than failing with
+// missing-LSP guidance.
+func TestTypeScriptMonorepo_ScanSucceedsWithoutRootProject(t *testing.T) {
 	requireDocker(t)
 	requireImage(t)
 
-	repo := setupBug56NoProjectFixture(t)
+	repo := setupMonorepoNoProjectFixture(t)
 	ctx := context.Background()
 	session := connectContainer(t, ctx, repo)
 	defer session.Close()
@@ -64,19 +63,19 @@ func TestBug56_TypeScriptMonorepoNoProject(t *testing.T) {
 	}
 }
 
-func setupBug56NoProjectFixture(t *testing.T) string {
+func setupMonorepoNoProjectFixture(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 
 	files := map[string]string{
 		"package.json": `{
-  "name": "bug56-monorepo",
+  "name": "ts-monorepo-no-project",
   "private": true,
   "workspaces": ["packages/*"]
 }
 `,
 		"packages/app/package.json": `{
-  "name": "@bug56/app",
+  "name": "@ts-monorepo-no-project/app",
   "version": "1.0.0",
   "private": true
 }

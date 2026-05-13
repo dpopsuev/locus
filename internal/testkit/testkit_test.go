@@ -10,7 +10,7 @@ import (
 	"github.com/dpopsuev/locus/internal/testkit/harness"
 )
 
-func TestAllFixtures(t *testing.T) {
+func TestScanner_AllLanguageFixturesParseCleanly(t *testing.T) {
 	root := findRepoRoot(t)
 	testkitDir := filepath.Join(root, "testdata", "testkit")
 

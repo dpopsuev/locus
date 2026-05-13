@@ -1,0 +1,5 @@
+{
+  "name": "@test/bug70",
+  "version": "0.0.1",
+  "description": "Fixture for LCS-BUG-70: intra-component import cycles hidden by component-level grouping"
+}

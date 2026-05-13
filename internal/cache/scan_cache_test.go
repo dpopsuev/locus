@@ -148,7 +148,7 @@ func TestGetCurrentMissAfterNewCommit(t *testing.T) {
 	}
 }
 
-func TestInvalidate(t *testing.T) {
+func TestCacheInvalidate_RemovesAllEntriesForRepo(t *testing.T) {
 	c := tempCache(t)
 
 	if err := c.Put("/repo", "sha1", &arch.ContextReport{ScanCore: arch.ScanCore{Scanner: "test"}}); err != nil {
@@ -169,7 +169,7 @@ func TestInvalidate(t *testing.T) {
 	}
 }
 
-func TestCacheMissEmpty(t *testing.T) {
+func TestCacheMiss_UnknownRepo(t *testing.T) {
 	c := tempCache(t)
 	_, hit, err := c.Get("/nonexistent/repo", "sha1")
 	if err != nil {
@@ -180,7 +180,7 @@ func TestCacheMissEmpty(t *testing.T) {
 	}
 }
 
-func TestCacheMissEmptySHA(t *testing.T) {
+func TestCacheMiss_EmptySHA(t *testing.T) {
 	c := tempCache(t)
 	_, hit, err := c.Get("/repo", "")
 	if err != nil {
