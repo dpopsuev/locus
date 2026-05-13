@@ -90,6 +90,11 @@ const (
 	ActionIslands      = "islands"
 	ActionExplainEdge  = "explain_edge"
 	ActionSymbolDiff   = "symbol_diff"
+	// Merged from standalone tools.
+	ActionBook         = "book"
+	ActionContextRead  = "context_read"
+	ActionContextWrite = "context_write"
+	ActionTriage       = "triage"
 )
 
 // Coupling view names.
@@ -151,14 +156,7 @@ var DiagramMinIntent = map[string]string{
 func NewServer(s store.Store, workspaceRoots []string, version string, pool ...lsp.Pool) (*batterymcp.Server, *triage.Registry) {
 	proto := engine.New(s, workspaceRoots, pool...)
 	bsrv := batterymcp.NewServer("locus", version).
-		WithInstructions("Locus is a Graph Walker for AI agents. Scan any repository, then walk the symbol graph with 4 primitives: " +
-			"probe (all vitals for one symbol), scenario (trace upstream/downstream to system boundaries), " +
-			"convergence (where N symbols meet), isolate (what disconnects if removed). " +
-			"Use the book tool to query diagnostic knowledge (smells, patterns, principles, metrics). " +
-			"Use diagnose for one-call probe+book. " +
-			"Workflow: codograph scan_local → analysis probe/scenario/convergence/isolate → book query → diagnose. " +
-			"Results cached by git HEAD SHA. Pass cache_key to avoid re-scanning. " +
-			"Intent param controls scan depth: architecture (fast), coupling, health (default), full.")
+		WithInstructions("Scan first (codograph scan_local), then walk (analysis probe/scenario/convergence/isolate). Results cached by SHA; pass cache_key to skip rescanning.")
 	srv := bsrv.SDK()
 	h := &handler{proto: proto}
 	// Record binary mtime at startup for stale binary detection (BUG-33).
@@ -171,10 +169,8 @@ func NewServer(s store.Store, workspaceRoots []string, version string, pool ...l
 	reg := triage.New()
 
 	triage.AddTool(reg, srv, triage.ToolMeta{
-		Name: "codograph",
-		Description: "Scan and compare repository architectures. " +
-			"Actions: scan_local, scan_remote, history, diff, status, set_desired_state, get_desired_state, accept_violation, warm. " +
-			"Scan returns cache_key for downstream tools.",
+		Name:        "codograph",
+		Description: "Scan and compare repository architectures. Returns cache_key for downstream tools.",
 		Keywords:   []string{"scan", "architecture", "overview", "remote", "github", "history", "diff", "branch", "compare", "cache", "flush", "rescan", "stale", "status", "desired", "rules", "layers"},
 		Categories: []string{"architecture", "onboarding", "comparison"},
 		Rationale:  map[string]string{"architecture": "Full codebase overview", "onboarding": "Best first step"},
@@ -182,11 +178,8 @@ func NewServer(s store.Store, workspaceRoots []string, version string, pool ...l
 	}, noOut(h.handleCodograph))
 
 	triage.AddTool(reg, srv, triage.ToolMeta{
-		Name: "analysis",
-		Description: "Symbol graph analysis with 4 primitives. " +
-			"Actions: probe, scenario, convergence, isolate, diagnose, islands, explain_edge, symbol_diff, " +
-			"deps, coupling, cycles, violations, callers, callees, call_path, " +
-			"component, search, symbol_search, symbol_graph, pipelines, mesh, preset.",
+		Name:        "analysis",
+		Description: "Walk the symbol graph, query the knowledge book, and triage tool selection.",
 		Keywords:   []string{"depend", "import", "impact", "coupling", "fan", "cycle", "circular", "caller", "callee", "call", "who", "symbol", "function", "find", "component", "pipeline", "data flow", "chain", "risk", "risky", "dangerous", "health", "review", "onboarding", "preset", "mesh", "zoom", "probe", "scenario", "trace", "convergence", "meet", "isolate", "disconnect", "break", "diagnose", "islands", "dead code", "unreachable", "explain", "snippet", "diff", "changed"},
 		Categories: []string{"dependencies", "architecture"},
 		Rationale:  map[string]string{"dependencies": "Component-level dependency analysis and cycle detection"},
@@ -195,40 +188,14 @@ func NewServer(s store.Store, workspaceRoots []string, version string, pool ...l
 
 	triage.AddTool(reg, srv, triage.ToolMeta{
 		Name:        "render_diagram",
-		Description: "Render a Mermaid diagram. Types: dependency, c4, coupling, churn, layers, tree, classes, sequence, er, interfaces, hexa, zones.",
+		Description: "Render a Mermaid diagram.",
 		Keywords:    []string{"diagram", "visual", "mermaid", "chart", "graph", "class", "sequence", "er", "draw", "render", "dataflow", "callgraph", "state", "layers", "c4", "tree", "hexa", "zones", "dsm"},
 		Categories:  []string{"visualization"},
 		Rationale:   map[string]string{"visualization": "Generate Mermaid charts from architecture data"},
 		Priority:    1,
 	}, noOut(h.handleRenderDiagram))
 
-	triage.AddTool(reg, srv, triage.ToolMeta{
-		Name:        "book",
-		Description: "Query the Architect's Book — knowledge graph for diagnostic reasoning. Input: keywords + hops. Returns knowledge entries with typed edges (violates, measured_by, confused_with, remediation).",
-		Keywords:    []string{"book", "knowledge", "diagnose", "interpret", "smell", "pattern", "principle", "metric", "fan-in", "god", "solid", "coupling"},
-		Categories:  []string{"knowledge", "diagnosis"},
-		Rationale:   map[string]string{"knowledge": "Interpret signals with diagnostic knowledge"},
-		Priority:    1,
-	}, noOut(h.handleBook))
-
-	triage.AddTool(reg, srv, triage.ToolMeta{
-		Name:        "context",
-		Description: "Read and write project-specific knowledge. Actions: read, write. Per-project memory stored under XDG, git-aware staleness detection.",
-		Keywords:    []string{"context", "memory", "note", "remember", "knowledge", "project", "module", "file", "symbol", "stale"},
-		Categories:  []string{"knowledge"},
-		Rationale:   map[string]string{"knowledge": "Agent's project-specific memory"},
-		Priority:    1,
-	}, noOut(h.handleContext))
-
 	h.reg = reg
-	triage.AddTool(reg, srv, triage.ToolMeta{
-		Name:        "triage",
-		Description: "Map a natural language intent to a ranked list of Locus tools.",
-		Keywords:    []string{"help", "what", "which", "recommend", "suggest", "guide"},
-		Categories:  []string{"meta"},
-		Rationale:   map[string]string{"meta": "Discover relevant tools"},
-		Priority:    1,
-	}, noOut(h.handleTriage))
 
 	return bsrv, reg
 }
@@ -245,11 +212,11 @@ type handler struct {
 type codographActionInput struct {
 	Action string `json:"action" jsonschema:"required,scan_local | scan_remote | history | diff | set_desired_state | get_desired_state | accept_violation | status | warm"`
 
-	Path            string   `json:"path,omitempty" jsonschema:"absolute path to local repository"`
-	Depth           int      `json:"depth,omitempty" jsonschema:"directory grouping depth"`
+	Path            string   `json:"path,omitempty"`
+	Depth           int      `json:"depth,omitempty"`
 	ChurnDays       int      `json:"churn_days,omitempty" jsonschema:"git history window in days"`
-	IncludeExternal bool     `json:"include_external,omitempty" jsonschema:"include external dependencies"`
-	IncludeTests    bool     `json:"include_tests,omitempty" jsonschema:"include test files"`
+	IncludeExternal bool     `json:"include_external,omitempty"`
+	IncludeTests    bool     `json:"include_tests,omitempty"`
 	IncludeCoverage bool     `json:"include_coverage,omitempty" jsonschema:"compute test coverage"`
 	Budget          int      `json:"budget,omitempty" jsonschema:"max components in output"`
 	Format          string   `json:"format,omitempty" jsonschema:"output format: json or summary"`
@@ -258,26 +225,26 @@ type codographActionInput struct {
 	URL             string   `json:"url,omitempty" jsonschema:"GitHub URL (scan_remote)"`
 	Ref             string   `json:"ref,omitempty" jsonschema:"git ref (scan_remote)"`
 	Keep            bool     `json:"keep,omitempty" jsonschema:"keep clone (scan_remote)"`
-	Last            int      `json:"last,omitempty" jsonschema:"history entries to return"`
+	Last            int      `json:"last,omitempty"`
 	Diff            bool     `json:"diff,omitempty" jsonschema:"compare latest two scans"`
 	Layers          []string `json:"layers,omitempty" jsonschema:"ordered layer names"`
-	BranchA         string   `json:"branch_a,omitempty" jsonschema:"first branch (diff)"`
-	BranchB         string   `json:"branch_b,omitempty" jsonschema:"second branch (diff)"`
-	Component       string   `json:"component,omitempty" jsonschema:"component for accept_violation"`
-	Principle       string   `json:"principle,omitempty" jsonschema:"principle for accept_violation"`
-	Reason          string   `json:"reason,omitempty" jsonschema:"reason for accept_violation"`
+	BranchA         string   `json:"branch_a,omitempty"`
+	BranchB         string   `json:"branch_b,omitempty"`
+	Component       string   `json:"component,omitempty"`
+	Principle       string   `json:"principle,omitempty"`
+	Reason          string   `json:"reason,omitempty"`
 }
 
 type analysisInput struct {
-	Action    string   `json:"action" jsonschema:"required,deps | impact | coupling | cycles | violations | callers | component | search | query | preset | scan_diff | risk_scores | symbol_search | callees | call_path | symbol_graph | pipelines | mesh | probe | scenario | convergence | isolate | diagnose | islands | explain_edge | symbol_diff"`
+	Action    string   `json:"action" jsonschema:"required,deps | impact | coupling | cycles | violations | callers | component | search | query | preset | scan_diff | risk_scores | symbol_search | callees | call_path | symbol_graph | pipelines | mesh | probe | scenario | convergence | isolate | diagnose | islands | explain_edge | symbol_diff | book | context_read | context_write | triage"`
 	Symbols   []string `json:"symbols,omitempty" jsonschema:"symbol FQNs for convergence (multiple symbols)"`
 	Stress    bool     `json:"stress,omitempty" jsonschema:"enrich scenario nodes with fan-out and downstream count"`
-	Path      string   `json:"path,omitempty" jsonschema:"absolute path to local repository"`
+	Path      string   `json:"path,omitempty"`
 	CacheKey  string   `json:"cache_key,omitempty" jsonschema:"cache key from scan_remote"`
-	Component string   `json:"component,omitempty" jsonschema:"component path for deps/impact/coupling"`
+	Component string   `json:"component,omitempty"`
 	Symbol    string   `json:"symbol,omitempty" jsonschema:"symbol name for callers/symbol_search (function or type name pattern)"`
-	SortBy    string   `json:"sort_by,omitempty" jsonschema:"sort field for coupling table"`
-	TopN      int      `json:"top_n,omitempty" jsonschema:"limit results to top N"`
+	SortBy    string   `json:"sort_by,omitempty"`
+	TopN      int      `json:"top_n,omitempty"`
 	View      string   `json:"view,omitempty" jsonschema:"coupling view: hot_spots, edges"`
 	ChurnDays int      `json:"churn_days,omitempty" jsonschema:"git history window (coupling hot_spots)"`
 	Layers    []string `json:"layers,omitempty" jsonschema:"ordered layer names (cycles)"`
@@ -286,7 +253,7 @@ type analysisInput struct {
 	Query     string   `json:"query,omitempty" jsonschema:"search: component name substring. query: natural language question. NOT for source code text search."`
 	BeforeSHA string   `json:"before_sha,omitempty" jsonschema:"earlier SHA (scan_diff)"`
 	AfterSHA  string   `json:"after_sha,omitempty" jsonschema:"later SHA (scan_diff)"`
-	MinLength int      `json:"min_length,omitempty" jsonschema:"minimum pipeline length (pipelines)"`
+	MinLength int      `json:"min_length,omitempty"`
 	MeshView  string   `json:"mesh_view,omitempty" jsonschema:"mesh view: full, neighborhood, distance, boundaries, aggregate (mesh)"`
 	Level     string   `json:"level,omitempty" jsonschema:"aggregation level: symbol, file, package, component (mesh aggregate)"`
 	FQN       string   `json:"fqn,omitempty" jsonschema:"fully qualified symbol name (mesh neighborhood)"`
@@ -294,6 +261,12 @@ type analysisInput struct {
 	From      string   `json:"from,omitempty" jsonschema:"source symbol FQN (mesh distance)"`
 	To        string   `json:"to,omitempty" jsonschema:"target symbol FQN (mesh distance)"`
 	MinWeight *float64 `json:"min_weight,omitempty" jsonschema:"minimum edge weight filter (mesh boundaries/neighborhood, default 0.1)"`
+	// Fields for merged tools (book, context_read/write, triage).
+	Keywords []string `json:"keywords,omitempty" jsonschema:"keywords for knowledge graph query (book)"`
+	Scope    string   `json:"scope,omitempty" jsonschema:"context scope: project | module | file | symbol"`
+	Target   string   `json:"target,omitempty" jsonschema:"target name for context actions (package, file path, or FQN)"`
+	Content  string   `json:"content,omitempty" jsonschema:"content to write (context_write only)"`
+	Intent   string   `json:"intent,omitempty" jsonschema:"natural language intent to map to tools (triage)"`
 }
 
 // staleBinaryWarning returns a warning string if the on-disk binary has been
@@ -421,6 +394,8 @@ func (h *handler) handleAnalysis(ctx context.Context, _ *sdkmcp.CallToolRequest,
 		ActionProbe, ActionScenario, ActionConvergence, ActionIsolate,
 		ActionDiagnose, ActionIslands, ActionExplainEdge, ActionSymbolDiff:
 		return h.dispatchAnalysisExtended(ctx, &in)
+	case ActionBook, ActionContextRead, ActionContextWrite, ActionTriage:
+		return h.dispatchAnalysisMeta(ctx, &in)
 	default:
 		return nil, nil, fmt.Errorf("%w %q", ErrUnknownAction, in.Action)
 	}
@@ -869,11 +844,11 @@ func (h *handler) enrichDiagramInput(ctx context.Context, path, diagramType stri
 }
 
 type diagramInput struct {
-	Path         string `json:"path" jsonschema:"required,absolute path to local repository"`
+	Path         string `json:"path" jsonschema:"required"`
 	Type         string `json:"type" jsonschema:"required,diagram type: dependency, c4, coupling, churn, layers, tree, classes, sequence, er, interfaces, hexa, zones, symbol_dsm"`
 	Scope        string `json:"scope,omitempty" jsonschema:"limit to sub-package"`
-	Depth        int    `json:"depth,omitempty" jsonschema:"grouping depth"`
-	TopN         int    `json:"top_n,omitempty" jsonschema:"limit to top N components"`
+	Depth        int    `json:"depth,omitempty"`
+	TopN         int    `json:"top_n,omitempty"`
 	Entry        string `json:"entry,omitempty" jsonschema:"entry point for sequence/callgraph"`
 	ExportedOnly bool   `json:"exported_only,omitempty" jsonschema:"exported symbols only (class diagrams)"`
 	Enrich       string `json:"enrich,omitempty" jsonschema:"node label metrics: loc, fan_in, churn"`
@@ -882,64 +857,30 @@ type diagramInput struct {
 	CacheKey     string `json:"cache_key,omitempty" jsonschema:"cache key from scan_remote"`
 }
 
-// --- Book handler ---
-
-type bookInput struct {
-	Keywords []string `json:"keywords" jsonschema:"required,keywords for knowledge graph query"`
-	Hops     int      `json:"hops,omitempty" jsonschema:"neighborhood radius in hops (default 2)"`
-}
-
-func (h *handler) handleBook(_ context.Context, _ *sdkmcp.CallToolRequest, in bookInput) (*sdkmcp.CallToolResult, any, error) { //nolint:gocritic
-	hops := in.Hops
-	if hops <= 0 {
-		hops = 2
-	}
-	r, err := h.proto.QueryBook(in.Keywords, hops)
-	if err != nil {
-		return nil, nil, err
-	}
-	return jsonResult(r)
-}
-
-// --- Triage handler ---
-
-type triageInput struct {
-	Intent string `json:"intent" jsonschema:"required,what you want to do"`
-	Path   string `json:"path,omitempty" jsonschema:"optional repository path"`
-}
-
-func (h *handler) handleTriage(_ context.Context, _ *sdkmcp.CallToolRequest, in triageInput) (*sdkmcp.CallToolResult, any, error) { //nolint:gocritic
-	if in.Intent == "" {
-		return nil, nil, ErrIntentRequired
-	}
-	return jsonResult(h.reg.Triage(in.Intent, in.Path))
-}
-
-// --- Context handler ---
-
-type contextInput struct {
-	Action  string `json:"action" jsonschema:"required,read | write"`
-	Path    string `json:"path" jsonschema:"required,repository path"`
-	Scope   string `json:"scope" jsonschema:"required,project | module | file | symbol"`
-	Target  string `json:"target,omitempty" jsonschema:"target name (package, file path, or FQN)"`
-	Content string `json:"content,omitempty" jsonschema:"content to write (write action only)"`
-}
-
-func (h *handler) handleContext(ctx context.Context, _ *sdkmcp.CallToolRequest, in contextInput) (*sdkmcp.CallToolResult, any, error) { //nolint:gocritic
-	path := in.Path
-	if path == "" && len(h.proto.Workspaces()) > 0 {
-		path = h.proto.Workspaces()[0]
-	}
-	// For now, return a placeholder until engine wiring is complete
-	// The context package exists in Oculus but isn't wired through engine yet
-	_ = path
+// dispatchAnalysisMeta handles actions merged from the former book, context, and triage tools.
+func (h *handler) dispatchAnalysisMeta(ctx context.Context, in *analysisInput) (*sdkmcp.CallToolResult, any, error) {
 	switch in.Action {
-	case "read":
+	case ActionBook:
+		hops := in.Hops
+		if hops <= 0 {
+			hops = 2
+		}
+		r, err := h.proto.QueryBook(in.Keywords, hops)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
+	case ActionContextRead:
 		return text("context read not yet wired to engine"), nil, nil
-	case "write":
+	case ActionContextWrite:
 		return text("context write not yet wired to engine"), nil, nil
+	case ActionTriage:
+		if in.Intent == "" {
+			return nil, nil, ErrIntentRequired
+		}
+		return jsonResult(h.reg.Triage(in.Intent, in.Path))
 	default:
-		return nil, nil, fmt.Errorf("%w: %s", ErrUnknownContextAction, in.Action)
+		return nil, nil, fmt.Errorf("%w %q", ErrUnknownAction, in.Action)
 	}
 }
 
@@ -952,7 +893,7 @@ func text(s string) *sdkmcp.CallToolResult {
 }
 
 func jsonResult(data any) (*sdkmcp.CallToolResult, any, error) {
-	b, _ := json.MarshalIndent(data, "", "  ")
+	b, _ := json.Marshal(data)
 	return text(string(b)), nil, nil
 }
 
