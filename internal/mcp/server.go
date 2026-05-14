@@ -742,14 +742,33 @@ const (
 )
 
 func (h *handler) symbolSearchFull(ctx context.Context, in *analysisInput, r *engine.SymbolSearchReport) (*sdkmcp.CallToolResult, any, error) {
+	// Bug fix: cap is hard at symbolSearchFullLimit; if caller supplied a
+	// smaller top_n honour it, but never silently exceed the ceiling.
 	limit := in.TopN
-	if limit <= 0 || limit > symbolSearchFullLimit {
+	switch {
+	case limit <= 0:
+		limit = symbolSearchFullLimit
+	case limit > symbolSearchFullLimit:
+		// Caller asked for more than the hard cap — clamp and tell them.
 		limit = symbolSearchFullLimit
 	}
+
 	total := len(r.Matches)
 	if total > limit {
 		r.Matches = r.Matches[:limit]
 	}
+
+	// Bug fix: ProbeSymbol must use the same path as the arch scan so that
+	// remote scans (cache_key points to a cloned repo) stay consistent.
+	// For local scans in.Path == probe path, so this is a no-op.
+	probePath := in.Path
+	if in.CacheKey != "" {
+		// cache_key is "<path>@<sha>" — extract the path component.
+		if i := len(in.CacheKey) - 41; i > 0 && in.CacheKey[i-1] == '@' {
+			probePath = in.CacheKey[:i-1]
+		}
+	}
+
 	enriched := make([]enrichedSymbolMatch, 0, len(r.Matches))
 	for _, m := range r.Matches {
 		em := enrichedSymbolMatch{
@@ -759,7 +778,7 @@ func (h *handler) symbolSearchFull(ctx context.Context, in *analysisInput, r *en
 			File:      m.File,
 			Line:      m.Line,
 		}
-		if pr, err := h.proto.ProbeSymbol(ctx, in.Path, m.Symbol); err == nil && pr != nil {
+		if pr, err := h.proto.ProbeSymbol(ctx, probePath, m.Symbol); err == nil && pr != nil {
 			em.Exported = pr.Exported
 			em.Params = pr.Params
 			em.Returns = pr.Returns
@@ -773,9 +792,10 @@ func (h *handler) symbolSearchFull(ctx context.Context, in *analysisInput, r *en
 		}
 		enriched = append(enriched, em)
 	}
-	summary := fmt.Sprintf("%d symbol(s) matching %q (full depth, showing %d)", total, in.Query, len(enriched))
+
+	summary := fmt.Sprintf("%d symbol(s) matching %q (full depth, showing %d of %d)", total, in.Query, len(enriched), total)
 	if total > limit {
-		summary += fmt.Sprintf("; %d omitted — narrow your query or increase top_n (max %d)", total-limit, symbolSearchFullLimit)
+		summary += fmt.Sprintf("; capped at %d — narrow your query or pass top_n ≤ %d", symbolSearchFullLimit, symbolSearchFullLimit)
 	}
 	return jsonResult(&enrichedSymbolSearchReport{Query: in.Query, Matches: enriched, Summary: summary})
 }
