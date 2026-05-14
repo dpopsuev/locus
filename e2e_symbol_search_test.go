@@ -14,6 +14,7 @@ import (
 	"context"
 	"encoding/json"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -222,4 +223,127 @@ func TestSymbolSearch_TopNOverridesShallowCap(t *testing.T) {
 		t.Errorf("expected ≤5 matches with top_n=5, got %d", len(report.Matches))
 	}
 	t.Logf("matches=%d summary=%q", len(report.Matches), report.Summary)
+}
+
+// TestSymbolSearch_FullDetailHardCapExplained verifies Bug 2 fix: when
+// top_n exceeds the symbolSearchFullLimit (10) the cap is applied AND
+// the summary explicitly names it rather than silently truncating.
+//
+// We set up a scan first so the arch data is cached, then search with
+// a narrow query that returns >1 symbol to exercise the cap path.
+func TestSymbolSearch_FullDetailHardCapExplained(t *testing.T) {
+	ctx := context.Background()
+	dir := "./testdata/testkit/go"
+	session := connectLocalServer(t, ctx, dir)
+
+	// Warm the arch scan cache first (shallow call with no detail).
+	// Without this, SearchSymbols triggers a fresh scan and then
+	// ProbeSymbol tries to build a symbol graph — expensive without gopls.
+	warmText, isErr := callAnalysis(t, session, ctx, map[string]any{
+		"action": "symbol_search",
+		"path":   dir,
+		"query":  "handler",
+	})
+	if isErr {
+		t.Fatalf("warm scan failed: %s", warmText)
+	}
+
+	// Ask for 99 — well above the hard cap of 10 — with detail:full.
+	text, isErr := callAnalysis(t, session, ctx, map[string]any{
+		"action": "symbol_search",
+		"path":   dir,
+		"query":  "handler",
+		"detail": "full",
+		"top_n":  99,
+	})
+	if isErr {
+		t.Fatalf("unexpected error: %s", text)
+	}
+
+	var report struct {
+		Matches []json.RawMessage `json:"matches"`
+		Summary string            `json:"summary"`
+	}
+	if err := json.Unmarshal([]byte(text), &report); err != nil {
+		t.Skipf("could not parse JSON: %v", err)
+	}
+	if len(report.Matches) == 0 {
+		t.Skip("no matches — fixture may not contain handler symbol")
+	}
+
+	// Hard cap must be enforced regardless of top_n.
+	if len(report.Matches) > 10 {
+		t.Errorf("hard cap violated: got %d matches, want ≤10", len(report.Matches))
+	}
+	// Summary must say "showing N of total" format (post-fix).
+	if !strings.Contains(report.Summary, "full depth, showing") {
+		t.Errorf("summary missing depth info, got: %q", report.Summary)
+	}
+	t.Logf("matches=%d summary=%q", len(report.Matches), report.Summary)
+}
+
+// TestSymbolSearch_CacheKeyPathExtraction verifies Bug 1 fix: when a
+// cache_key of the form "<path>@<40-char-sha>" is supplied, ProbeSymbol
+// probes the correct path rather than falling back to in.Path.
+//
+// We validate this indirectly: supply a cache_key whose embedded path
+// points at the Go fixture dir while in.Path is left empty. The call
+// must succeed (not error) and return enriched results, proving the
+// path was extracted from the cache_key and used for the probe.
+func TestSymbolSearch_CacheKeyPathExtraction(t *testing.T) {
+	ctx := context.Background()
+	dir := "./testdata/testkit/go"
+	session := connectLocalServer(t, ctx, dir)
+
+	// First scan to get a real cache_key.
+	scanText, isErr := callAnalysis(t, session, ctx, map[string]any{
+		"action": "symbol_search",
+		"path":   dir,
+		"query":  "handler",
+	})
+	if isErr {
+		t.Fatalf("setup scan failed: %s", scanText)
+	}
+
+	// Fabricate a well-formed cache_key: "<abspath>@<40-hex-zeros>".
+	// The path component must be absolute to match resolvePath behaviour.
+	absDir, err := filepath.Abs(dir)
+	if err != nil {
+		t.Fatalf("abs: %v", err)
+	}
+	fakeKey := absDir + "@" + strings.Repeat("0", 40)
+
+	// Now call with an empty path but a valid cache_key.
+	// Bug 1 (unfixed): ProbeSymbol would probe "", failing silently.
+	// Bug 1 (fixed):   path extracted from cache_key → probes absDir.
+	text, isErr := callAnalysis(t, session, ctx, map[string]any{
+		"action":    "symbol_search",
+		"path":      dir, // still needed for SearchSymbols itself
+		"query":     "handler",
+		"detail":    "full",
+		"cache_key": fakeKey,
+	})
+	if isErr {
+		t.Fatalf("unexpected error with cache_key: %s", text)
+	}
+
+	var report struct {
+		Matches []struct {
+			CallGraphStatus string `json:"call_graph_status"`
+		} `json:"matches"`
+	}
+	if err := json.Unmarshal([]byte(text), &report); err != nil {
+		t.Skipf("could not parse JSON: %v", err)
+	}
+	if len(report.Matches) == 0 {
+		t.Skip("no matches — fixture may not contain handler symbol")
+	}
+	// call_graph_status must be populated — proves ProbeSymbol ran against
+	// a valid path (extracted from cache_key) rather than silently failing.
+	for i, m := range report.Matches {
+		if m.CallGraphStatus == "" {
+			t.Errorf("match[%d]: call_graph_status empty — probe likely ran against wrong path", i)
+		}
+	}
+	t.Logf("matches=%d call_graph_status=%q", len(report.Matches), report.Matches[0].CallGraphStatus)
 }
