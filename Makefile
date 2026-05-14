@@ -50,15 +50,26 @@ image: build
 	$(CONTAINER_RT) build -t $(IMAGE) .
 
 deploy: image
-	-$(CONTAINER_RT) stop locus 2>/dev/null
-	-$(CONTAINER_RT) rm locus 2>/dev/null
-	$(CONTAINER_RT) run -d --name locus \
-		--userns=keep-id \
-		--user $(shell id -u):$(shell id -g) \
-		-p 8081:8081 \
-		-v $(HOME):$(HOME):rbind \
-		$(IMAGE) \
-		serve --transport http --addr :8081
+	# Tag latest so image pulls work, then pin the service to the versioned tag
+	# so systemd restarts never silently run stale binaries.
+	$(CONTAINER_RT) tag $(IMAGE) locus:latest
+	@SERVICE=$${HOME}/.config/systemd/user/container-locus.service; \
+	if [ -f "$$SERVICE" ]; then \
+		sed -i "s|localhost/locus:[^ ]*|$(IMAGE)|" "$$SERVICE"; \
+		systemctl --user daemon-reload; \
+		systemctl --user restart container-locus.service; \
+		echo "systemd service restarted with $(IMAGE)"; \
+	else \
+		$(CONTAINER_RT) stop locus 2>/dev/null || true; \
+		$(CONTAINER_RT) rm locus 2>/dev/null || true; \
+		$(CONTAINER_RT) run -d --name locus \
+			--userns=keep-id \
+			--user $(shell id -u):$(shell id -g) \
+			-p 8081:8081 \
+			-v $(HOME):$(HOME):rbind \
+			$(IMAGE) \
+			serve --transport http --addr :8081; \
+	fi
 
 test-container: image
 	go test -tags=e2e -run TestContainer_E2E -timeout 300s -v .
