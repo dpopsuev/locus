@@ -44,6 +44,7 @@ var (
 	ErrExplainEdgeParams      = errors.New("explain_edge requires symbol (source FQN) and query (target FQN)")
 	ErrSymbolDiffParams       = errors.New("symbol_diff requires before_sha and after_sha")
 	ErrUnknownContextAction   = errors.New("unknown context action")
+	ErrQueryRequired          = errors.New("symbol_search requires a non-empty query; use symbol_search with a name pattern to find specific symbols")
 )
 
 // --- Action constants ---
@@ -261,6 +262,7 @@ type analysisInput struct {
 	From      string   `json:"from,omitempty" jsonschema:"source symbol FQN (mesh distance)"`
 	To        string   `json:"to,omitempty" jsonschema:"target symbol FQN (mesh distance)"`
 	MinWeight *float64 `json:"min_weight,omitempty" jsonschema:"minimum edge weight filter (mesh boundaries/neighborhood, default 0.1)"`
+	Detail    string   `json:"detail,omitempty" jsonschema:"symbol_search detail level: shallow (default, locators only) or full (adds fan_in, fan_out, instability, signature — caps results at 10)"`
 	// Fields for merged tools (book, context_read/write, triage).
 	Keywords []string `json:"keywords,omitempty" jsonschema:"keywords for knowledge graph query (book)"`
 	Scope    string   `json:"scope,omitempty" jsonschema:"context scope: project | module | file | symbol"`
@@ -410,9 +412,24 @@ func (h *handler) dispatchAnalysisExtended(ctx context.Context, in *analysisInpu
 		}
 		return jsonResult(r)
 	case ActionSymbolSearch:
+		if in.Query == "" {
+			return nil, nil, ErrQueryRequired
+		}
 		r, err := h.proto.SearchSymbols(ctx, in.Path, in.Query, in.CacheKey)
 		if err != nil {
 			return nil, nil, err
+		}
+		if in.Detail == detailFull {
+			return h.symbolSearchFull(ctx, in, r)
+		}
+		const defaultShallowLimit = 50
+		limit := in.TopN
+		if limit <= 0 {
+			limit = defaultShallowLimit
+		}
+		if len(r.Matches) > limit {
+			r.Matches = r.Matches[:limit]
+			r.Summary = fmt.Sprintf("%s (showing first %d; use detail:\"full\" on a narrower query for metrics)", r.Summary, limit)
 		}
 		return jsonResult(r)
 	case ActionCallees:
@@ -689,6 +706,79 @@ func (h *handler) handleDiffBranches(ctx context.Context, in *codographActionInp
 }
 
 // --- Analysis sub-handlers ---
+
+// enrichedSymbolMatch is a SymbolMatch extended with call-graph metrics from ProbeSymbol.
+// Fields sourced from ProbeResult are omitted when the symbol has no call-graph coverage.
+type enrichedSymbolMatch struct {
+	// Locator (always present)
+	Symbol    string `json:"symbol"`
+	Kind      string `json:"kind"`
+	Component string `json:"component"`
+	File      string `json:"file,omitempty"`
+	Line      int    `json:"line,omitempty"`
+	// Metrics (present when call-graph coverage exists)
+	Exported        bool     `json:"exported,omitempty"`
+	Params          []string `json:"params,omitempty"`
+	Returns         []string `json:"returns,omitempty"`
+	FanIn           int      `json:"fan_in,omitempty"`
+	FanOut          int      `json:"fan_out,omitempty"`
+	Instability     float64  `json:"instability,omitempty"`
+	CrossPackage    int      `json:"cross_pkg_callees,omitempty"`
+	Circuits        int      `json:"circuits,omitempty"`
+	Boundaries      []string `json:"boundaries,omitempty"`
+	CallGraphStatus string   `json:"call_graph_status,omitempty"`
+}
+
+type enrichedSymbolSearchReport struct {
+	Query   string                `json:"query"`
+	Matches []enrichedSymbolMatch `json:"matches"`
+	Summary string                `json:"summary"`
+}
+
+const (
+	symbolSearchFullLimit    = 10     // hard ceiling for detail:full — each match calls ProbeSymbol
+	symbolSearchShallowLimit = 50
+	detailFull               = "full" // detail param value for enriched symbol search
+)
+
+func (h *handler) symbolSearchFull(ctx context.Context, in *analysisInput, r *engine.SymbolSearchReport) (*sdkmcp.CallToolResult, any, error) {
+	limit := in.TopN
+	if limit <= 0 || limit > symbolSearchFullLimit {
+		limit = symbolSearchFullLimit
+	}
+	total := len(r.Matches)
+	if total > limit {
+		r.Matches = r.Matches[:limit]
+	}
+	enriched := make([]enrichedSymbolMatch, 0, len(r.Matches))
+	for _, m := range r.Matches {
+		em := enrichedSymbolMatch{
+			Symbol:    m.Symbol,
+			Kind:      m.Kind,
+			Component: m.Component,
+			File:      m.File,
+			Line:      m.Line,
+		}
+		if pr, err := h.proto.ProbeSymbol(ctx, in.Path, m.Symbol); err == nil && pr != nil {
+			em.Exported = pr.Exported
+			em.Params = pr.Params
+			em.Returns = pr.Returns
+			em.FanIn = pr.FanIn
+			em.FanOut = pr.FanOut
+			em.Instability = pr.Instability
+			em.CrossPackage = pr.CrossPkg
+			em.Circuits = pr.Circuits
+			em.Boundaries = pr.Boundaries
+			em.CallGraphStatus = string(pr.CallGraphStatus)
+		}
+		enriched = append(enriched, em)
+	}
+	summary := fmt.Sprintf("%d symbol(s) matching %q (full depth, showing %d)", total, in.Query, len(enriched))
+	if total > limit {
+		summary += fmt.Sprintf("; %d omitted — narrow your query or increase top_n (max %d)", total-limit, symbolSearchFullLimit)
+	}
+	return jsonResult(&enrichedSymbolSearchReport{Query: in.Query, Matches: enriched, Summary: summary})
+}
 
 func (h *handler) handleCoupling(ctx context.Context, path, sortBy string, topN int, view string, churnDays int, component, cacheKey string) (*sdkmcp.CallToolResult, any, error) {
 	switch view {
