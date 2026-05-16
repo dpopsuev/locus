@@ -3,7 +3,7 @@
 package locus_test
 
 // TestSymbolSearch_* validates the symbol_search MCP action (LCS-TSK-466):
-//   - empty query is rejected (ErrQueryRequired)
+//   - empty symbol is rejected (ErrQueryRequired)
 //   - shallow results are capped at 50
 //   - detail:"full" enriches each match with call-graph metrics (cap 10)
 //
@@ -89,7 +89,7 @@ func TestSymbolSearch_ShallowCapAt50(t *testing.T) {
 	text, isErr := callAnalysis(t, session, ctx, map[string]any{
 		"action": "symbol_search",
 		"path":   ".",
-		"query":  "get",
+		"symbol": "get",
 	})
 	if isErr {
 		t.Fatalf("unexpected error: %s", text)
@@ -118,7 +118,7 @@ func TestSymbolSearch_FullDetailEnriches(t *testing.T) {
 	text, isErr := callAnalysis(t, session, ctx, map[string]any{
 		"action": "symbol_search",
 		"path":   ".",
-		"query":  "handler",
+		"symbol": "handler",
 		"detail": "full",
 	})
 	if isErr {
@@ -163,7 +163,7 @@ func TestSymbolSearch_FullDetailEnriches_GoFixture(t *testing.T) {
 	text, isErr := callAnalysis(t, session, ctx, map[string]any{
 		"action": "symbol_search",
 		"path":   dir,
-		"query":  "handler",
+		"symbol": "handler",
 		"detail": "full",
 	})
 	if isErr {
@@ -204,7 +204,7 @@ func TestSymbolSearch_TopNOverridesShallowCap(t *testing.T) {
 	text, isErr := callAnalysis(t, session, ctx, map[string]any{
 		"action": "symbol_search",
 		"path":   ".",
-		"query":  "get",
+		"symbol": "get",
 		"top_n":  5,
 	})
 	if isErr {
@@ -242,7 +242,7 @@ func TestSymbolSearch_FullDetailHardCapExplained(t *testing.T) {
 	warmText, isErr := callAnalysis(t, session, ctx, map[string]any{
 		"action": "symbol_search",
 		"path":   dir,
-		"query":  "handler",
+		"symbol": "handler",
 	})
 	if isErr {
 		t.Fatalf("warm scan failed: %s", warmText)
@@ -252,7 +252,7 @@ func TestSymbolSearch_FullDetailHardCapExplained(t *testing.T) {
 	text, isErr := callAnalysis(t, session, ctx, map[string]any{
 		"action": "symbol_search",
 		"path":   dir,
-		"query":  "handler",
+		"symbol": "handler",
 		"detail": "full",
 		"top_n":  99,
 	})
@@ -299,7 +299,7 @@ func TestSymbolSearch_CacheKeyPathExtraction(t *testing.T) {
 	scanText, isErr := callAnalysis(t, session, ctx, map[string]any{
 		"action": "symbol_search",
 		"path":   dir,
-		"query":  "handler",
+		"symbol": "handler",
 	})
 	if isErr {
 		t.Fatalf("setup scan failed: %s", scanText)
@@ -319,7 +319,7 @@ func TestSymbolSearch_CacheKeyPathExtraction(t *testing.T) {
 	text, isErr := callAnalysis(t, session, ctx, map[string]any{
 		"action":    "symbol_search",
 		"path":      dir, // still needed for SearchSymbols itself
-		"query":     "handler",
+		"symbol":    "handler",
 		"detail":    "full",
 		"cache_key": fakeKey,
 	})

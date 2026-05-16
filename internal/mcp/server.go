@@ -44,7 +44,7 @@ var (
 	ErrExplainEdgeParams      = errors.New("explain_edge requires symbol (source FQN) and query (target FQN)")
 	ErrSymbolDiffParams       = errors.New("symbol_diff requires before_sha and after_sha")
 	ErrUnknownContextAction   = errors.New("unknown context action")
-	ErrQueryRequired          = errors.New("symbol_search requires a non-empty query; use symbol_search with a name pattern to find specific symbols")
+	ErrQueryRequired          = errors.New("symbol_search requires a non-empty symbol; use symbol_search with a name pattern to find specific symbols")
 )
 
 // --- Action constants ---
@@ -412,10 +412,10 @@ func (h *handler) dispatchAnalysisExtended(ctx context.Context, in *analysisInpu
 		}
 		return jsonResult(r)
 	case ActionSymbolSearch:
-		if in.Query == "" {
+		if in.Symbol == "" {
 			return nil, nil, ErrQueryRequired
 		}
-		r, err := h.proto.SearchSymbols(ctx, in.Path, in.Query, in.CacheKey)
+		r, err := h.proto.SearchSymbols(ctx, in.Path, in.Symbol, in.CacheKey)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -793,11 +793,11 @@ func (h *handler) symbolSearchFull(ctx context.Context, in *analysisInput, r *en
 		enriched = append(enriched, em)
 	}
 
-	summary := fmt.Sprintf("%d symbol(s) matching %q (full depth, showing %d of %d)", total, in.Query, len(enriched), total)
+	summary := fmt.Sprintf("%d symbol(s) matching %q (full depth, showing %d of %d)", total, in.Symbol, len(enriched), total)
 	if total > limit {
-		summary += fmt.Sprintf("; capped at %d — narrow your query or pass top_n ≤ %d", symbolSearchFullLimit, symbolSearchFullLimit)
+		summary += fmt.Sprintf("; capped at %d — narrow your symbol or pass top_n ≤ %d", symbolSearchFullLimit, symbolSearchFullLimit)
 	}
-	return jsonResult(&enrichedSymbolSearchReport{Query: in.Query, Matches: enriched, Summary: summary})
+	return jsonResult(&enrichedSymbolSearchReport{Query: in.Symbol, Matches: enriched, Summary: summary})
 }
 
 func (h *handler) handleCoupling(ctx context.Context, path, sortBy string, topN int, view string, churnDays int, component, cacheKey string) (*sdkmcp.CallToolResult, any, error) {
