@@ -55,7 +55,7 @@ deploy: image
 	$(CONTAINER_RT) tag $(IMAGE) locus:latest
 	@SERVICE=$${HOME}/.config/systemd/user/container-locus.service; \
 	if [ -f "$$SERVICE" ]; then \
-		sed -i "s|localhost/locus:[^ ]*|$(IMAGE)|" "$$SERVICE"; \
+		sed -i "s|locus:v[^ ]*|$(IMAGE)|g" "$$SERVICE"; \
 		systemctl --user daemon-reload; \
 		systemctl --user restart container-locus.service; \
 		echo "systemd service restarted with $(IMAGE)"; \
