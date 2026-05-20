@@ -13,7 +13,7 @@ require (
 
 require (
 	github.com/dpopsuev/battery v0.11.0
-	github.com/dpopsuev/oculus/v3 v3.62.0
+	github.com/dpopsuev/oculus/v3 v3.63.0
 	github.com/dpopsuev/tako v0.0.0-20260508195727-91edf3b3bb2d
 )
 
