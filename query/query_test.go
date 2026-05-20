@@ -160,14 +160,30 @@ func TestQuery_HotSpotsShape(t *testing.T) {
 		t.Fatalf("Query: %v", err)
 	}
 
+	// Shape: response is well-formed and action succeeded.
+	if !resp.Results[0].OK {
+		t.Fatalf("hot_spots action failed: %s", resp.Results[0].Err)
+	}
 	var spots []arch.HotSpot
 	if err := json.Unmarshal(resp.Results[0].Data, &spots); err != nil {
 		t.Fatalf("unmarshal hot_spots: %v", err)
 	}
-	if len(spots) == 0 {
-		t.Error("expected at least 1 hot spot from self-scan")
-	}
+
+	// top_n cap must be respected.
 	if len(spots) > 3 {
-		t.Errorf("requested top_n=3 but got %d", len(spots))
+		t.Errorf("requested top_n=3 but got %d spots", len(spots))
+	}
+
+	// At least 1 hot spot: internal/mcp has high churn (the busiest package
+	// in this repo) and qualifies under the churn-risk criterion.
+	if len(spots) == 0 {
+		t.Error("expected at least 1 hot spot: internal/mcp should qualify by churn")
+	}
+
+	// Verify each spot has the required fields populated.
+	for _, s := range spots {
+		if s.Component == "" {
+			t.Error("hot spot has empty Component")
+		}
 	}
 }
