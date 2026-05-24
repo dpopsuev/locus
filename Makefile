@@ -50,9 +50,6 @@ image: build
 	$(CONTAINER_RT) build -t $(IMAGE) .
 
 deploy: image
-	# Tag latest so image pulls work, then pin the service to the versioned tag
-	# so systemd restarts never silently run stale binaries.
-	$(CONTAINER_RT) tag $(IMAGE) locus:latest
 	@SERVICE=$${HOME}/.config/systemd/user/container-locus.service; \
 	if [ -f "$$SERVICE" ]; then \
 		sed -i "s|locus:v[^ ]*|$(IMAGE)|g" "$$SERVICE"; \
