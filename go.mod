@@ -17,6 +17,9 @@ require (
 	github.com/dpopsuev/tako v0.0.0-20260508195727-91edf3b3bb2d
 )
 
+// LCS-BUG-75: use local oculus until ctags --exclude fix lands in a release.
+replace github.com/dpopsuev/oculus/v3 => ../oculus
+
 require (
 	dario.cat/mergo v1.0.0 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect

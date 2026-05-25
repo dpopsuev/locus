@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/sync/singleflight"
+
 	batterymcp "github.com/dpopsuev/battery/mcp"
 	"github.com/dpopsuev/locus/internal/store"
 	oculus "github.com/dpopsuev/oculus/v3"
@@ -206,6 +208,12 @@ type handler struct {
 	reg      *triage.Registry
 	binStart time.Time // mtime of binary at startup, for stale detection
 	binPath  string    // path to running binary
+
+	// scanGroup deduplicates concurrent scan_local calls for the same workspace:
+	// if N sessions call scan_local on the same path+intent simultaneously, only
+	// one ctags process is spawned and all callers receive the same result when
+	// it completes (LCS-BUG-75).
+	scanGroup singleflight.Group
 }
 
 // --- Input structs (per-tool, only relevant fields) ---
@@ -642,15 +650,34 @@ func (h *handler) dispatchAnalysisLookup(ctx context.Context, in *analysisInput)
 // --- Codograph sub-handlers ---
 
 func (h *handler) handleScanProject(ctx context.Context, in *codographActionInput) (*sdkmcp.CallToolResult, any, error) {
-	result, err := h.proto.ScanProject(ctx, in.Path, engine.ScanOpts{
-		Depth: in.Depth, ChurnDays: in.ChurnDays,
-		IncludeExternal: in.IncludeExternal, IncludeTests: in.IncludeTests,
-		IncludeCoverage: in.IncludeCoverage, Budget: in.Budget,
-		Intent: in.Intent, Since: in.Since,
+	// Deduplicate concurrent scan_local calls for the same workspace+intent.
+	// The singleflight key must match the ScanProject cache key used by the
+	// engine (path + intent); additional opts don't matter for the common case.
+	sfKey := in.Path + "\x00" + in.Intent
+
+	type sfPayload struct {
+		scanResult *engine.ScanResult
+		driftText  string
+	}
+
+	v, err, _ := h.scanGroup.Do(sfKey, func() (any, error) {
+		r, scanErr := h.proto.ScanProject(ctx, in.Path, engine.ScanOpts{
+			Depth: in.Depth, ChurnDays: in.ChurnDays,
+			IncludeExternal: in.IncludeExternal, IncludeTests: in.IncludeTests,
+			IncludeCoverage: in.IncludeCoverage, Budget: in.Budget,
+			Intent: in.Intent, Since: in.Since,
+		})
+		if scanErr != nil {
+			return nil, scanErr
+		}
+		drift := h.proto.CheckDriftOnScan(ctx, in.Path, r.Report)
+		return &sfPayload{scanResult: r, driftText: engine.RenderScanSummary(r, drift)}, nil
 	})
 	if err != nil {
 		return nil, nil, err
 	}
+	payload := v.(*sfPayload)
+	result := payload.scanResult
 	switch in.Format {
 	case FormatSummary:
 		return text(arch.RenderMarkdown(result.Report)), nil, nil
@@ -661,8 +688,9 @@ func (h *handler) handleScanProject(ctx context.Context, in *codographActionInpu
 		}
 		return text(string(data)), nil, nil
 	default:
-		driftInfo := h.proto.CheckDriftOnScan(ctx, in.Path, result.Report)
-		return text(engine.RenderScanSummary(result, driftInfo)), nil, nil
+		// Use the drift text pre-computed inside the singleflight closure so
+		// all concurrent callers share the same result without redundant work.
+		return text(payload.driftText), nil, nil
 	}
 }
 
