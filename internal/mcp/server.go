@@ -161,7 +161,7 @@ func NewServer(s store.Store, workspaceRoots []string, version string, pool ...l
 	bsrv := batterymcp.NewServer("locus", version).
 		WithInstructions("Scan first (codograph scan_local), then walk (analysis probe/scenario/convergence/isolate). Results cached by SHA; pass cache_key to skip rescanning.")
 	srv := bsrv.SDK()
-	h := &handler{proto: proto}
+	h := &handler{proto: proto, sproto: proto}
 	// Record binary mtime at startup for stale binary detection (BUG-33).
 	if exe, err := os.Executable(); err == nil {
 		h.binPath = exe
@@ -203,8 +203,17 @@ func NewServer(s store.Store, workspaceRoots []string, version string, pool ...l
 	return bsrv, reg
 }
 
+// scanProto is a narrow interface over the two engine methods used by
+// handleScanProject. Keeping it separate from *engine.Engine lets tests
+// inject a fake without wiring up a real store+cache.
+type scanProto interface {
+	ScanProject(ctx context.Context, path string, opts engine.ScanOpts) (*engine.ScanResult, error)
+	CheckDriftOnScan(ctx context.Context, path string, report *arch.ContextReport) string
+}
+
 type handler struct {
 	proto    *engine.Engine
+	sproto   scanProto  // scan+drift; defaults to proto, replaceable in tests
 	reg      *triage.Registry
 	binStart time.Time // mtime of binary at startup, for stale detection
 	binPath  string    // path to running binary
@@ -661,7 +670,7 @@ func (h *handler) handleScanProject(ctx context.Context, in *codographActionInpu
 	}
 
 	v, err, _ := h.scanGroup.Do(sfKey, func() (any, error) {
-		r, scanErr := h.proto.ScanProject(ctx, in.Path, engine.ScanOpts{
+		r, scanErr := h.sproto.ScanProject(ctx, in.Path, engine.ScanOpts{
 			Depth: in.Depth, ChurnDays: in.ChurnDays,
 			IncludeExternal: in.IncludeExternal, IncludeTests: in.IncludeTests,
 			IncludeCoverage: in.IncludeCoverage, Budget: in.Budget,
@@ -670,7 +679,7 @@ func (h *handler) handleScanProject(ctx context.Context, in *codographActionInpu
 		if scanErr != nil {
 			return nil, scanErr
 		}
-		drift := h.proto.CheckDriftOnScan(ctx, in.Path, r.Report)
+		drift := h.sproto.CheckDriftOnScan(ctx, in.Path, r.Report)
 		return &sfPayload{scanResult: r, driftText: engine.RenderScanSummary(r, drift)}, nil
 	})
 	if err != nil {
