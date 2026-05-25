@@ -94,6 +94,49 @@ func (s *LRUStore) addLocked(key string, report *arch.ContextReport) {
 	}
 }
 
+// Snapshottable is implemented by stores that expose their in-memory LRU state.
+// Used by GET /debug/cache to inspect which cache slots are warm.
+type Snapshottable interface {
+	Snapshot() []LRUEntry
+}
+
+// LRUEntry is a single item in the LRU snapshot.
+type LRUEntry struct {
+	Project   string `json:"project"`
+	SHA       string `json:"sha"`
+	Services  int    `json:"services"`
+	Edges     int    `json:"edges"`
+}
+
+// Snapshot returns a point-in-time copy of all in-memory LRU entries,
+// ordered from most-recently-used to least-recently-used.
+// Used by GET /debug/cache to diagnose cache state without a restart.
+func (s *LRUStore) Snapshot() []LRUEntry {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	entries := make([]LRUEntry, 0, s.order.Len())
+	for el := s.order.Front(); el != nil; el = el.Next() {
+		e := el.Value.(*lruEntry)
+		parts := strings.SplitN(e.key, "\x00", 2)
+		project, sha := "", ""
+		if len(parts) == 2 {
+			project, sha = parts[0], parts[1]
+		}
+		var svcs, edges int
+		if e.report != nil {
+			svcs = len(e.report.Architecture.Services)
+			edges = len(e.report.Architecture.Edges)
+		}
+		entries = append(entries, LRUEntry{
+			Project:  project,
+			SHA:      sha,
+			Services: svcs,
+			Edges:    edges,
+		})
+	}
+	return entries
+}
+
 func (s *LRUStore) evictLocked() {
 	back := s.order.Back()
 	if back == nil {

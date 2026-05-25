@@ -1067,7 +1067,9 @@ func jsonResult(data any) (*sdkmcp.CallToolResult, any, error) {
 func (h *handler) logAnalysisEntry(ctx context.Context, in *analysisInput) {
 	resolvedPath := h.proto.ResolvePath(in.Path)
 	sha := h.proto.ResolveHEAD(resolvedPath)
-	slog.LogAttrs(ctx, slog.LevelDebug, "analysis dispatch",
+	// Cache miss → ScanAndBuild is always a meaningful event.
+	// Logged at INFO so operators see it without enabling debug mode.
+	slog.LogAttrs(ctx, slog.LevelInfo, "analysis dispatch",
 		slog.String(logKeyAction, in.Action),
 		slog.String(logKeyPath, resolvedPath),
 		slog.String(logKeySHA, sha),

@@ -19,6 +19,7 @@ import (
 
 	"github.com/dpopsuev/locus/internal/config"
 	locusmcp "github.com/dpopsuev/locus/internal/mcp"
+	"github.com/dpopsuev/locus/internal/store"
 	"github.com/dpopsuev/oculus/v3/analyzer"
 	"github.com/dpopsuev/oculus/v3/arch"
 	"github.com/dpopsuev/oculus/v3/diagram"
@@ -123,6 +124,7 @@ var serveFlags struct {
 	workspaces []string
 	transport  string
 	addr       string
+	logLevel   string
 }
 
 var serveCmd = &cobra.Command{
@@ -137,6 +139,12 @@ Tools: scan_project, get_dependencies, get_impact, get_coupling_table,
        codograph_remote, get_codograph_history, diff_branches,
        get_cycles, render_diagram, triage.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if serveFlags.logLevel != "" {
+			// --log-level overrides LOCUS_LOG_LEVEL; re-init logger with the
+			// flag value so operators can set it without touching the environment.
+			_ = os.Setenv("LOCUS_LOG_LEVEL", serveFlags.logLevel)
+			initLogger()
+		}
 		roots := serveFlags.workspaces
 		if len(roots) == 0 {
 			cwd, _ := os.Getwd()
@@ -154,12 +162,15 @@ Tools: scan_project, get_dependencies, get_impact, get_coupling_table,
 		srv, _ := locusmcp.NewServer(s, roots, version, pool)
 		if serveFlags.transport == "http" {
 			sdk := srv.SDK()
-			handler := sdkmcp.NewStreamableHTTPHandler(
+			mcpHandler := sdkmcp.NewStreamableHTTPHandler(
 				func(r *http.Request) *sdkmcp.Server { return sdk },
 				nil,
 			)
+			mux := http.NewServeMux()
+			mux.Handle("/", mcpHandler)
+			mux.HandleFunc("/debug/cache", debugCacheHandler(s))
 			slog.LogAttrs(ctx, slog.LevelInfo, "locus server starting", slog.String(logKeyVersion, version), slog.String(logKeyTransport, "http"), slog.String(logKeyAddr, serveFlags.addr))
-			server := &http.Server{Addr: serveFlags.addr, Handler: handler, ReadHeaderTimeout: 10 * time.Second}
+			server := &http.Server{Addr: serveFlags.addr, Handler: mux, ReadHeaderTimeout: 10 * time.Second}
 			go func() {
 				<-ctx.Done()
 				slog.LogAttrs(ctx, slog.LevelInfo, "shutting down")
@@ -170,6 +181,34 @@ Tools: scan_project, get_dependencies, get_impact, get_coupling_table,
 		slog.LogAttrs(ctx, slog.LevelInfo, "locus server starting", slog.String(logKeyVersion, version), slog.String(logKeyTransport, "stdio"))
 		return srv.Serve(ctx, &sdkmcp.StdioTransport{})
 	},
+}
+
+// debugCacheHandler returns an HTTP handler for GET /debug/cache.
+// It reports which cache slots are warm in the LRU, their project path,
+// sha key, and component/edge counts. If the store is not Snapshottable
+// it returns a plain-text message instead of failing.
+//
+// Example: curl http://localhost:8081/debug/cache | jq
+func debugCacheHandler(s store.Store) http.HandlerFunc {
+	type response struct {
+		LRU        []store.LRUEntry `json:"lru"`
+		TotalSlots int              `json:"total_slots"`
+		Note       string           `json:"note,omitempty"`
+	}
+	return func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		enc := json.NewEncoder(w)
+		snap, ok := s.(store.Snapshottable)
+		if !ok {
+			_ = enc.Encode(response{Note: "store does not implement Snapshottable"})
+			return
+		}
+		entries := snap.Snapshot()
+		_ = enc.Encode(response{
+			LRU:        entries,
+			TotalSlots: len(entries),
+		})
+	}
 }
 
 var codographFlags struct {
@@ -624,6 +663,7 @@ func init() {
 	serveCmd.Flags().StringArrayVar(&serveFlags.workspaces, "workspace", nil, "Workspace root paths (repeatable; defaults to cwd)")
 	serveCmd.Flags().StringVar(&serveFlags.transport, "transport", envOr("LOCUS_TRANSPORT", "stdio"), "Transport type: stdio, http ($LOCUS_TRANSPORT)")
 	serveCmd.Flags().StringVar(&serveFlags.addr, "addr", envOr("LOCUS_ADDR", ":8081"), "Listen address for http transport ($LOCUS_ADDR)")
+	serveCmd.Flags().StringVar(&serveFlags.logLevel, "log-level", "", "Log level: debug, info, warn, error (overrides $LOCUS_LOG_LEVEL)")
 
 	codographCmd.Flags().StringVar(&codographFlags.ref, "ref", "", "Branch or tag to clone (default: repo default branch)")
 	codographCmd.Flags().BoolVar(&codographFlags.keep, "keep", false, "Keep the cloned directory after scan")
