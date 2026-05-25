@@ -36,12 +36,11 @@ func (c *capturingScanProto) last() engine.ScanOpts {
 
 // --- LCS-BUG-77 reproduction ---
 
-// TestScanLocal_IntentFull_DefaultsToLSP is the primary regression test for
-// LCS-BUG-77. When intent=full is requested the handler must set
-// ScannerOverride="lsp" so that gopls/tsserver/rust-analyzer is used instead
-// of the regex-only TypeScriptScanner (or equivalent). Without LSP the symbol
-// index is never built and all analysis actions return empty results.
-func TestScanLocal_IntentFull_DefaultsToLSP(t *testing.T) {
+// TestScanLocal_IntentFull_UsesAutoScanner verifies that intent=full with no
+// explicit scanner leaves ScannerOverride empty so AutoScanner selects the
+// right language scanner (e.g. TypeScriptScanner for TS → correct import
+// edges). Deep analysis uses the LSP pool independently (LCS-BUG-78).
+func TestScanLocal_IntentFull_UsesAutoScanner(t *testing.T) {
 	sp := &capturingScanProto{}
 	h := newTestHandler(sp)
 
@@ -54,10 +53,9 @@ func TestScanLocal_IntentFull_DefaultsToLSP(t *testing.T) {
 	}
 
 	got := sp.last().Scanner
-	if got != "lsp" {
-		t.Errorf("intent=full: ScannerOverride=%q, want \"lsp\"\n"+
-			"(LCS-BUG-77: analysis actions return empty because TypeScriptScanner\n"+
-			"produces no symbol graph — LSP scanner must be used for intent=full)", got)
+	if got != "" {
+		t.Errorf("intent=full with no explicit scanner: ScannerOverride=%q, want \"\" (auto)\n"+
+			"(LCS-BUG-78: forcing lsp for survey breaks import edges; deep analysis uses pool)", got)
 	}
 }
 
@@ -122,8 +120,8 @@ func TestScanLocal_IntentBelowFull_AutoScanner(t *testing.T) {
 
 // TestScanLocal_IntentFull_ScannerInSingleflightKey verifies that the
 // singleflight key is sensitive to the effective scanner so that a concurrent
-// intent=full call (→ lsp) and an intent=health call (→ auto) are NOT merged
-// into the same in-flight scan.
+// intent=full call and an intent=health call are NOT merged into the same
+// in-flight scan (different intents → different DB cache keys → different results).
 func TestScanLocal_IntentFull_ScannerInSingleflightKey(t *testing.T) {
 	var calls atomic.Int32
 	gate := make(chan struct{})

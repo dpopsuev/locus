@@ -660,14 +660,11 @@ func (h *handler) dispatchAnalysisLookup(ctx context.Context, in *analysisInput)
 // --- Codograph sub-handlers ---
 
 func (h *handler) handleScanProject(ctx context.Context, in *codographActionInput) (*sdkmcp.CallToolResult, any, error) {
-	// Resolve effective scanner. Explicit scanner always wins; when intent=full
-	// and no scanner is specified, default to "lsp" so the symbol graph and
-	// call graph are built (LCS-BUG-77). Lower intents leave the scanner as
-	// "" so AutoScanner picks the right language scanner automatically.
+	// Resolve effective scanner. Explicit scanner always wins; no automatic
+	// upgrade for intent=full — the survey scanner (TypeScriptScanner etc.)
+	// is correct for structure and import edges. Deep analysis tools use the
+	// LSP pool independently via analyzer.CachedDeepFallback (LCS-BUG-78).
 	effectiveScanner := in.Scanner
-	if effectiveScanner == "" && in.Intent == string(arch.IntentFull) {
-		effectiveScanner = "lsp"
-	}
 
 	// Deduplicate concurrent scan_local calls for the same workspace+intent+scanner.
 	// Include effectiveScanner in the key so intent=full (→ lsp) and intent=health
