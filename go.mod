@@ -13,12 +13,9 @@ require (
 
 require (
 	github.com/dpopsuev/battery v0.11.0
-	github.com/dpopsuev/oculus/v3 v3.65.0
+	github.com/dpopsuev/oculus/v3 v3.66.0
 	github.com/dpopsuev/tako v0.0.0-20260508195727-91edf3b3bb2d
 )
-
-// LCS-BUG-75: use local oculus until ctags --exclude fix lands in a release.
-replace github.com/dpopsuev/oculus/v3 => ../oculus
 
 require (
 	dario.cat/mergo v1.0.0 // indirect
@@ -50,7 +47,7 @@ require (
 	github.com/spf13/pflag v1.0.9 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
-	golang.org/x/sync v0.20.0 // indirect
+	golang.org/x/sync v0.20.0
 	golang.org/x/sys v0.42.0 // indirect
 	gonum.org/v1/gonum v0.17.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1
