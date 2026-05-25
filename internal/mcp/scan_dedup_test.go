@@ -1,7 +1,6 @@
 // Package mcp contains the MCP server implementation for Locus.
-// This file tests LCS-BUG-75: concurrent scan_local deduplication via
-// singleflight, and the documented residual that locus_analysis without a
-// cache_key bypasses that singleflight entirely.
+// This file tests the concurrent scan_local deduplication contract and the
+// independence of analysis tools from the singleflight group.
 package mcp
 
 import (
@@ -52,10 +51,13 @@ func newTestHandler(sp scanProto) *handler {
 
 // --- Test 1: singleflight dedup ---
 
-// TestScanLocal_Singleflight proves that N concurrent scan_local calls for the
-// same path+intent result in exactly one invocation of the underlying
-// ScanProject function (LCS-BUG-75 checklist item 2).
-func TestScanLocal_Singleflight(t *testing.T) {
+// TestScanLocal_ConcurrentCalls_Deduplicated verifies that N simultaneous
+// scan_local requests for the same path+intent share one ScanProject execution.
+//
+// Given N goroutines calling scan_local with identical path and intent
+// When all calls arrive before the in-flight scan completes
+// Then the underlying ScanProject is invoked exactly once and all callers receive the result
+func TestScanLocal_ConcurrentCalls_Deduplicated(t *testing.T) {
 	const n = 8
 	fake := newFakeScanProto()
 	h := newTestHandler(fake)
@@ -68,8 +70,10 @@ func TestScanLocal_Singleflight(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			in := &codographActionInput{Path: "/workspace/proj", Intent: "health"}
-			_, _, err := h.handleScanProject(context.Background(), in)
+			_, _, err := h.handleScanProject(context.Background(), &codographActionInput{
+				Path:   "/workspace/proj",
+				Intent: "health",
+			})
 			errs <- err
 		}()
 	}
@@ -87,13 +91,17 @@ func TestScanLocal_Singleflight(t *testing.T) {
 	}
 
 	if got := fake.calls.Load(); got != 1 {
-		t.Errorf("ScanProject called %d time(s), want exactly 1 — singleflight is broken", got)
+		t.Errorf("ScanProject called %d time(s), want exactly 1 — concurrent deduplication is broken", got)
 	}
 }
 
-// TestScanLocal_Singleflight_DifferentKeys proves that calls with different
-// path+intent keys are NOT deduplicated — each gets its own ScanProject call.
-func TestScanLocal_Singleflight_DifferentKeys(t *testing.T) {
+// TestScanLocal_DifferentKeys_NotDeduplicated verifies that calls with distinct
+// path+intent+scanner keys are each executed independently.
+//
+// Given 3 goroutines with different path/intent combinations
+// When all calls arrive before any scan completes
+// Then ScanProject is invoked once per distinct key
+func TestScanLocal_DifferentKeys_NotDeduplicated(t *testing.T) {
 	fake := newFakeScanProto()
 	h := newTestHandler(fake)
 
@@ -131,32 +139,26 @@ func TestScanLocal_Singleflight_DifferentKeys(t *testing.T) {
 	}
 }
 
-// --- Test 2: residual — analysis bypasses scanGroup ---
+// --- Test 2: analysis tools bypass the singleflight group ---
 
-// TestAnalysis_GetCycles_BypassesScanGroup is the proof of the documented
-// residual in LCS-BUG-75: GetCycles (and all other getOrScan-based analysis
-// methods) called without a cache_key do NOT go through handleScanProject's
-// singleflight. If the cache is cold they call arch.ScanAndBuild independently.
+// TestAnalysis_GetCycles_IndependentOfScanGroup documents and proves that
+// analysis tool calls (GetCycles, SearchSymbols, etc.) with no cache_key and a
+// cold cache execute their own ScanAndBuild, independently of any in-flight
+// scan_local singleflight.
 //
-// The test demonstrates this with two observations:
+// Given scan_local is in-flight and blocked inside a gate that never opens
+// When GetCycles is called on the same path with a cold cache and no cache_key
+// Then GetCycles returns without waiting for the scan_local singleflight
 //
-//  1. A handleScanProject call is blocked inside a fake sproto.ScanProject.
-//     Only one goroutine enters (singleflight works for scan_local).
-//
-//  2. A concurrent h.proto.GetCycles call on the same path and a cold cache
-//     returns without waiting for the singleflight — it runs its own
-//     ScanAndBuild via getOrScan. If GetCycles were gated by scanGroup it
-//     would deadlock here (the gate is never closed during the test).
-//
-// This test will need updating (or deleting) once the residual is fixed by
-// pushing dedup down into the engine's getOrScan path.
-func TestAnalysis_GetCycles_BypassesScanGroup(t *testing.T) {
+// This test will need updating once the engine routes cache-miss analysis
+// calls through the same deduplication group as scan_local.
+func TestAnalysis_GetCycles_IndependentOfScanGroup(t *testing.T) {
 	// fixturePath is a tiny Go project included in the test corpus.
 	// The Go scanner requires no external tools, so the test is hermetic.
 	fixturePath := "../../testdata/testkit/go"
 
 	// A fake sproto whose ScanProject blocks forever (gate never closed).
-	// This simulates a long-running ctags on the scan_local path.
+	// This simulates a long-running scan on the scan_local path.
 	gate := make(chan struct{}) // intentionally never closed in this test
 	var scanLocalCalls atomic.Int32
 	blocked := &fakeScanProtoFunc{
@@ -188,20 +190,17 @@ func TestAnalysis_GetCycles_BypassesScanGroup(t *testing.T) {
 	}
 
 	// GetCycles with no cache_key on a cold cache. If it were gated by
-	// scanGroup this call would block forever. Instead it runs its own
-	// ScanAndBuild via getOrScan and returns (success or scan error).
+	// scanGroup it would block forever and this test would time out.
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	_, cyclesErr := proto.GetCycles(ctx, fixturePath, nil)
 
-	// We don't assert on cyclesErr because the fixture may or may not have
-	// cycles. What matters is that the call RETURNED — proving it did not
-	// wait for the singleflight. If it had been blocked the context deadline
-	// would fire and this test would time out.
-	t.Logf("GetCycles returned (err=%v) — did not block on scan_local singleflight", cyclesErr)
+	// The call must return — success or scan error are both acceptable.
+	// The only unacceptable outcome is blocking until the test times out.
+	t.Logf("GetCycles returned (err=%v) — did not block on in-flight scan_local", cyclesErr)
 
-	// Sanity: scan_local is still blocked (the gate is never closed).
+	// Sanity: scan_local is still blocked (gate was never closed).
 	select {
 	case err := <-scanLocalDone:
 		t.Fatalf("scan_local should still be blocked, but it returned (err=%v)", err)

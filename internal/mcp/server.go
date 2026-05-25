@@ -162,7 +162,7 @@ func NewServer(s store.Store, workspaceRoots []string, version string, pool ...l
 		WithInstructions("Scan first (codograph scan_local), then walk (analysis probe/scenario/convergence/isolate). Results cached by SHA; pass cache_key to skip rescanning.")
 	srv := bsrv.SDK()
 	h := &handler{proto: proto, sproto: proto}
-	// Record binary mtime at startup for stale binary detection (BUG-33).
+	// Record binary mtime at startup for stale binary detection.
 	if exe, err := os.Executable(); err == nil {
 		h.binPath = exe
 		if info, err := os.Stat(exe); err == nil {
@@ -221,7 +221,7 @@ type handler struct {
 	// scanGroup deduplicates concurrent scan_local calls for the same workspace:
 	// if N sessions call scan_local on the same path+intent simultaneously, only
 	// one ctags process is spawned and all callers receive the same result when
-	// it completes (LCS-BUG-75).
+	// it completes.
 	scanGroup singleflight.Group
 }
 
@@ -663,7 +663,7 @@ func (h *handler) handleScanProject(ctx context.Context, in *codographActionInpu
 	// Resolve effective scanner. Explicit scanner always wins; no automatic
 	// upgrade for intent=full — the survey scanner (TypeScriptScanner etc.)
 	// is correct for structure and import edges. Deep analysis tools use the
-	// LSP pool independently via analyzer.CachedDeepFallback (LCS-BUG-78).
+	// LSP pool independently via analyzer.CachedDeepFallback.
 	effectiveScanner := in.Scanner
 
 	// Deduplicate concurrent scan_local calls for the same workspace+intent+scanner.

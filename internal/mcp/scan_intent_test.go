@@ -1,9 +1,10 @@
-// Package mcp — regression tests for LCS-BUG-77.
+// Package mcp — tests for scanner selection and intent routing in scan_local.
 //
-// scan_local with intent=full must forward ScannerOverride="lsp" to the engine
-// so that the symbol graph, call graph, and coupling hot spots are populated.
-// Without this, TypeScriptScanner (regex-only) is used and analysis actions
-// (risk_scores, symbol_search, cycles, coupling) all return empty/null.
+// Covers three invariants:
+//   - intent=full does not override the survey scanner; auto-detection is preserved
+//   - an explicit scanner field is forwarded verbatim to the engine
+//   - the singleflight key is sensitive to the effective scanner so that
+//     calls producing different cache entries are never merged
 package mcp
 
 import (
@@ -34,12 +35,14 @@ func (c *capturingScanProto) last() engine.ScanOpts {
 	return c.calls[len(c.calls)-1]
 }
 
-// --- LCS-BUG-77 reproduction ---
-
-// TestScanLocal_IntentFull_UsesAutoScanner verifies that intent=full with no
-// explicit scanner leaves ScannerOverride empty so AutoScanner selects the
-// right language scanner (e.g. TypeScriptScanner for TS → correct import
-// edges). Deep analysis uses the LSP pool independently (LCS-BUG-78).
+// TestScanLocal_IntentFull_UsesAutoScanner verifies that a scan with intent=full
+// and no explicit scanner leaves ScannerOverride empty. AutoScanner then selects
+// the correct language scanner (e.g. TypeScriptScanner → correct import edges).
+// The LSP pool drives deep analysis independently via CachedDeepFallback.
+//
+// Given scan_local is called with intent=full and no scanner override
+// When the request is forwarded to ScanProject
+// Then ScannerOverride is empty (auto-detection preserved)
 func TestScanLocal_IntentFull_UsesAutoScanner(t *testing.T) {
 	sp := &capturingScanProto{}
 	h := newTestHandler(sp)
@@ -55,21 +58,25 @@ func TestScanLocal_IntentFull_UsesAutoScanner(t *testing.T) {
 	got := sp.last().Scanner
 	if got != "" {
 		t.Errorf("intent=full with no explicit scanner: ScannerOverride=%q, want \"\" (auto)\n"+
-			"(LCS-BUG-78: forcing lsp for survey breaks import edges; deep analysis uses pool)", got)
+			"forcing lsp for survey breaks import edges; deep analysis uses the pool", got)
 	}
 }
 
-// TestScanLocal_ExplicitScanner_Forwarded verifies that an explicit scanner
-// field on the MCP input is forwarded verbatim to ScannerOverride. This covers
-// the case where a caller wants a specific scanner regardless of intent.
-func TestScanLocal_ExplicitScanner_Forwarded(t *testing.T) {
+// TestScanLocal_ExplicitScanner_ForwardedVerbatim verifies that an explicit
+// scanner field is forwarded to the engine's ScannerOverride as-is, regardless
+// of the intent. An explicit scanner always wins over any auto-selection logic.
+//
+// Given scan_local is called with an explicit scanner and any intent
+// When the request is forwarded to ScanProject
+// Then ScannerOverride matches the explicit scanner exactly
+func TestScanLocal_ExplicitScanner_ForwardedVerbatim(t *testing.T) {
 	cases := []struct {
 		scanner string
 		intent  string
 		want    string
 	}{
 		{"lsp", "health", "lsp"},
-		{"typescript", "full", "typescript"}, // explicit overrides the full→lsp default
+		{"typescript", "full", "typescript"}, // explicit overrides auto for full intent too
 		{"go", "architecture", "go"},
 		{"ctags", "health", "ctags"},
 	}
@@ -95,10 +102,13 @@ func TestScanLocal_ExplicitScanner_Forwarded(t *testing.T) {
 	}
 }
 
-// TestScanLocal_IntentBelowFull_AutoScanner verifies that intents below "full"
-// leave ScannerOverride empty so AutoScanner picks the right language scanner
-// automatically. Upgrading to LSP for non-full intents would be wasteful.
-func TestScanLocal_IntentBelowFull_AutoScanner(t *testing.T) {
+// TestScanLocal_SubFullIntent_AutoScannerPreserved verifies that no intent below
+// "full" causes a scanner override — all produce an empty ScannerOverride.
+//
+// Given scan_local is called with architecture, coupling, health, or no intent
+// When the request is forwarded to ScanProject
+// Then ScannerOverride is empty for every sub-full intent
+func TestScanLocal_SubFullIntent_AutoScannerPreserved(t *testing.T) {
 	for _, intent := range []string{"architecture", "coupling", "health", ""} {
 		t.Run("intent="+intent, func(t *testing.T) {
 			sp := &capturingScanProto{}
@@ -118,11 +128,15 @@ func TestScanLocal_IntentBelowFull_AutoScanner(t *testing.T) {
 	}
 }
 
-// TestScanLocal_IntentFull_ScannerInSingleflightKey verifies that the
-// singleflight key is sensitive to the effective scanner so that a concurrent
-// intent=full call and an intent=health call are NOT merged into the same
-// in-flight scan (different intents → different DB cache keys → different results).
-func TestScanLocal_IntentFull_ScannerInSingleflightKey(t *testing.T) {
+// TestScanLocal_Singleflight_KeyIncludesScanner verifies that two concurrent
+// scan_local calls that produce different effective scanners are NOT merged by
+// the singleflight group. They generate different DB cache entries and must be
+// kept separate.
+//
+// Given 2 goroutines with intent=full and 1 goroutine with intent=health on the same path
+// When all calls block on the same gate
+// Then ScanProject is called exactly twice (one per distinct intent+scanner key)
+func TestScanLocal_Singleflight_KeyIncludesScanner(t *testing.T) {
 	var calls atomic.Int32
 	gate := make(chan struct{})
 
@@ -136,10 +150,9 @@ func TestScanLocal_IntentFull_ScannerInSingleflightKey(t *testing.T) {
 	}
 	h := newTestHandler(sp)
 
-	done := make(chan struct{}, 2)
+	done := make(chan struct{}, 3)
 
-	// Two concurrent calls: same path, same intent=full.
-	// They MUST be deduplicated — only 1 scan invocation.
+	// Two concurrent intent=full calls — must be deduplicated to 1 scan.
 	for range 2 {
 		go func() {
 			_, _, _ = h.handleScanProject(context.Background(), &codographActionInput{
@@ -149,8 +162,7 @@ func TestScanLocal_IntentFull_ScannerInSingleflightKey(t *testing.T) {
 		}()
 	}
 
-	// A third concurrent call: same path, intent=health (different effective scanner).
-	// It must NOT be merged with the intent=full pair.
+	// A third concurrent call with a different intent — must NOT be merged.
 	go func() {
 		_, _, _ = h.handleScanProject(context.Background(), &codographActionInput{
 			Path: "/workspace/proj", Intent: "health",
@@ -167,6 +179,6 @@ func TestScanLocal_IntentFull_ScannerInSingleflightKey(t *testing.T) {
 
 	// intent=full pair → 1 scan; intent=health → 1 scan = 2 total.
 	if got := calls.Load(); got != 2 {
-		t.Errorf("scan called %d time(s), want 2 (one per distinct intent+scanner key)", got)
+		t.Errorf("ScanProject called %d time(s), want 2 (one per distinct intent+scanner key)", got)
 	}
 }
