@@ -49,13 +49,22 @@ install-hooks:
 image: build
 	$(CONTAINER_RT) build -t $(IMAGE) .
 
+# WORKSPACE is required for deploy: make deploy WORKSPACE=/path/to/repo
+# Without it the container defaults to cwd=/, sha is always empty, and all
+# analysis calls run a cold ScanAndBuild against / producing 0 components.
+WORKSPACE ?= $(shell git -C . rev-parse --show-toplevel 2>/dev/null || pwd)
+
 deploy: image
+	@test -n "$(WORKSPACE)" || (echo "ERROR: set WORKSPACE=/path/to/repo" && exit 1)
 	@SERVICE=$${HOME}/.config/systemd/user/container-locus.service; \
 	if [ -f "$$SERVICE" ]; then \
 		sed -i "s|locus:v[^ ]*|$(IMAGE)|g" "$$SERVICE"; \
+		if ! grep -q '\-\-workspace' "$$SERVICE"; then \
+			sed -i "s|--addr :8081|--addr :8081 \\\\\n\t--workspace $(WORKSPACE)|g" "$$SERVICE"; \
+		fi; \
 		systemctl --user daemon-reload; \
 		systemctl --user restart container-locus.service; \
-		echo "systemd service restarted with $(IMAGE)"; \
+		echo "systemd service restarted with $(IMAGE), workspace=$(WORKSPACE)"; \
 	else \
 		$(CONTAINER_RT) stop locus 2>/dev/null || true; \
 		$(CONTAINER_RT) rm locus 2>/dev/null || true; \
@@ -65,7 +74,8 @@ deploy: image
 			-p 8081:8081 \
 			-v $(HOME):$(HOME):rbind \
 			$(IMAGE) \
-			serve --transport http --addr :8081; \
+			serve --transport http --addr :8081 \
+				--workspace $(WORKSPACE); \
 	fi
 
 test-container: image

@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"strings"
 	"syscall"
@@ -149,6 +150,20 @@ Tools: scan_project, get_dependencies, get_impact, get_coupling_table,
 		if len(roots) == 0 {
 			cwd, _ := os.Getwd()
 			roots = []string{cwd}
+			slog.LogAttrs(cmd.Context(), slog.LevelWarn,
+				"no --workspace set, using cwd; analysis tools will fail if cwd is not a git repo",
+				slog.String("cwd", cwd))
+		}
+		// Validate: each workspace root must be inside a git repo, otherwise
+		// ResolveHEAD returns '' and every analysis call runs a cold ScanAndBuild.
+		for _, root := range roots {
+			git := exec.Command("git", "-C", root, "rev-parse", "HEAD") //nolint:gosec // root comes from the operator-controlled --workspace flag
+			if out, err := git.Output(); err != nil || len(out) == 0 {
+				slog.LogAttrs(cmd.Context(), slog.LevelError,
+					"workspace is not inside a git repo — sha will be empty, analysis results will be null",
+					slog.String("workspace", root),
+					slog.String("fix", "pass --workspace /path/to/git/repo"))
+			}
 		}
 		s := config.NewStore()
 		defer s.Close()
