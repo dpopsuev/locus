@@ -28,9 +28,16 @@ import (
 
 // Log key constants for structured logging.
 const (
-	logKeyTool    = "tool"
-	logKeyElapsed = "elapsed"
-	logKeyError   = "error"
+	logKeyTool      = "tool"
+	logKeyElapsed   = "elapsed"
+	logKeyError     = "error"
+	logKeyAction    = "action"
+	logKeyPath      = "path"
+	logKeySHA       = "sha"
+	logKeyServices  = "services"
+	logKeyEdges     = "edges"
+	logKeyCacheKey  = "cache_key"
+	logKeyCacheHit  = "cache_hit"
 )
 
 // Sentinel errors for input validation.
@@ -367,6 +374,7 @@ func (h *handler) handleCodograph(ctx context.Context, req *sdkmcp.CallToolReque
 // --- Analysis handler ---
 
 func (h *handler) handleAnalysis(ctx context.Context, _ *sdkmcp.CallToolRequest, in analysisInput) (*sdkmcp.CallToolResult, any, error) { //nolint:gocritic
+	h.logAnalysisEntry(ctx, &in)
 	switch in.Action {
 	case ActionDeps:
 		r, err := h.proto.GetDependencies(ctx, in.Path, in.Component, in.CacheKey)
@@ -1050,6 +1058,22 @@ func text(s string) *sdkmcp.CallToolResult {
 func jsonResult(data any) (*sdkmcp.CallToolResult, any, error) {
 	b, _ := json.Marshal(data)
 	return text(string(b)), nil, nil
+}
+
+// logAnalysisEntry emits a structured log line for every analysis call with
+// the resolved path, git SHA, and cache key. This is the primary diagnostic
+// for "why is analysis returning null" — the SHA and cache_hit fields reveal
+// whether getOrScan will find cached data or fall through to ScanAndBuild.
+func (h *handler) logAnalysisEntry(ctx context.Context, in *analysisInput) {
+	resolvedPath := h.proto.ResolvePath(in.Path)
+	sha := h.proto.ResolveHEAD(resolvedPath)
+	slog.LogAttrs(ctx, slog.LevelDebug, "analysis dispatch",
+		slog.String(logKeyAction, in.Action),
+		slog.String(logKeyPath, resolvedPath),
+		slog.String(logKeySHA, sha),
+		slog.String(logKeyCacheKey, in.CacheKey),
+		slog.Bool(logKeyCacheHit, sha != ""),
+	)
 }
 
 func noOut[In any](h func(context.Context, *sdkmcp.CallToolRequest, In) (*sdkmcp.CallToolResult, any, error)) sdkmcp.ToolHandlerFor[In, any] {
