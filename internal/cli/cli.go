@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	_ "net/http/pprof" //nolint:gosec // intentional: pprof is gated behind the HTTP mux, not exposed by default
 	"os"
 	"os/exec"
 	"os/signal"
@@ -184,6 +185,9 @@ Tools: scan_project, get_dependencies, get_impact, get_coupling_table,
 			mux := http.NewServeMux()
 			mux.Handle("/", mcpHandler)
 			mux.HandleFunc("/debug/cache", debugCacheHandler(s))
+			// /debug/pprof/* is registered by the blank import above;
+			// forward the prefix so the default mux handler is reachable.
+			mux.Handle("/debug/pprof/", http.DefaultServeMux)
 			slog.LogAttrs(ctx, slog.LevelInfo, "locus server starting", slog.String(logKeyVersion, version), slog.String(logKeyTransport, "http"), slog.String(logKeyAddr, serveFlags.addr))
 			server := &http.Server{Addr: serveFlags.addr, Handler: mux, ReadHeaderTimeout: 10 * time.Second}
 			go func() {

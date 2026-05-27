@@ -56,6 +56,10 @@ var (
 	ErrQueryRequired          = errors.New("symbol_search requires a non-empty symbol; use symbol_search with a name pattern to find specific symbols")
 )
 
+// defaultAnalysisTimeout caps every analysis dispatch.
+// Operators can override via LOCUS_ANALYSIS_TIMEOUT (e.g. "10m").
+const defaultAnalysisTimeout = 5 * time.Minute
+
 // --- Action constants ---
 
 // Codograph actions.
@@ -374,6 +378,11 @@ func (h *handler) handleCodograph(ctx context.Context, req *sdkmcp.CallToolReque
 // --- Analysis handler ---
 
 func (h *handler) handleAnalysis(ctx context.Context, _ *sdkmcp.CallToolRequest, in analysisInput) (*sdkmcp.CallToolResult, any, error) { //nolint:gocritic
+	// Wrapping ctx preserves transport-level cancellations: if the transport
+	// fires before our deadline, callers still see the shorter deadline.
+	ctx, cancel := context.WithTimeout(ctx, analysisTimeout())
+	defer cancel()
+
 	h.logAnalysisEntry(ctx, &in)
 	switch in.Action {
 	case ActionDeps:
@@ -1060,21 +1069,30 @@ func jsonResult(data any) (*sdkmcp.CallToolResult, any, error) {
 	return text(string(b)), nil, nil
 }
 
-// logAnalysisEntry emits a structured log line for every analysis call with
-// the resolved path, git SHA, and cache key. This is the primary diagnostic
-// for "why is analysis returning null" — the SHA and cache_hit fields reveal
-// whether getOrScan will find cached data or fall through to ScanAndBuild.
+// analysisTimeout returns the effective per-call deadline for analysis
+// dispatches.  It honours LOCUS_ANALYSIS_TIMEOUT so operators can tune it
+// without recompiling (e.g. "10m" for a very large monorepo).
+func analysisTimeout() time.Duration {
+	if s := os.Getenv("LOCUS_ANALYSIS_TIMEOUT"); s != "" {
+		if d, err := time.ParseDuration(s); err == nil && d > 0 {
+			return d
+		}
+	}
+	return defaultAnalysisTimeout
+}
+
+// logAnalysisEntry records the path, SHA, and cache key for every dispatch.
+// sha_resolved=false means HEAD could not be resolved — the workspace is
+// likely not a git repo and every call will trigger a cold scan.
 func (h *handler) logAnalysisEntry(ctx context.Context, in *analysisInput) {
 	resolvedPath := h.proto.ResolvePath(in.Path)
 	sha := h.proto.ResolveHEAD(resolvedPath)
-	// Cache miss → ScanAndBuild is always a meaningful event.
-	// Logged at INFO so operators see it without enabling debug mode.
 	slog.LogAttrs(ctx, slog.LevelInfo, "analysis dispatch",
 		slog.String(logKeyAction, in.Action),
 		slog.String(logKeyPath, resolvedPath),
 		slog.String(logKeySHA, sha),
 		slog.String(logKeyCacheKey, in.CacheKey),
-		slog.Bool(logKeyCacheHit, sha != ""),
+		slog.Bool("sha_resolved", sha != ""),
 	)
 }
 
