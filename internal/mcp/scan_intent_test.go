@@ -47,7 +47,7 @@ func TestScanLocal_IntentFull_UsesAutoScanner(t *testing.T) {
 	sp := &capturingScanProto{}
 	h := newTestHandler(sp)
 
-	_, _, err := h.handleScanProject(context.Background(), &codographActionInput{
+	_, _, err := h.handleScanProject(context.Background(), nil, &codographActionInput{
 		Path:   "/workspace/ts-project",
 		Intent: "full",
 	})
@@ -86,7 +86,7 @@ func TestScanLocal_ExplicitScanner_ForwardedVerbatim(t *testing.T) {
 			sp := &capturingScanProto{}
 			h := newTestHandler(sp)
 
-			_, _, err := h.handleScanProject(context.Background(), &codographActionInput{
+			_, _, err := h.handleScanProject(context.Background(), nil, &codographActionInput{
 				Path:    "/workspace/proj",
 				Intent:  tc.intent,
 				Scanner: tc.scanner,
@@ -114,7 +114,7 @@ func TestScanLocal_SubFullIntent_AutoScannerPreserved(t *testing.T) {
 			sp := &capturingScanProto{}
 			h := newTestHandler(sp)
 
-			_, _, err := h.handleScanProject(context.Background(), &codographActionInput{
+			_, _, err := h.handleScanProject(context.Background(), nil, &codographActionInput{
 				Path:   "/workspace/proj",
 				Intent: intent,
 			})
@@ -155,7 +155,7 @@ func TestScanLocal_Singleflight_KeyIncludesScanner(t *testing.T) {
 	// Two concurrent intent=full calls — must be deduplicated to 1 scan.
 	for range 2 {
 		go func() {
-			_, _, _ = h.handleScanProject(context.Background(), &codographActionInput{
+			_, _, _ = h.handleScanProject(context.Background(), nil, &codographActionInput{
 				Path: "/workspace/proj", Intent: "full",
 			})
 			done <- struct{}{}
@@ -164,7 +164,7 @@ func TestScanLocal_Singleflight_KeyIncludesScanner(t *testing.T) {
 
 	// A third concurrent call with a different intent — must NOT be merged.
 	go func() {
-		_, _, _ = h.handleScanProject(context.Background(), &codographActionInput{
+		_, _, _ = h.handleScanProject(context.Background(), nil, &codographActionInput{
 			Path: "/workspace/proj", Intent: "health",
 		})
 		done <- struct{}{}

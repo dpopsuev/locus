@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/sync/singleflight"
@@ -59,6 +60,15 @@ var (
 // defaultAnalysisTimeout caps every analysis dispatch.
 // Operators can override via LOCUS_ANALYSIS_TIMEOUT (e.g. "10m").
 const defaultAnalysisTimeout = 5 * time.Minute
+
+// defaultScanTimeout caps scan_local. Scans are I/O-bound and can take much
+// longer than analysis on large repos; progress heartbeats keep clients alive
+// during the wait. Operators can override via LOCUS_SCAN_TIMEOUT (e.g. "60m").
+const defaultScanTimeout = 30 * time.Minute
+
+// scanProgressInterval is how often a progress heartbeat is sent to the client
+// while a scan_local is running.
+const scanProgressInterval = 10 * time.Second
 
 // --- Action constants ---
 
@@ -234,6 +244,10 @@ type handler struct {
 	// one ctags process is spawned and all callers receive the same result when
 	// it completes.
 	scanGroup singleflight.Group
+
+	// scanTotal counts every scan_local dispatch (including singleflight dedupes).
+	// Monotonically increasing; non-zero value in logs signals repeated cold scans.
+	scanTotal atomic.Int64
 }
 
 // --- Input structs (per-tool, only relevant fields) ---
@@ -321,7 +335,7 @@ func (h *handler) staleBinaryWarning() string {
 func (h *handler) handleCodograph(ctx context.Context, req *sdkmcp.CallToolRequest, in codographActionInput) (*sdkmcp.CallToolResult, any, error) { //nolint:gocritic
 	switch in.Action {
 	case ActionScanLocal:
-		return h.handleScanProject(ctx, &in)
+		return h.handleScanProject(ctx, req, &in)
 	case ActionScanRemote:
 		return h.handleCodographRemote(ctx, &in)
 	case ActionHistory:
@@ -676,24 +690,20 @@ func (h *handler) dispatchAnalysisLookup(ctx context.Context, in *analysisInput)
 
 // --- Codograph sub-handlers ---
 
-func (h *handler) handleScanProject(ctx context.Context, in *codographActionInput) (*sdkmcp.CallToolResult, any, error) {
-	// Resolve effective scanner. Explicit scanner always wins; no automatic
-	// upgrade for intent=full — the survey scanner (TypeScriptScanner etc.)
-	// is correct for structure and import edges. Deep analysis tools use the
-	// LSP pool independently via analyzer.CachedDeepFallback.
+func (h *handler) handleScanProject(ctx context.Context, req *sdkmcp.CallToolRequest, in *codographActionInput) (*sdkmcp.CallToolResult, any, error) {
+	ctx, cancel := context.WithTimeout(ctx, scanTimeout())
+	defer cancel()
+
 	effectiveScanner := in.Scanner
+	scanN := h.scanTotal.Add(1)
+	resolvedPath, sha, gitRepo, scanStart := h.probeScanCache(ctx, scanN, in.Path)
 
-	// Deduplicate concurrent scan_local calls for the same workspace+intent+scanner.
-	// Include effectiveScanner in the key so intent=full (→ lsp) and intent=health
-	// (→ auto) are never merged into the same in-flight scan.
 	sfKey := in.Path + "\x00" + in.Intent + "\x00" + effectiveScanner
-
-	type sfPayload struct {
-		scanResult *engine.ScanResult
-		driftText  string
-	}
+	startScanHeartbeat(ctx, req, resolvedPath, in.Intent, scanStart)
 
 	v, err, _ := h.scanGroup.Do(sfKey, func() (any, error) {
+		// BUG-92: if sha=="" this scan result will not be stored by the engine;
+		// the next call for this path will cold-scan again.
 		r, scanErr := h.sproto.ScanProject(ctx, in.Path, engine.ScanOpts{
 			Depth: in.Depth, ChurnDays: in.ChurnDays,
 			IncludeExternal: in.IncludeExternal, IncludeTests: in.IncludeTests,
@@ -707,24 +717,63 @@ func (h *handler) handleScanProject(ctx context.Context, in *codographActionInpu
 		drift := h.sproto.CheckDriftOnScan(ctx, in.Path, r.Report)
 		return &sfPayload{scanResult: r, driftText: engine.RenderScanSummary(r, drift)}, nil
 	})
+
+	slog.LogAttrs(ctx, slog.LevelInfo, "scan_local: completed",
+		slog.Int64("scan_n", scanN), slog.String(logKeyPath, resolvedPath),
+		slog.String(logKeySHA, sha), slog.Bool("git_repo", gitRepo),
+		slog.Bool("will_cache", gitRepo), slog.Duration(logKeyElapsed, time.Since(scanStart)),
+		slog.Any(logKeyError, err),
+	)
 	if err != nil {
 		return nil, nil, err
 	}
-	payload := v.(*sfPayload)
-	result := payload.scanResult
-	switch in.Format {
+	res, renderErr := renderScanPayload(v.(*sfPayload), in.Format)
+	return res, nil, renderErr
+}
+
+// sfPayload is the value shared between singleflight callers for a scan.
+type sfPayload struct {
+	scanResult *engine.ScanResult
+	driftText  string
+}
+
+// probeScanCache resolves the path and SHA, logs cache disposition, and
+// returns values needed by the scan dispatch and completion log.
+func (h *handler) probeScanCache(ctx context.Context, scanN int64, path string) (resolvedPath, sha string, gitRepo bool, start time.Time) {
+	start = time.Now()
+	if h.proto == nil {
+		return
+	}
+	resolvedPath = h.proto.ResolvePath(path)
+	sha = h.proto.ResolveHEAD(resolvedPath)
+	gitRepo = sha != ""
+	if !gitRepo {
+		slog.LogAttrs(ctx, slog.LevelWarn,
+			"scan_local: workspace is not a git repo — SHA is empty; results will NOT be cached; every call re-scans",
+			slog.Int64("scan_n", scanN), slog.String(logKeyPath, resolvedPath),
+			slog.String("fix", "pass --workspace pointing at a git repo, or run locus serve inside one"),
+		)
+		return
+	}
+	slog.LogAttrs(ctx, slog.LevelDebug, "scan_local: cache probe",
+		slog.Int64("scan_n", scanN), slog.String(logKeyPath, resolvedPath), slog.String(logKeySHA, sha),
+	)
+	return
+}
+
+// renderScanPayload formats a completed scan according to the requested format.
+func renderScanPayload(payload *sfPayload, format string) (*sdkmcp.CallToolResult, error) {
+	switch format {
 	case FormatSummary:
-		return text(arch.RenderMarkdown(result.Report)), nil, nil
+		return text(arch.RenderMarkdown(payload.scanResult.Report)), nil
 	case FormatJSON:
-		data, jsonErr := arch.RenderJSON(result.Report)
-		if jsonErr != nil {
-			return nil, nil, fmt.Errorf("render JSON: %w", jsonErr)
+		data, err := arch.RenderJSON(payload.scanResult.Report)
+		if err != nil {
+			return nil, fmt.Errorf("render JSON: %w", err)
 		}
-		return text(string(data)), nil, nil
+		return text(string(data)), nil
 	default:
-		// Use the drift text pre-computed inside the singleflight closure so
-		// all concurrent callers share the same result without redundant work.
-		return text(payload.driftText), nil, nil
+		return text(payload.driftText), nil
 	}
 }
 
@@ -1069,6 +1118,33 @@ func jsonResult(data any) (*sdkmcp.CallToolResult, any, error) {
 	return text(string(b)), nil, nil
 }
 
+// startScanHeartbeat fires a goroutine that emits notifications/progress every
+// scanProgressInterval while the scan context is live. It is a no-op when req
+// or its Session are nil (test mode, stateless transport).
+func startScanHeartbeat(ctx context.Context, req *sdkmcp.CallToolRequest, path, intent string, start time.Time) {
+	if req == nil || req.Session == nil {
+		return
+	}
+	token := req.Params.GetProgressToken()
+	go func() {
+		ticker := time.NewTicker(scanProgressInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				elapsed := time.Since(start).Round(time.Second)
+				_ = req.Session.NotifyProgress(ctx, &sdkmcp.ProgressNotificationParams{
+					ProgressToken: token,
+					Message:       fmt.Sprintf("scan_local running: %s (elapsed %s, intent=%s)", path, elapsed, intent),
+					Progress:      elapsed.Seconds(),
+				})
+			}
+		}
+	}()
+}
+
 // analysisTimeout returns the effective per-call deadline for analysis
 // dispatches.  It honours LOCUS_ANALYSIS_TIMEOUT so operators can tune it
 // without recompiling (e.g. "10m" for a very large monorepo).
@@ -1079,6 +1155,18 @@ func analysisTimeout() time.Duration {
 		}
 	}
 	return defaultAnalysisTimeout
+}
+
+// scanTimeout returns the effective per-call deadline for scan_local.
+// Scans are I/O-bound and warrant a much longer budget than analysis;
+// progress heartbeats keep MCP clients alive during the wait.
+func scanTimeout() time.Duration {
+	if s := os.Getenv("LOCUS_SCAN_TIMEOUT"); s != "" {
+		if d, err := time.ParseDuration(s); err == nil && d > 0 {
+			return d
+		}
+	}
+	return defaultScanTimeout
 }
 
 // logAnalysisEntry records the path, SHA, and cache key for every dispatch.

@@ -70,7 +70,7 @@ func TestScanLocal_ConcurrentCalls_Deduplicated(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, _, err := h.handleScanProject(context.Background(), &codographActionInput{
+			_, _, err := h.handleScanProject(context.Background(), nil, &codographActionInput{
 				Path:   "/workspace/proj",
 				Intent: "health",
 			})
@@ -117,7 +117,7 @@ func TestScanLocal_DifferentKeys_NotDeduplicated(t *testing.T) {
 		wg.Add(1)
 		go func(in codographActionInput) {
 			defer wg.Done()
-			_, _, err := h.handleScanProject(context.Background(), &in)
+			_, _, err := h.handleScanProject(context.Background(), nil, &in)
 			errs <- err
 		}(in)
 	}
@@ -180,7 +180,7 @@ func TestAnalysis_GetCycles_IndependentOfScanGroup(t *testing.T) {
 	scanLocalDone := make(chan error, 1)
 	go func() {
 		in := &codographActionInput{Path: fixturePath, Intent: "health"}
-		_, _, err := h.handleScanProject(context.Background(), in)
+		_, _, err := h.handleScanProject(context.Background(), nil, in)
 		scanLocalDone <- err
 	}()
 

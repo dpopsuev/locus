@@ -133,7 +133,7 @@ func runScanAndDiagnose(ctx context.Context, t *testing.T, h *handler) (sha stri
 		t.Error("SHA is empty — git unavailable; ScanProject stores nothing, analysis runs ScanAndBuild")
 	}
 
-	scanResult, _, err := h.handleScanProject(ctx, &codographActionInput{Intent: "full"})
+	scanResult, _, err := h.handleScanProject(ctx, nil, &codographActionInput{Intent: "full"})
 	if err != nil {
 		t.Fatalf("scan_local: %v", err)
 	}
@@ -232,7 +232,7 @@ func TestMCPSimulation_SHAEmptyWhenGitUnavailable(t *testing.T) {
 	}
 
 	// Scan completes but stores nothing (sha="").
-	_, _, err := h.handleScanProject(context.Background(), &codographActionInput{Intent: "full"})
+	_, _, err := h.handleScanProject(context.Background(), nil, &codographActionInput{Intent: "full"})
 	if err != nil {
 		t.Fatalf("scan_local: %v", err)
 	}
