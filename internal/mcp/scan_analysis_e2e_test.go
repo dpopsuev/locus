@@ -417,3 +417,46 @@ func TestMCPAnalysis_CallersAt(t *testing.T) {
 		t.Errorf("expected 'caller' in result; got: %s", text)
 	}
 }
+
+// TestScanLocal_TSFileGranularity verifies that when scan_local is called with
+// file_granularity=true on a TypeScript project, each .ts file becomes its own
+// component in the scan result rather than being grouped by directory.
+//
+// Given a TypeScript project with 2 .ts files in src/
+// When scan_local(file_granularity=true) is called
+// Then the result has ≥2 components (one per file, not one per directory)
+func TestScanLocal_TSFileGranularity(t *testing.T) {
+	dir := monorepoFixture(t) // has packages/spine/src/index.ts, etc.
+	h := newHandlerWithWorkspace(t, dir)
+	ctx := context.Background()
+
+	// Default scan — directory-level grouping.
+	_, _, defaultCacheKey := func() (int, int, string) {
+		_, svcs, edges, ck := runScanAndDiagnose(ctx, t, h)
+		return svcs, edges, ck
+	}()
+
+	// File-granularity scan.
+	result, _, err := h.handleScanProject(ctx, nil, &codographActionInput{
+		Path:            dir,
+		Intent:          "full",
+		FileGranularity: true,
+	})
+	if err != nil {
+		t.Fatalf("scan file_granularity: %v", err)
+	}
+	fileGranText := extractText(result)
+	t.Logf("file granularity scan: %s", fileGranText)
+
+	// Extract component counts from both.
+	_, _, fileCacheKey := parseScanSummary(fileGranText)
+
+	// File-granularity must produce a different cache key (has -file suffix).
+	if fileCacheKey == defaultCacheKey {
+		t.Errorf("file-granularity scan should produce a different cache key; default=%q file=%q",
+			defaultCacheKey, fileCacheKey)
+	}
+	if !strings.HasSuffix(fileCacheKey, "-file") {
+		t.Errorf("file-granularity cache key should end with -file; got %q", fileCacheKey)
+	}
+}

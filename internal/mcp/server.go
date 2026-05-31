@@ -271,6 +271,7 @@ type codographActionInput struct {
 	Format          string   `json:"format,omitempty" jsonschema:"output format: json or summary"`
 	Intent          string   `json:"intent,omitempty" jsonschema:"scan depth: architecture, coupling, health, full"`
 	Scanner         string   `json:"scanner,omitempty" jsonschema:"scanner override: auto, go, packages, rust, typescript, lsp, ctags, composite"`
+	FileGranularity bool     `json:"file_granularity,omitempty" jsonschema:"TypeScript: treat each .ts file as its own component instead of grouping by directory"`
 	Since           string   `json:"since,omitempty" jsonschema:"git ref for incremental scan"`
 	URL             string   `json:"url,omitempty" jsonschema:"GitHub URL (scan_remote)"`
 	Ref             string   `json:"ref,omitempty" jsonschema:"git ref (scan_remote)"`
@@ -778,7 +779,8 @@ func (h *handler) handleScanProject(ctx context.Context, req *sdkmcp.CallToolReq
 			IncludeExternal: in.IncludeExternal, IncludeTests: in.IncludeTests,
 			IncludeCoverage: in.IncludeCoverage, Budget: in.Budget,
 			Intent: in.Intent, Since: in.Since,
-			Scanner: effectiveScanner,
+			Scanner:           effectiveScanner,
+			TSFileGranularity: in.FileGranularity,
 		})
 		if scanErr != nil {
 			return nil, scanErr
