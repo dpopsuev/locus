@@ -54,7 +54,8 @@ var (
 	ErrExplainEdgeParams      = errors.New("explain_edge requires symbol (source FQN) and query (target FQN)")
 	ErrSymbolDiffParams       = errors.New("symbol_diff requires before_sha and after_sha")
 	ErrUnknownContextAction   = errors.New("unknown context action")
-	ErrQueryRequired          = errors.New("symbol_search requires a non-empty symbol; use symbol_search with a name pattern to find specific symbols")
+	ErrQueryRequired          = errors.New("symbol_search requires a non-empty symbol or file; provide symbol= (name pattern) or file= (absolute path)")
+	ErrCallersAtFileRequired  = errors.New("callers_at requires file=")
 )
 
 // defaultAnalysisTimeout caps every analysis dispatch.
@@ -94,11 +95,16 @@ const (
 	ActionCycles       = "cycles"
 	ActionViolations   = "violations"
 	ActionCallers      = "callers"
+	ActionCallersAt    = "callers_at"
 	ActionComponent    = "component"
 	ActionSearch       = "search"
 	ActionQuery        = "query"
 	ActionPreset       = "preset"
-	ActionScanDiff     = "scan_diff"
+	ActionScanDiff      = "scan_diff"
+	ActionComponentDiff    = "component_diff"
+	ActionMigrationOverlay = "migration_overlay"
+	ActionRegisterMirror   = "register_mirror"
+	ActionListMirrors      = "list_mirrors"
 	ActionRiskScores   = "risk_scores"
 	ActionSymbolSearch = "symbol_search"
 	ActionCallees      = "callees"
@@ -280,7 +286,7 @@ type codographActionInput struct {
 }
 
 type analysisInput struct {
-	Action    string   `json:"action" jsonschema:"required,deps | impact | coupling | cycles | violations | callers | component | search | query | preset | scan_diff | risk_scores | symbol_search | callees | call_path | symbol_graph | pipelines | mesh | probe | scenario | convergence | isolate | diagnose | islands | explain_edge | symbol_diff | book | context_read | context_write | triage"`
+	Action    string   `json:"action" jsonschema:"required,deps | impact | coupling | cycles | violations | callers | callers_at | component | search | query | preset | scan_diff | risk_scores | symbol_search | callees | call_path | symbol_graph | pipelines | mesh | probe | scenario | convergence | isolate | diagnose | islands | explain_edge | symbol_diff | book | context_read | context_write | triage"`
 	Symbols   []string `json:"symbols,omitempty" jsonschema:"symbol FQNs for convergence (multiple symbols)"`
 	Stress    bool     `json:"stress,omitempty" jsonschema:"enrich scenario nodes with fan-out and downstream count"`
 	Path      string   `json:"path,omitempty"`
@@ -306,6 +312,9 @@ type analysisInput struct {
 	To        string   `json:"to,omitempty" jsonschema:"target symbol FQN (mesh distance)"`
 	MinWeight *float64 `json:"min_weight,omitempty" jsonschema:"minimum edge weight filter (mesh boundaries/neighborhood, default 0.1)"`
 	Detail    string   `json:"detail,omitempty" jsonschema:"symbol_search detail level: shallow (default, locators only) or full (adds fan_in, fan_out, instability, signature — caps results at 10)"`
+	File      string   `json:"file,omitempty" jsonschema:"absolute file path — when set, symbol_search returns only symbols from that file; callers_at requires it"`
+	Line      int      `json:"line,omitempty" jsonschema:"1-based line number (callers_at)"`
+	Char      int      `json:"char,omitempty" jsonschema:"0-based character offset (callers_at)"`
 	// Fields for merged tools (book, context_read/write, triage).
 	Keywords []string `json:"keywords,omitempty" jsonschema:"keywords for knowledge graph query (book)"`
 	Scope    string   `json:"scope,omitempty" jsonschema:"context scope: project | module | file | symbol"`
@@ -328,6 +337,48 @@ func (h *handler) staleBinaryWarning() string {
 		return "⚠ Locus binary upgraded on disk — restart MCP server for latest analysis"
 	}
 	return ""
+}
+
+// stalenessWarning checks whether the scan referenced by cacheKey is behind
+// the current HEAD of path. Returns a non-empty warning string when stale.
+// Fails open (returns "") when HEAD cannot be resolved or the handler has no
+// proto (test mode).
+func (h *handler) stalenessWarning(path, cacheKey string) string {
+	if h.proto == nil || cacheKey == "" {
+		return ""
+	}
+	// cache_key format: path@sha[-intent]  (e.g. /repo@abc123-full)
+	atIdx := strings.LastIndex(cacheKey, "@")
+	if atIdx < 0 {
+		return ""
+	}
+	shaPart := cacheKey[atIdx+1:]
+	if dashIdx := strings.Index(shaPart, "-"); dashIdx >= 0 {
+		shaPart = shaPart[:dashIdx]
+	}
+	if shaPart == "" {
+		return ""
+	}
+	resolvedPath := h.proto.ResolvePath(path)
+	head := h.proto.ResolveHEAD(resolvedPath)
+	if head == "" || head == shaPart {
+		return ""
+	}
+	return fmt.Sprintf("Warning: cached scan is stale (scan@%s, HEAD=%s). Run scan_local to refresh.\n", shaPart, head)
+}
+
+// prependWarning prepends a warning string to the first text content item of
+// result. Returns a new CallToolResult; the original is not modified.
+func prependWarning(warn string, r *sdkmcp.CallToolResult) *sdkmcp.CallToolResult {
+	if warn == "" || r == nil || len(r.Content) == 0 {
+		return r
+	}
+	out := &sdkmcp.CallToolResult{Content: make([]sdkmcp.Content, len(r.Content))}
+	copy(out.Content, r.Content)
+	if tc, ok := out.Content[0].(*sdkmcp.TextContent); ok {
+		out.Content[0] = &sdkmcp.TextContent{Text: warn + tc.Text}
+	}
+	return out
 }
 
 // --- Codograph handler ---
@@ -391,13 +442,46 @@ func (h *handler) handleCodograph(ctx context.Context, req *sdkmcp.CallToolReque
 
 // --- Analysis handler ---
 
-func (h *handler) handleAnalysis(ctx context.Context, _ *sdkmcp.CallToolRequest, in analysisInput) (*sdkmcp.CallToolResult, any, error) { //nolint:gocritic
+func (h *handler) handleAnalysis(ctx context.Context, _ *sdkmcp.CallToolRequest, in analysisInput) (result *sdkmcp.CallToolResult, raw any, retErr error) { //nolint:gocritic
 	// Wrapping ctx preserves transport-level cancellations: if the transport
 	// fires before our deadline, callers still see the shorter deadline.
 	ctx, cancel := context.WithTimeout(ctx, analysisTimeout())
 	defer cancel()
 
+	staleWarn := h.stalenessWarning(in.Path, in.CacheKey)
+	defer func() {
+		if staleWarn != "" && result != nil && retErr == nil {
+			result = prependWarning(staleWarn, result)
+		}
+	}()
+
 	h.logAnalysisEntry(ctx, &in)
+	switch in.Action {
+	case ActionCoupling:
+		topN := in.TopN
+		if in.Format == FormatSummary && topN == 0 {
+			topN = 5
+		}
+		return h.handleCoupling(ctx, in.Path, in.SortBy, topN, in.View, in.ChurnDays, in.Component, in.CacheKey)
+	case ActionCycles:
+		return h.handleCycles(ctx, in.Path, in.Layers, in.CacheKey, in.Format)
+	case ActionViolations:
+		return h.handleViolations(ctx, in.Path, in.Layers, in.CacheKey, in.Format)
+	case ActionComponent, ActionSearch, ActionQuery:
+		return h.dispatchAnalysisLookup(ctx, &in)
+	case ActionScanDiff, ActionComponentDiff, ActionMigrationOverlay, ActionRegisterMirror, ActionListMirrors:
+		return h.dispatchAnalysisMigration(ctx, &in)
+	case ActionBook, ActionContextRead, ActionContextWrite, ActionTriage:
+		return h.dispatchAnalysisMeta(ctx, &in)
+	default:
+		return h.dispatchAnalysisCore(ctx, &in)
+	}
+}
+
+// dispatchAnalysisCore handles the primary analysis actions (deps, impact,
+// preset, callers) that were previously inline in handleAnalysis but were
+// moved here to keep handleAnalysis below the funlen/gocyclo thresholds.
+func (h *handler) dispatchAnalysisCore(ctx context.Context, in *analysisInput) (*sdkmcp.CallToolResult, any, error) {
 	switch in.Action {
 	case ActionDeps:
 		r, err := h.proto.GetDependencies(ctx, in.Path, in.Component, in.CacheKey)
@@ -411,44 +495,29 @@ func (h *handler) handleAnalysis(ctx context.Context, _ *sdkmcp.CallToolRequest,
 			return nil, nil, err
 		}
 		return jsonResult(r)
-	case ActionCoupling:
-		topN := in.TopN
-		if in.Format == FormatSummary && topN == 0 {
-			topN = 5
-		}
-		return h.handleCoupling(ctx, in.Path, in.SortBy, topN, in.View, in.ChurnDays, in.Component, in.CacheKey)
-	case ActionCycles:
-		return h.handleCycles(ctx, in.Path, in.Layers, in.CacheKey, in.Format)
-	case ActionViolations:
-		return h.handleViolations(ctx, in.Path, in.Layers, in.CacheKey, in.Format)
-	case ActionCallers:
-		r, err := h.proto.GetCallers(ctx, in.Path, in.Symbol, in.CacheKey)
-		if err != nil {
-			return nil, nil, err
-		}
-		return jsonResult(r)
-	case ActionComponent, ActionSearch, ActionQuery:
-		return h.dispatchAnalysisLookup(ctx, &in)
 	case ActionPreset:
 		r, err := h.proto.RunPreset(ctx, in.Path, in.Preset, in.CacheKey)
 		if err != nil {
 			return nil, nil, err
 		}
 		return text(r), nil, nil
-	case ActionScanDiff:
-		r, err := h.proto.GetScanDiff(ctx, in.Path, in.BeforeSHA, in.AfterSHA)
+	case ActionCallers:
+		r, err := h.proto.GetCallers(ctx, in.Path, in.Symbol, in.CacheKey)
 		if err != nil {
 			return nil, nil, err
 		}
 		return jsonResult(r)
-	case ActionRiskScores, ActionSymbolSearch, ActionCallees, ActionCallPath, ActionSymbolGraph, ActionPipelines, ActionMesh,
-		ActionProbe, ActionScenario, ActionConvergence, ActionIsolate,
-		ActionDiagnose, ActionIslands, ActionExplainEdge, ActionSymbolDiff:
-		return h.dispatchAnalysisExtended(ctx, &in)
-	case ActionBook, ActionContextRead, ActionContextWrite, ActionTriage:
-		return h.dispatchAnalysisMeta(ctx, &in)
+	case ActionCallersAt:
+		if in.File == "" {
+			return nil, nil, ErrCallersAtFileRequired
+		}
+		r, err := h.proto.GetCallersAt(ctx, in.Path, in.File, in.Line, in.Char, in.CacheKey)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
 	default:
-		return nil, nil, fmt.Errorf("%w %q", ErrUnknownAction, in.Action)
+		return h.dispatchAnalysisExtended(ctx, in)
 	}
 }
 
@@ -461,10 +530,10 @@ func (h *handler) dispatchAnalysisExtended(ctx context.Context, in *analysisInpu
 		}
 		return jsonResult(r)
 	case ActionSymbolSearch:
-		if in.Symbol == "" {
+		if in.Symbol == "" && in.File == "" {
 			return nil, nil, ErrQueryRequired
 		}
-		r, err := h.proto.SearchSymbols(ctx, in.Path, in.Symbol, in.CacheKey)
+		r, err := h.proto.SearchSymbolsFiltered(ctx, in.Path, in.Symbol, in.File, in.CacheKey)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1076,6 +1145,43 @@ type diagramInput struct {
 	Theme        string `json:"theme,omitempty" jsonschema:"theme: light, dark, natural"`
 	Format       string `json:"format,omitempty" jsonschema:"output: mermaid, facts, both"`
 	CacheKey     string `json:"cache_key,omitempty" jsonschema:"cache key from scan_remote"`
+}
+
+// dispatchAnalysisMigration handles diff, overlay, and mirror actions.
+func (h *handler) dispatchAnalysisMigration(ctx context.Context, in *analysisInput) (*sdkmcp.CallToolResult, any, error) {
+	switch in.Action {
+	case ActionScanDiff:
+		r, err := h.proto.GetScanDiff(ctx, in.Path, in.BeforeSHA, in.AfterSHA)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
+	case ActionComponentDiff:
+		r, err := h.proto.GetComponentRangeDiff(ctx, in.Path, in.BeforeSHA, in.AfterSHA, in.CacheKey)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
+	case ActionMigrationOverlay:
+		r, err := h.proto.ComputeMigrationOverlay(ctx, in.Path, in.Component, in.Query, in.CacheKey)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
+	case ActionRegisterMirror:
+		if err := h.proto.RegisterMirror(ctx, in.Path, in.From, in.To); err != nil {
+			return nil, nil, err
+		}
+		return text(fmt.Sprintf("registered mirror: %s \u2192 %s", in.From, in.To)), nil, nil
+	case ActionListMirrors:
+		r, err := h.proto.ListMirrors(ctx, in.Path)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
+	default:
+		return nil, nil, fmt.Errorf("%w %q", ErrUnknownAction, in.Action)
+	}
 }
 
 // dispatchAnalysisMeta handles actions merged from the former book, context, and triage tools.

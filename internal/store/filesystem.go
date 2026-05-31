@@ -15,6 +15,14 @@ import (
 	"github.com/dpopsuev/oculus/v3/history"
 )
 
+// isTempPath returns true when path lives under the OS temp directory.
+// Test workspaces created by the Locus test suite are registered here and
+// must not pollute the persistent project list.
+func isTempPath(path string) bool {
+	tmp := os.TempDir()
+	return strings.HasPrefix(filepath.Clean(path), filepath.Clean(tmp))
+}
+
 // FilesystemStore implements Store by delegating to the existing
 // cache.ScanCache (gzipped JSON files) and history package (JSONL files).
 // This is the v1 adapter — zero behavior change from the pre-hexagonal code.
@@ -131,7 +139,14 @@ func (f *FilesystemStore) loadProjects() ([]ProjectInfo, error) {
 	if err := json.Unmarshal(data, &projects); err != nil {
 		return nil, err
 	}
-	return projects, nil
+	// Filter out any stale temp-directory entries persisted by previous runs.
+	filtered := projects[:0]
+	for _, p := range projects {
+		if !isTempPath(p.Path) {
+			filtered = append(filtered, p)
+		}
+	}
+	return filtered, nil
 }
 
 func (f *FilesystemStore) saveProjects(projects []ProjectInfo) error {
@@ -249,6 +264,9 @@ func (f *FilesystemStore) metaPath(project, sha string) string {
 
 // Auto-register project on PutReport.
 func (f *FilesystemStore) autoRegisterProject(project, sha string, report *arch.ContextReport) {
+	if isTempPath(project) {
+		return
+	}
 	info := ProjectInfo{
 		Path:       project,
 		Name:       report.ModulePath,

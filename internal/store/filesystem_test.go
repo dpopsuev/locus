@@ -114,6 +114,70 @@ func TestFilesystem_GetDesiredState_Missing(t *testing.T) {
 	}
 }
 
+// --- FilesystemStore: /tmp project filter ---
+
+// TestFilesystem_TmpProject_NotRegistered verifies that a scan of a path under
+// os.TempDir() is never written to projects.json.
+//
+// Given a PutReport call for a path under /tmp
+// When ListProjects is called
+// Then the /tmp entry is absent from the result
+func TestFilesystem_TmpProject_NotRegistered(t *testing.T) {
+	fs := newFS(t)
+	ctx := context.Background()
+
+	tmpPath := t.TempDir() // always under os.TempDir()
+	if err := fs.PutReport(ctx, tmpPath, "sha1", newReport("tmp-mod")); err != nil {
+		t.Fatalf("PutReport: %v", err)
+	}
+
+	projects, err := fs.ListProjects(ctx)
+	if err != nil {
+		t.Fatalf("ListProjects: %v", err)
+	}
+	for _, p := range projects {
+		if p.Path == tmpPath {
+			t.Errorf("tmp project %q should not appear in ListProjects", tmpPath)
+		}
+	}
+}
+
+// TestFilesystem_TmpProject_FilteredOnRead verifies that stale /tmp entries
+// already persisted in projects.json are filtered out on read.
+//
+// Given projects.json already contains a /tmp entry (legacy pollution)
+// When ListProjects is called
+// Then the /tmp entry is excluded from the returned slice
+func TestFilesystem_TmpProject_FilteredOnRead(t *testing.T) {
+	fs := newFS(t)
+	ctx := context.Background()
+
+	// Register a real project first so we can check the file exists.
+	_ = fs.PutReport(ctx, "/real/project", "sha1", newReport("real-mod"))
+
+	// Directly inject a stale /tmp entry by calling UpsertProject.
+	tmpPath := t.TempDir()
+	_ = fs.UpsertProject(ctx, store.ProjectInfo{Path: tmpPath, Name: "stale-tmp"})
+
+	projects, err := fs.ListProjects(ctx)
+	if err != nil {
+		t.Fatalf("ListProjects: %v", err)
+	}
+
+	foundReal := false
+	for _, p := range projects {
+		if p.Path == tmpPath {
+			t.Errorf("stale tmp entry %q should be filtered on read", tmpPath)
+		}
+		if p.Path == "/real/project" {
+			foundReal = true
+		}
+	}
+	if !foundReal {
+		t.Error("real project should still appear after /tmp filtering")
+	}
+}
+
 // --- LRUStore: snapshot and invalidate ---
 
 func TestLRU_Snapshot_ReflectsWarmEntries(t *testing.T) {

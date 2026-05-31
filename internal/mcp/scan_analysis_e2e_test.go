@@ -272,3 +272,148 @@ func parseScanSummary(text string) (services, edges int, cacheKey string) {
 	}
 	return
 }
+
+// TestMCPSymbolSearch_FileFilter verifies that symbol_search with file= set
+// returns only symbols from the specified file.
+//
+// Given a monorepo scanned in full
+// When symbol_search(file=packages/spine/src/index.ts) is called
+// Then spineCore is returned and corpusMain is not
+func TestMCPSymbolSearch_FileFilter(t *testing.T) {
+	dir := monorepoFixture(t)
+	h := newHandlerWithWorkspace(t, dir)
+	ctx := context.Background()
+
+	_, _, _, cacheKey := runScanAndDiagnose(ctx, t, h)
+
+	spineFile := filepath.Join(dir, "packages/spine/src/index.ts")
+	result, _, err := h.handleAnalysis(ctx, nil, analysisInput{
+		Action:   ActionSymbolSearch,
+		File:     spineFile,
+		CacheKey: cacheKey,
+	})
+	if err != nil {
+		t.Fatalf("symbol_search file=...: %v", err)
+	}
+
+	text := extractText(result)
+	t.Logf("symbol_search result: %s", text)
+	if !strings.Contains(text, "spineCore") {
+		t.Errorf("expected spineCore in result for spine/src/index.ts")
+	}
+	if strings.Contains(text, "corpusMain") {
+		t.Errorf("corpusMain from corpus/src/index.ts should not appear in spine file filter")
+	}
+}
+
+// TestMCPAnalysis_StalenessWarning verifies that when HEAD advances after a
+// scan, analysis results include a staleness warning.
+//
+// Given a project scanned at SHA abc (from the initial commit)
+// And then a second commit is made advancing HEAD to a new SHA
+// When analysis(deps) is called with the old cache_key
+// Then the result text contains "Warning: cached scan is stale"
+func TestMCPAnalysis_StalenessWarning(t *testing.T) {
+	dir := monorepoFixture(t)
+	h := newHandlerWithWorkspace(t, dir)
+	ctx := context.Background()
+
+	_, _, _, cacheKey := runScanAndDiagnose(ctx, t, h)
+	if cacheKey == "" {
+		t.Skip("no cache_key returned from scan (git unavailable)")
+	}
+
+	// Advance HEAD by making a new commit.
+	run := func(args ...string) {
+		cmd := exec.Command("git", args...) //nolint:gosec
+		cmd.Dir = dir
+		_ = cmd.Run()
+	}
+	run("config", "user.email", "test@example.com")
+	run("config", "user.name", "Test")
+
+	extraFile := filepath.Join(dir, "extra.ts")
+	if err := os.WriteFile(extraFile, []byte("export function extra() {}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	run("add", extraFile)
+	run("commit", "-q", "-m", "add extra.ts")
+
+	// Use the OLD cache_key — HEAD has advanced.
+	result, _, err := h.handleAnalysis(ctx, nil, analysisInput{
+		Action:   ActionDeps,
+		Component: "packages/spine/src",
+		CacheKey: cacheKey,
+	})
+	if err != nil {
+		t.Fatalf("deps: %v", err)
+	}
+
+	text := extractText(result)
+	t.Logf("deps result: %s", text)
+	if !strings.Contains(text, "stale") {
+		t.Errorf("expected staleness warning in result when HEAD has advanced; got: %q", text)
+	}
+}
+
+// TestMCPAnalysis_PathOnlyResolvesLatestScan verifies that analysis tools
+// accept path= without cache_key= and resolve the latest cached scan.
+//
+// Given a project that was scanned with scan_local
+// When deps is called with only path= (no cache_key)
+// Then results are returned from the cached scan
+func TestMCPAnalysis_PathOnlyResolvesLatestScan(t *testing.T) {
+	dir := monorepoFixture(t)
+	h := newHandlerWithWorkspace(t, dir)
+	ctx := context.Background()
+
+	// Scan first to populate the cache.
+	_, _, _, _ = runScanAndDiagnose(ctx, t, h)
+
+	// Analysis with path= only, no cache_key.
+	result, _, err := h.handleAnalysis(ctx, nil, analysisInput{
+		Action:    ActionDeps,
+		Path:      dir,
+		Component: "packages/spine/src",
+		// CacheKey intentionally omitted.
+	})
+	if err != nil {
+		t.Fatalf("deps path-only: %v", err)
+	}
+	text := extractText(result)
+	if !strings.Contains(text, "packages/spine/src") {
+		t.Errorf("expected spine component in result; got: %s", text)
+	}
+}
+
+// TestMCPAnalysis_CallersAt verifies that callers_at is wired and returns a
+// CallersReport (empty is OK without a real LSP server).
+//
+// Given a scanned project
+// When callers_at(file=..., line=1, char=0) is called
+// Then a CallersReport is returned (no error)
+func TestMCPAnalysis_CallersAt(t *testing.T) {
+	dir := monorepoFixture(t)
+	h := newHandlerWithWorkspace(t, dir)
+	ctx := context.Background()
+
+	_, _, _, cacheKey := runScanAndDiagnose(ctx, t, h)
+
+	spineFile := filepath.Join(dir, "packages/spine/src/index.ts")
+	result, _, err := h.handleAnalysis(ctx, nil, analysisInput{
+		Action:   ActionCallersAt,
+		File:     spineFile,
+		Line:     1,
+		Char:     0,
+		CacheKey: cacheKey,
+	})
+	if err != nil {
+		t.Fatalf("callers_at: %v", err)
+	}
+
+	text := extractText(result)
+	t.Logf("callers_at result: %s", text)
+	if !strings.Contains(text, "caller") {
+		t.Errorf("expected 'caller' in result; got: %s", text)
+	}
+}
