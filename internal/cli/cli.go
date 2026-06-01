@@ -9,7 +9,6 @@ import (
 	"net/http"
 	_ "net/http/pprof" //nolint:gosec // intentional: pprof is gated behind the HTTP mux, not exposed by default
 	"os"
-	"os/exec"
 	"os/signal"
 	"strings"
 	"syscall"
@@ -36,10 +35,9 @@ var version string
 
 // Sentinel errors for CLI validation.
 var (
-	errComponentRequired  = errors.New("--component is required")
-	errNoIntent           = errors.New("provide an intent string, --list, or --category")
-	errUnknownFormat      = errors.New("unknown format")
-	errWorkspaceNotGit    = errors.New("workspace is not inside a git repository — pass --workspace pointing at a git repo to enable caching and prevent unbounded cold scans")
+	errComponentRequired = errors.New("--component is required")
+	errNoIntent          = errors.New("provide an intent string, --list, or --category")
+	errUnknownFormat     = errors.New("unknown format")
 )
 
 const (
@@ -155,12 +153,6 @@ Tools: scan_project, get_dependencies, get_impact, get_coupling_table,
 			slog.LogAttrs(cmd.Context(), slog.LevelWarn,
 				"no --workspace set, using cwd; analysis tools will fail if cwd is not a git repo",
 				slog.String("cwd", cwd))
-		}
-		for _, root := range roots {
-			git := exec.Command("git", "-C", root, "rev-parse", "HEAD") //nolint:gosec
-			if out, err := git.Output(); err != nil || len(out) == 0 {
-				return fmt.Errorf("%w: %s", errWorkspaceNotGit, root)
-			}
 		}
 		s := config.NewStore()
 		defer s.Close()

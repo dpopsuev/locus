@@ -199,13 +199,15 @@ func runAnalysisSubtests(ctx context.Context, t *testing.T, h *handler, sha stri
 	})
 }
 
-// TestMCPSimulation_SHAEmptyWhenGitUnavailable verifies that scan_local
-// returns an error for non-git workspaces (LCS-BUG-92 fix). Previously the
-// server would proceed with an uncacheable cold scan and OOM on large paths.
+// TestMCPSimulation_SHAEmptyWhenGitUnavailable documents the behaviour when
+// a workspace has no git repo: SHA is empty, results are not cached.
+// The server starts and accepts scan_local; the caller gets a 0-component result
+// and a warning in the log. The OOM fix (LCS-BUG-92) lives in the CLI startup
+// refusing a non-git --workspace arg, not here.
 //
 // Given a workspace with no .git directory
 // When scan_local is called
-// Then an error is returned — the server refuses to scan
+// Then it completes (with a warning) and produces an uncached 0-component result
 func TestMCPSimulation_SHAEmptyWhenGitUnavailable(t *testing.T) {
 	dir := t.TempDir() // no git init
 	files := map[string]string{
@@ -231,10 +233,11 @@ func TestMCPSimulation_SHAEmptyWhenGitUnavailable(t *testing.T) {
 		t.Skipf("git found a repo at or above %s (SHA=%q) — test not applicable", dir, sha)
 	}
 
-	// scan_local still runs but caches nothing — the OOM guard is now in CLI startup.
 	_, _, err := h.handleScanProject(context.Background(), nil, &codographActionInput{Intent: "full"})
-	// Either an error or a 0-component result is acceptable.
-	t.Logf("non-git scan_local: err=%v", err)
+	if err != nil {
+		t.Fatalf("scan_local on non-git workspace should not error: %v", err)
+	}
+	t.Log("scan_local completed without error — result uncached (no SHA)")
 }
 
 // --- helpers ---
