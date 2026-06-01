@@ -36,9 +36,10 @@ var version string
 
 // Sentinel errors for CLI validation.
 var (
-	errComponentRequired = errors.New("--component is required")
-	errNoIntent          = errors.New("provide an intent string, --list, or --category")
-	errUnknownFormat     = errors.New("unknown format")
+	errComponentRequired  = errors.New("--component is required")
+	errNoIntent           = errors.New("provide an intent string, --list, or --category")
+	errUnknownFormat      = errors.New("unknown format")
+	errWorkspaceNotGit    = errors.New("workspace is not inside a git repository — pass --workspace pointing at a git repo to enable caching and prevent unbounded cold scans")
 )
 
 const (
@@ -155,15 +156,10 @@ Tools: scan_project, get_dependencies, get_impact, get_coupling_table,
 				"no --workspace set, using cwd; analysis tools will fail if cwd is not a git repo",
 				slog.String("cwd", cwd))
 		}
-		// Validate: each workspace root must be inside a git repo, otherwise
-		// ResolveHEAD returns '' and every analysis call runs a cold ScanAndBuild.
 		for _, root := range roots {
-			git := exec.Command("git", "-C", root, "rev-parse", "HEAD") //nolint:gosec // root comes from the operator-controlled --workspace flag
+			git := exec.Command("git", "-C", root, "rev-parse", "HEAD") //nolint:gosec
 			if out, err := git.Output(); err != nil || len(out) == 0 {
-				slog.LogAttrs(cmd.Context(), slog.LevelError,
-					"workspace is not inside a git repo — sha will be empty, analysis results will be null",
-					slog.String("workspace", root),
-					slog.String("fix", "pass --workspace /path/to/git/repo"))
+				return fmt.Errorf("%w: %s", errWorkspaceNotGit, root)
 			}
 		}
 		s := config.NewStore()

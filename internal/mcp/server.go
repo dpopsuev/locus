@@ -768,12 +768,12 @@ func (h *handler) handleScanProject(ctx context.Context, req *sdkmcp.CallToolReq
 	scanN := h.scanTotal.Add(1)
 	resolvedPath, sha, gitRepo, scanStart := h.probeScanCache(ctx, scanN, in.Path)
 
+
+
 	sfKey := in.Path + "\x00" + in.Intent + "\x00" + effectiveScanner
 	startScanHeartbeat(ctx, req, resolvedPath, in.Intent, scanStart)
 
 	v, err, _ := h.scanGroup.Do(sfKey, func() (any, error) {
-		// BUG-92: if sha=="" this scan result will not be stored by the engine;
-		// the next call for this path will cold-scan again.
 		r, scanErr := h.sproto.ScanProject(ctx, in.Path, engine.ScanOpts{
 			Depth: in.Depth, ChurnDays: in.ChurnDays,
 			IncludeExternal: in.IncludeExternal, IncludeTests: in.IncludeTests,
