@@ -486,3 +486,55 @@ func TestScanLocal_NonGitWorkspace_Warns(t *testing.T) {
 		t.Logf("result: %s", text)
 	}
 }
+
+// --- LCS-BUG-97: analysis uses last-scanned path when no path/cache_key given ---
+
+// TestAnalysis_UsesLastScannedPath_WhenNoPathGiven reproduces LCS-BUG-97.
+// When the server workspace is pi-mono but the user scanned alef, analysis
+// calls with no path= or cache_key= must resolve against alef (last scanned),
+// not pi-mono (configured workspace).
+//
+// Given scan_local was called for dirA
+// And analysis(deps) is called with no path and no cache_key
+// Then the analysis resolves against dirA, not the server workspace
+func TestAnalysis_UsesLastScannedPath_WhenNoPathGiven(t *testing.T) {
+	// server workspace = dirB (a different directory, never scanned)
+	dirB := t.TempDir()
+	// dirA = the "other project" that was scanned — must be a git repo
+	dirA := monorepoFixture(t)
+
+	// Handler whose workspace is dirB but user scans dirA.
+	h := newHandlerWithWorkspace(t, dirB)
+	_ = dirA
+	ctx := context.Background()
+
+	// Scan dirA explicitly by passing its path.
+	scanResult, _, err := h.handleScanProject(ctx, nil, &codographActionInput{
+		Path:   dirA,
+		Intent: "full",
+	})
+	if err != nil {
+		t.Fatalf("scan dirA: %v", err)
+	}
+	t.Logf("scan dirA: %s", extractText(scanResult))
+
+	// Analysis with NO path and NO cache_key — should use dirA (last scanned),
+	// not dirB (the workspace). Currently returns dirB results = bug.
+	result, _, err := h.handleAnalysis(ctx, nil, analysisInput{
+		Action:    ActionDeps,
+		Component: "packages/spine/src",
+		// Path intentionally empty, cache_key intentionally empty.
+	})
+	if err != nil {
+		t.Fatalf("deps: %v", err)
+	}
+	text := extractText(result)
+	t.Logf("deps result: %s", text)
+
+	// spine has 2 importers (corpus and organ) in dirA.
+	// If LCS-BUG-97 is present, fan_in is null (resolved against empty dirB).
+	// After the fix fan_in must be non-null.
+	if !strings.Contains(text, "fan_in") || strings.Contains(text, `"fan_in":null`) {
+		t.Errorf("LCS-BUG-97: analysis without path= resolved against workspace (dirB) instead of last-scanned path (dirA); fan_in should be non-null for spine; result: %s", text)
+	}
+}

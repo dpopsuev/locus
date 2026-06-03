@@ -254,6 +254,11 @@ type handler struct {
 	// scanTotal counts every scan_local dispatch (including singleflight dedupes).
 	// Monotonically increasing; non-zero value in logs signals repeated cold scans.
 	scanTotal atomic.Int64
+
+	// lastScannedPath is the resolved path of the most recent successful scan_local.
+	// When analysis tools are called with no path= and no cache_key=, this is used
+	// instead of falling back to the configured workspace root (LCS-BUG-97).
+	lastScannedPath atomic.Value // stores string
 }
 
 // --- Input structs (per-tool, only relevant fields) ---
@@ -448,6 +453,16 @@ func (h *handler) handleAnalysis(ctx context.Context, _ *sdkmcp.CallToolRequest,
 	// fires before our deadline, callers still see the shorter deadline.
 	ctx, cancel := context.WithTimeout(ctx, analysisTimeout())
 	defer cancel()
+
+	// LCS-BUG-97: when no path and no cache_key are provided, fall back to
+	// the last successfully scanned path rather than the configured workspace.
+	if in.Path == "" && in.CacheKey == "" {
+		if v := h.lastScannedPath.Load(); v != nil {
+			if p, ok := v.(string); ok && p != "" {
+				in.Path = p
+			}
+		}
+	}
 
 	staleWarn := h.stalenessWarning(in.Path, in.CacheKey)
 	defer func() {
@@ -798,6 +813,7 @@ func (h *handler) handleScanProject(ctx context.Context, req *sdkmcp.CallToolReq
 	if err != nil {
 		return nil, nil, err
 	}
+	h.lastScannedPath.Store(resolvedPath)
 	res, renderErr := renderScanPayload(v.(*sfPayload), in.Format)
 	return res, nil, renderErr
 }
