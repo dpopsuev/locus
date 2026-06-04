@@ -264,19 +264,19 @@ type handler struct {
 // --- Input structs (per-tool, only relevant fields) ---
 
 type codographActionInput struct {
-	Action string `json:"action" jsonschema:"required,scan_local | scan_remote | history | diff | set_desired_state | get_desired_state | accept_violation | status | flush | warm"`
+	Action string `json:"action" jsonschema:"required,scan_local|scan_remote|history|diff|set_desired_state|get_desired_state|accept_violation|status|flush|warm"`
 
 	Path            string   `json:"path,omitempty"`
 	Depth           int      `json:"depth,omitempty"`
 	ChurnDays       int      `json:"churn_days,omitempty" jsonschema:"git history window in days"`
 	IncludeExternal bool     `json:"include_external,omitempty"`
 	IncludeTests    bool     `json:"include_tests,omitempty"`
-	IncludeCoverage bool     `json:"include_coverage,omitempty" jsonschema:"compute test coverage"`
+	IncludeCoverage bool     `json:"include_coverage,omitempty"`
 	Budget          int      `json:"budget,omitempty" jsonschema:"max components in output"`
-	Format          string   `json:"format,omitempty" jsonschema:"output format: json or summary"`
-	Intent          string   `json:"intent,omitempty" jsonschema:"scan depth: architecture, coupling, health, full"`
-	Scanner         string   `json:"scanner,omitempty" jsonschema:"scanner override: auto, go, packages, rust, typescript, lsp, ctags, composite"`
-	FileGranularity bool     `json:"file_granularity,omitempty" jsonschema:"TypeScript: treat each .ts file as its own component instead of grouping by directory"`
+	Format          string   `json:"format,omitempty" jsonschema:"json or summary"`
+	Intent          string   `json:"intent,omitempty" jsonschema:"architecture|coupling|health|full"`
+	Scanner         string   `json:"scanner,omitempty" jsonschema:"auto|go|packages|rust|typescript|lsp|ctags|composite"`
+	FileGranularity bool     `json:"file_granularity,omitempty" jsonschema:"TypeScript: file-level components"`
 	Since           string   `json:"since,omitempty" jsonschema:"git ref for incremental scan"`
 	URL             string   `json:"url,omitempty" jsonschema:"GitHub URL (scan_remote)"`
 	Ref             string   `json:"ref,omitempty" jsonschema:"git ref (scan_remote)"`
@@ -292,41 +292,40 @@ type codographActionInput struct {
 }
 
 type analysisInput struct {
-	Action    string   `json:"action" jsonschema:"required,deps | impact | coupling | cycles | violations | callers | callers_at | component | search | query | preset | scan_diff | risk_scores | symbol_search | callees | call_path | symbol_graph | pipelines | mesh | probe | scenario | convergence | isolate | diagnose | islands | explain_edge | symbol_diff | book | context_read | context_write | triage"`
-	Symbols   []string `json:"symbols,omitempty" jsonschema:"symbol FQNs for convergence (multiple symbols)"`
-	Stress    bool     `json:"stress,omitempty" jsonschema:"enrich scenario nodes with fan-out and downstream count"`
+	Action    string   `json:"action" jsonschema:"required,deps|impact|coupling|cycles|violations|callers|callers_at|component|search|query|preset|scan_diff|risk_scores|symbol_search|callees|call_path|symbol_graph|pipelines|mesh|probe|scenario|convergence|isolate|diagnose|islands|explain_edge|symbol_diff|book|context_read|context_write|triage"`
+	Symbols   []string `json:"symbols,omitempty" jsonschema:"FQNs for convergence"`
+	Stress    bool     `json:"stress,omitempty" jsonschema:"enrich scenario nodes with fan-out"`
 	Path      string   `json:"path,omitempty"`
 	CacheKey  string   `json:"cache_key,omitempty" jsonschema:"cache key from scan_remote"`
 	Component string   `json:"component,omitempty"`
-	Symbol    string   `json:"symbol,omitempty" jsonschema:"symbol name for callers/symbol_search (function or type name pattern)"`
+	Symbol    string   `json:"symbol,omitempty" jsonschema:"name pattern (callers/symbol_search)"`
 	SortBy    string   `json:"sort_by,omitempty"`
 	TopN      int      `json:"top_n,omitempty"`
-	View      string   `json:"view,omitempty" jsonschema:"coupling view: hot_spots, edges"`
-	ChurnDays int      `json:"churn_days,omitempty" jsonschema:"git history window (coupling hot_spots)"`
-	Layers    []string `json:"layers,omitempty" jsonschema:"ordered layer names (cycles)"`
-	Format    string   `json:"format,omitempty" jsonschema:"output format: json, summary"`
-	Preset    string   `json:"preset,omitempty" jsonschema:"preset: architecture_review, health_check, onboarding, pre_pr, full_clinic, code_health"`
-	Query     string   `json:"query,omitempty" jsonschema:"search: component name substring. query: natural language question. NOT for source code text search."`
+	View      string   `json:"view,omitempty" jsonschema:"hot_spots|edges"`
+	ChurnDays int      `json:"churn_days,omitempty" jsonschema:"git history window in days"`
+	Layers    []string `json:"layers,omitempty" jsonschema:"ordered layer names"`
+	Format    string   `json:"format,omitempty" jsonschema:"json|summary"`
+	Preset    string   `json:"preset,omitempty" jsonschema:"architecture_review|health_check|onboarding|pre_pr|full_clinic|code_health"`
+	Query     string   `json:"query,omitempty" jsonschema:"component name (search) or natural language question (query)"`
 	BeforeSHA string   `json:"before_sha,omitempty" jsonschema:"earlier SHA (scan_diff)"`
 	AfterSHA  string   `json:"after_sha,omitempty" jsonschema:"later SHA (scan_diff)"`
 	MinLength int      `json:"min_length,omitempty"`
-	MeshView  string   `json:"mesh_view,omitempty" jsonschema:"mesh view: full, neighborhood, distance, boundaries, aggregate (mesh)"`
-	Level     string   `json:"level,omitempty" jsonschema:"aggregation level: symbol, file, package, component (mesh aggregate)"`
-	FQN       string   `json:"fqn,omitempty" jsonschema:"fully qualified symbol name (mesh neighborhood)"`
-	Hops      int      `json:"hops,omitempty" jsonschema:"neighborhood radius in hops (mesh neighborhood)"`
-	From      string   `json:"from,omitempty" jsonschema:"source symbol FQN (mesh distance)"`
-	To        string   `json:"to,omitempty" jsonschema:"target symbol FQN (mesh distance)"`
-	MinWeight *float64 `json:"min_weight,omitempty" jsonschema:"minimum edge weight filter (mesh boundaries/neighborhood, default 0.1)"`
-	Detail    string   `json:"detail,omitempty" jsonschema:"symbol_search detail level: shallow (default, locators only) or full (adds fan_in, fan_out, instability, signature — caps results at 10)"`
-	File      string   `json:"file,omitempty" jsonschema:"absolute file path — when set, symbol_search returns only symbols from that file; callers_at requires it"`
-	Line      int      `json:"line,omitempty" jsonschema:"1-based line number (callers_at)"`
-	Char      int      `json:"char,omitempty" jsonschema:"0-based character offset (callers_at)"`
-	// Fields for merged tools (book, context_read/write, triage).
-	Keywords []string `json:"keywords,omitempty" jsonschema:"keywords for knowledge graph query (book)"`
-	Scope    string   `json:"scope,omitempty" jsonschema:"context scope: project | module | file | symbol"`
-	Target   string   `json:"target,omitempty" jsonschema:"target name for context actions (package, file path, or FQN)"`
-	Content  string   `json:"content,omitempty" jsonschema:"content to write (context_write only)"`
-	Intent   string   `json:"intent,omitempty" jsonschema:"natural language intent to map to tools (triage)"`
+	MeshView  string   `json:"mesh_view,omitempty" jsonschema:"full|neighborhood|distance|boundaries|aggregate"`
+	Level     string   `json:"level,omitempty" jsonschema:"symbol|file|package|component"`
+	FQN       string   `json:"fqn,omitempty" jsonschema:"fully qualified symbol name"`
+	Hops      int      `json:"hops,omitempty" jsonschema:"neighborhood radius in hops"`
+	From      string   `json:"from,omitempty" jsonschema:"source FQN (mesh distance)"`
+	To        string   `json:"to,omitempty" jsonschema:"target FQN (mesh distance)"`
+	MinWeight *float64 `json:"min_weight,omitempty" jsonschema:"edge weight filter, default 0.1"`
+	Detail    string   `json:"detail,omitempty" jsonschema:"shallow (default) or full"`
+	File      string   `json:"file,omitempty" jsonschema:"abs path: filters symbol_search; required by callers_at"`
+	Line      int      `json:"line,omitempty" jsonschema:"1-based line (callers_at)"`
+	Char      int      `json:"char,omitempty" jsonschema:"0-based char offset (callers_at)"`
+	Keywords  []string `json:"keywords,omitempty" jsonschema:"keywords for book query"`
+	Scope     string   `json:"scope,omitempty" jsonschema:"project|module|file|symbol"`
+	Target    string   `json:"target,omitempty" jsonschema:"package, file path, or FQN"`
+	Content   string   `json:"content,omitempty" jsonschema:"content to write (context_write)"`
+	Intent    string   `json:"intent,omitempty" jsonschema:"natural language intent (triage)"`
 }
 
 // staleBinaryWarning returns a warning string if the on-disk binary has been
@@ -1153,15 +1152,15 @@ func (h *handler) enrichDiagramInput(ctx context.Context, path, diagramType stri
 
 type diagramInput struct {
 	Path         string `json:"path" jsonschema:"required"`
-	Type         string `json:"type" jsonschema:"required,diagram type: dependency, c4, coupling, churn, layers, tree, classes, sequence, er, interfaces, hexa, zones, symbol_dsm"`
+	Type         string `json:"type" jsonschema:"required,dependency|c4|coupling|churn|layers|tree|classes|sequence|er|interfaces|hexa|zones|symbol_dsm"`
 	Scope        string `json:"scope,omitempty" jsonschema:"limit to sub-package"`
 	Depth        int    `json:"depth,omitempty"`
 	TopN         int    `json:"top_n,omitempty"`
 	Entry        string `json:"entry,omitempty" jsonschema:"entry point for sequence/callgraph"`
-	ExportedOnly bool   `json:"exported_only,omitempty" jsonschema:"exported symbols only (class diagrams)"`
-	Enrich       string `json:"enrich,omitempty" jsonschema:"node label metrics: loc, fan_in, churn"`
-	Theme        string `json:"theme,omitempty" jsonschema:"theme: light, dark, natural"`
-	Format       string `json:"format,omitempty" jsonschema:"output: mermaid, facts, both"`
+	ExportedOnly bool   `json:"exported_only,omitempty" jsonschema:"class diagrams only"`
+	Enrich       string `json:"enrich,omitempty" jsonschema:"node labels: loc, fan_in, churn"`
+	Theme        string `json:"theme,omitempty" jsonschema:"light|dark|natural"`
+	Format       string `json:"format,omitempty" jsonschema:"mermaid|facts|both"`
 	CacheKey     string `json:"cache_key,omitempty" jsonschema:"cache key from scan_remote"`
 }
 
