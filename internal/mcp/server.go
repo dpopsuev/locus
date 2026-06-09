@@ -18,7 +18,7 @@ import (
 	oculus "github.com/dpopsuev/oculus/v3"
 	"github.com/dpopsuev/oculus/v3/analyzer"
 	"github.com/dpopsuev/oculus/v3/arch"
-	clinichexa "github.com/dpopsuev/oculus/v3/clinic/hexa"
+	"github.com/dpopsuev/oculus/v3/clinic"
 	"github.com/dpopsuev/oculus/v3/diagram"
 	diagramcore "github.com/dpopsuev/oculus/v3/diagram/core"
 	"github.com/dpopsuev/oculus/v3/engine"
@@ -120,6 +120,10 @@ const (
 	ActionIslands      = "islands"
 	ActionExplainEdge  = "explain_edge"
 	ActionSymbolDiff   = "symbol_diff"
+	// Intra-component queries (NED-14, NED-16, NED-17).
+	ActionIntraDeps    = "intra_deps"
+	ActionIntraCoupling = "intra_coupling"
+	ActionTypeUsages   = "type_usages"
 	// Merged from standalone tools.
 	ActionBook         = "book"
 	ActionContextRead  = "context_read"
@@ -292,7 +296,7 @@ type codographActionInput struct {
 }
 
 type analysisInput struct {
-	Action    string   `json:"action" jsonschema:"required,deps|impact|coupling|cycles|violations|callers|callers_at|component|search|query|preset|scan_diff|risk_scores|symbol_search|callees|call_path|symbol_graph|pipelines|mesh|probe|scenario|convergence|isolate|diagnose|islands|explain_edge|symbol_diff|book|context_read|context_write|triage"`
+	Action    string   `json:"action" jsonschema:"required,deps|impact|coupling|cycles|violations|callers|callers_at|component|search|query|preset|scan_diff|risk_scores|symbol_search|callees|call_path|symbol_graph|pipelines|mesh|probe|scenario|convergence|isolate|diagnose|islands|explain_edge|symbol_diff|intra_deps|intra_coupling|type_usages|book|context_read|context_write|triage"`
 	Symbols   []string `json:"symbols,omitempty" jsonschema:"FQNs for convergence"`
 	Stress    bool     `json:"stress,omitempty" jsonschema:"enrich scenario nodes with fan-out"`
 	Path      string   `json:"path,omitempty"`
@@ -484,6 +488,8 @@ func (h *handler) handleAnalysis(ctx context.Context, _ *sdkmcp.CallToolRequest,
 		return h.handleViolations(ctx, in.Path, in.Layers, in.CacheKey, in.Format)
 	case ActionComponent, ActionSearch, ActionQuery:
 		return h.dispatchAnalysisLookup(ctx, &in)
+	case ActionIntraDeps, ActionIntraCoupling, ActionTypeUsages:
+		return h.dispatchAnalysisIntra(ctx, &in)
 	case ActionScanDiff, ActionComponentDiff, ActionMigrationOverlay, ActionRegisterMirror, ActionListMirrors:
 		return h.dispatchAnalysisMigration(ctx, &in)
 	case ActionBook, ActionContextRead, ActionContextWrite, ActionTriage:
@@ -1114,7 +1120,11 @@ func (h *handler) resolveDiagramReport(ctx context.Context, path string, in diag
 		return h.proto.GetCachedReport(ctx, in.CacheKey)
 	}
 	intent := DiagramMinIntent[in.Type]
-	result, err := h.proto.ScanProject(ctx, path, engine.ScanOpts{Depth: in.Depth, Intent: intent})
+	result, err := h.proto.ScanProject(ctx, path, engine.ScanOpts{
+		Depth:             in.Depth,
+		Intent:            intent,
+		TSFileGranularity: in.FileGranularity,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -1133,7 +1143,7 @@ func (h *handler) enrichDiagramInput(ctx context.Context, path, diagramType stri
 	if diagramType == DiagramHexa {
 		fa := analyzer.NewFallback(path, pool)
 		classes, _ := fa.Classes(ctx, path)
-		hexaClass := clinichexa.ComputeHexaClassification(report.Architecture.Services, report.Architecture.Edges, classes)
+		hexaClass := clinic.ComputeHexaClassification(report.Architecture.Services, report.Architecture.Edges, classes)
 		input.HexaRoles = make(map[string]string, len(hexaClass.Components))
 		for _, c := range hexaClass.Components {
 			input.HexaRoles[c.Name] = string(c.Role)
@@ -1151,20 +1161,46 @@ func (h *handler) enrichDiagramInput(ctx context.Context, path, diagramType stri
 }
 
 type diagramInput struct {
-	Path         string `json:"path" jsonschema:"required"`
-	Type         string `json:"type" jsonschema:"required,dependency|c4|coupling|churn|layers|tree|classes|sequence|er|interfaces|hexa|zones|symbol_dsm"`
-	Scope        string `json:"scope,omitempty" jsonschema:"limit to sub-package"`
-	Depth        int    `json:"depth,omitempty"`
-	TopN         int    `json:"top_n,omitempty"`
-	Entry        string `json:"entry,omitempty" jsonschema:"entry point for sequence/callgraph"`
-	ExportedOnly bool   `json:"exported_only,omitempty" jsonschema:"class diagrams only"`
-	Enrich       string `json:"enrich,omitempty" jsonschema:"node labels: loc, fan_in, churn"`
-	Theme        string `json:"theme,omitempty" jsonschema:"light|dark|natural"`
-	Format       string `json:"format,omitempty" jsonschema:"mermaid|facts|both"`
-	CacheKey     string `json:"cache_key,omitempty" jsonschema:"cache key from scan_remote"`
+	Path            string `json:"path" jsonschema:"required"`
+	Type            string `json:"type" jsonschema:"required,dependency|c4|coupling|churn|layers|tree|classes|sequence|er|interfaces|hexa|zones|symbol_dsm"`
+	Scope           string `json:"scope,omitempty" jsonschema:"limit to sub-package"`
+	Depth           int    `json:"depth,omitempty"`
+	TopN            int    `json:"top_n,omitempty"`
+	Entry           string `json:"entry,omitempty" jsonschema:"entry point for sequence/callgraph"`
+	ExportedOnly    bool   `json:"exported_only,omitempty" jsonschema:"class diagrams only"`
+	Enrich          string `json:"enrich,omitempty" jsonschema:"node labels: loc, fan_in, churn"`
+	Theme           string `json:"theme,omitempty" jsonschema:"light|dark|natural"`
+	Format          string `json:"format,omitempty" jsonschema:"mermaid|facts|both"`
+	CacheKey        string `json:"cache_key,omitempty" jsonschema:"cache key from scan_remote"`
+	FileGranularity bool   `json:"file_granularity,omitempty" jsonschema:"TypeScript: file-level nodes"`
 }
 
 // dispatchAnalysisMigration handles diff, overlay, and mirror actions.
+func (h *handler) dispatchAnalysisIntra(ctx context.Context, in *analysisInput) (*sdkmcp.CallToolResult, any, error) {
+	switch in.Action {
+	case ActionIntraDeps:
+		r, err := h.proto.GetIntraPackageDeps(ctx, in.Path, in.Component, in.CacheKey)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
+	case ActionIntraCoupling:
+		r, err := h.proto.GetIntraCoupling(ctx, in.Path, in.Component, in.CacheKey)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
+	case ActionTypeUsages:
+		r, err := h.proto.GetTypeUsages(ctx, in.Path, in.Query, in.CacheKey)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(r)
+	default:
+		return nil, nil, ErrUnknownAction
+	}
+}
+
 func (h *handler) dispatchAnalysisMigration(ctx context.Context, in *analysisInput) (*sdkmcp.CallToolResult, any, error) {
 	switch in.Action {
 	case ActionScanDiff:

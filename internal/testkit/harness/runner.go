@@ -13,9 +13,9 @@ import (
 	"github.com/dpopsuev/oculus/v3/arch"
 	"github.com/dpopsuev/oculus/v3/cache"
 	"github.com/dpopsuev/oculus/v3/clinic"
-	clinichexa "github.com/dpopsuev/oculus/v3/clinic/hexa"
-	clinicnaming "github.com/dpopsuev/oculus/v3/clinic/naming"
-	clinicsolid "github.com/dpopsuev/oculus/v3/clinic/solid"
+	
+	
+	
 	"github.com/dpopsuev/oculus/v3/diagram"
 	diagramcore "github.com/dpopsuev/oculus/v3/diagram/core"
 	"github.com/dpopsuev/oculus/v3/engine"
@@ -99,7 +99,7 @@ func checkHexa(t *testing.T, report *arch.ContextReport, m *testkit.Manifest) {
 		return
 	}
 	t.Run("hexa", func(t *testing.T) {
-		hr := clinichexa.ComputeHexaViolations(
+		hr := clinic.ComputeHexaViolations(
 			report.Architecture.Services, report.Architecture.Edges, nil,
 		)
 		if len(hr.Violations) > m.ExpectedHexa.MaxViolations {
@@ -124,7 +124,7 @@ func checkSOLID(t *testing.T, report *arch.ContextReport, m *testkit.Manifest, r
 		return
 	}
 	t.Run("solid", func(t *testing.T) {
-		sr := clinicsolid.ComputeSOLIDScan(
+		sr := clinic.ComputeSOLIDScan(
 			report.Architecture.Services, report.Architecture.Edges,
 			nil, nil, nil, root, nil, nil,
 		)
@@ -141,7 +141,7 @@ func checkSymbols(t *testing.T, report *arch.ContextReport, m *testkit.Manifest)
 		return
 	}
 	t.Run("symbols", func(t *testing.T) {
-		sq := clinicnaming.ComputeSymbolQuality(
+		sq := clinic.ComputeSymbolQuality(
 			report.Architecture.Services, report.Architecture.Edges,
 		)
 		for _, abbr := range m.ExpectedSymbols.Abbreviations {
@@ -214,7 +214,7 @@ func hasDetection(detections []clinic.PatternDetection, id string) bool {
 	return false
 }
 
-func hasIssue(issues []clinicnaming.SymbolIssue, issueType, substr string) bool {
+func hasIssue(issues []clinic.SymbolIssue, issueType, substr string) bool {
 	for _, i := range issues {
 		if i.Issue == issueType && strings.Contains(i.Symbol, substr) {
 			return true
