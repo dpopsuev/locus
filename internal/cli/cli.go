@@ -42,6 +42,7 @@ var (
 
 const (
 	formatJSON    = "json"
+	formatSummary = "summary"
 	formatMermaid = "mermaid"
 
 	// Slog attribute keys.
@@ -657,7 +658,7 @@ var lintCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(versionCmd, scanCmd, serveCmd, codographCmd, historyCmd, diffCmd, validateCmd, conventionsCmd, impactCmd, gapsCmd, healthCmd, diagramCmd, triageCmd, lintCmd)
 
-	scanCmd.Flags().StringVar(&scanFlags.format, "format", formatJSON, "Output format: json, md, mermaid")
+	scanCmd.Flags().StringVar(&scanFlags.format, "format", formatJSON, "Output format: json, summary, md, mermaid")
 	scanCmd.Flags().StringVar(&scanFlags.scanner, "scanner", "auto", "Scanner: auto, go, packages, rust, typescript, composite, ctags, lsp")
 	scanCmd.Flags().IntVar(&scanFlags.depth, "depth", 0, "Group namespaces by first N directory segments")
 	scanCmd.Flags().IntVar(&scanFlags.churnDays, "churn-days", 30, "Overlay file churn from last N days of git history (0 = disabled)")
@@ -674,7 +675,7 @@ func init() {
 
 	codographCmd.Flags().StringVar(&codographFlags.ref, "ref", "", "Branch or tag to clone (default: repo default branch)")
 	codographCmd.Flags().BoolVar(&codographFlags.keep, "keep", false, "Keep the cloned directory after scan")
-	codographCmd.Flags().StringVar(&codographFlags.format, "format", formatJSON, "Output format: json, md, mermaid")
+	codographCmd.Flags().StringVar(&codographFlags.format, "format", formatJSON, "Output format: json, summary, md, mermaid")
 	codographCmd.Flags().IntVar(&codographFlags.depth, "depth", 0, "Group namespaces by first N directory segments")
 	codographCmd.Flags().IntVar(&codographFlags.budget, "budget", 0, "Cap output to N tokens (0 = unlimited)")
 
@@ -714,12 +715,14 @@ func renderReport(report *arch.ContextReport, format string) error {
 			return fmt.Errorf("render JSON: %w", err)
 		}
 		fmt.Println(string(data))
+	case formatSummary:
+		fmt.Print(arch.RenderMarkdown(report))
 	case "md":
 		fmt.Print(arch.RenderArchMarkdown(report.Architecture))
 	case formatMermaid:
 		fmt.Print(arch.RenderMermaid(report.Architecture))
 	default:
-		return fmt.Errorf("%w %q (use json, md, or mermaid)", errUnknownFormat, format)
+		return fmt.Errorf("%w %q (use json, summary, md, or mermaid)", errUnknownFormat, format)
 	}
 	return nil
 }
