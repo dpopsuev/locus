@@ -15,9 +15,9 @@ import (
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// TestServe_GoplsWorkspaceSwitch reproduces LCS-BUG-65:
-// gopls is active for one Go workspace but call graph requests fail after
-// scanning a different Go repository in the same server session.
+// TestServe_GoplsWorkspaceSwitch verifies that gopls correctly switches
+// between Go workspaces: call graph requests must succeed after scanning
+// a different Go repository in the same server session.
 //
 // Run:
 //
@@ -26,8 +26,8 @@ func TestServe_GoplsWorkspaceSwitch(t *testing.T) {
 	requireDocker(t)
 	requireImage(t)
 
-	repoA := setupBug65Fixture(t, "example.com/bug65a")
-	repoB := setupBug65Fixture(t, "example.com/bug65b")
+	repoA := setupGoRepoFixture(t, "example.com/bug65a")
+	repoB := setupGoRepoFixture(t, "example.com/bug65b")
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()
 
@@ -48,7 +48,7 @@ func TestServe_GoplsWorkspaceSwitch(t *testing.T) {
 	}
 }
 
-func setupBug65Fixture(t *testing.T, module string) string {
+func setupGoRepoFixture(t *testing.T, module string) string {
 	t.Helper()
 
 	dir := t.TempDir()

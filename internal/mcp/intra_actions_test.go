@@ -6,12 +6,12 @@ import (
 	"testing"
 )
 
-// TestNED14_IntraPackageDeps_Action verifies the intra_deps MCP action.
+// TestIntraPackageDeps_Action verifies the intra_deps MCP action.
 //
 // Given a scanned repository
 // When analysis action=intra_deps component=<component> is called
 // Then a JSON result is returned listing file-level edges within that component
-func TestNED14_IntraPackageDeps_Action(t *testing.T) {
+func TestIntraPackageDeps_Action(t *testing.T) {
 	dir := monorepoFixture(t)
 	h := newHandlerWithWorkspace(t, dir)
 	ctx := context.Background()
@@ -43,8 +43,8 @@ func TestNED14_IntraPackageDeps_Action(t *testing.T) {
 	}
 }
 
-// TestNED17_IntraCoupling_Action verifies the intra_coupling MCP action.
-func TestNED17_IntraCoupling_Action(t *testing.T) {
+// TestIntraCoupling_Action verifies the intra_coupling MCP action.
+func TestIntraCoupling_Action(t *testing.T) {
 	dir := monorepoFixture(t)
 	h := newHandlerWithWorkspace(t, dir)
 	ctx := context.Background()
@@ -72,8 +72,8 @@ func TestNED17_IntraCoupling_Action(t *testing.T) {
 	}
 }
 
-// TestNED16_TypeUsages_Action verifies the type_usages MCP action.
-func TestNED16_TypeUsages_Action(t *testing.T) {
+// TestTypeUsages_Action verifies the type_usages MCP action.
+func TestTypeUsages_Action(t *testing.T) {
 	dir := monorepoFixture(t)
 	h := newHandlerWithWorkspace(t, dir)
 	ctx := context.Background()
