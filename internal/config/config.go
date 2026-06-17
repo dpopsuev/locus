@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 
+	"github.com/dpopsuev/locus/internal/resource"
 	"github.com/dpopsuev/locus/internal/store"
 	"github.com/dpopsuev/oculus/v3/cache"
 	"github.com/dpopsuev/oculus/v3/history"
@@ -22,21 +23,19 @@ var Version = "dev"
 // NewStore creates a Store based on environment configuration.
 // Default: filesystem backend wrapped in LRU.
 func NewStore() store.Store {
-	backend := envOr(EnvStore, BackendFilesystem)
+	return NewStoreWithConfig(resource.LoadConfig())
+}
 
-	switch backend {
-	case BackendFilesystem:
-		sc := cache.NewVersioned(envOr(EnvCacheDir, cache.DefaultCacheDir()), Version)
-		histDir := envOr(EnvHistoryDir, history.DefaultHistoryDir())
-		fs := store.NewFilesystem(sc, histDir)
-		return store.NewLRU(fs, store.DefaultLRUCapacity)
-	default:
-		// Unknown backend falls back to filesystem.
-		sc := cache.NewVersioned(envOr(EnvCacheDir, cache.DefaultCacheDir()), Version)
-		histDir := envOr(EnvHistoryDir, history.DefaultHistoryDir())
-		fs := store.NewFilesystem(sc, histDir)
-		return store.NewLRU(fs, store.DefaultLRUCapacity)
+// NewStoreWithConfig creates a Store using explicit resource configuration.
+func NewStoreWithConfig(cfg resource.Config) store.Store {
+	sc := cache.NewVersioned(envOr(EnvCacheDir, cache.DefaultCacheDir()), Version)
+	histDir := envOr(EnvHistoryDir, history.DefaultHistoryDir())
+	fs := store.NewFilesystem(sc, histDir)
+	lruCap := cfg.LRUCapacity
+	if lruCap <= 0 {
+		lruCap = store.DefaultLRUCapacity
 	}
+	return store.NewLRU(fs, lruCap)
 }
 
 func envOr(key, fallback string) string {

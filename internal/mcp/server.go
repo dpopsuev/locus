@@ -187,7 +187,8 @@ var DiagramMinIntent = map[string]string{
 
 // --- Server ---
 
-func NewServer(s store.Store, workspaceRoots []string, version string, pool ...lsp.Pool) (*batterymcp.Server, *triage.Registry) {
+// NewServer creates the Locus MCP server with tool handlers.
+func NewServer(s store.Store, workspaceRoots []string, version string, pool ...lsp.Pool) (*batterymcp.Server, *triage.Registry, *engine.Engine) {
 	proto := engine.New(s, workspaceRoots, pool...)
 	bsrv := batterymcp.NewServer("locus", version).
 		WithInstructions("Scan first (codograph scan_local), then walk (analysis probe/scenario/convergence/isolate). Results cached by SHA; pass cache_key to skip rescanning.")
@@ -231,7 +232,7 @@ func NewServer(s store.Store, workspaceRoots []string, version string, pool ...l
 
 	h.reg = reg
 
-	return bsrv, reg
+	return bsrv, reg, proto
 }
 
 // scanProto is a narrow interface over the two engine methods used by

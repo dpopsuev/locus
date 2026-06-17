@@ -59,6 +59,9 @@ USER locus
 # Override at runtime to user-writable location.
 ENV CARGO_HOME=/tmp/cargo RUSTUP_HOME=/tmp/rustup
 
+ENV GOMEMLIMIT=1GiB
+ENV GOGC=50
+
 COPY locus /usr/local/bin/locus
 
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \

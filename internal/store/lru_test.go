@@ -10,6 +10,8 @@ import (
 	"github.com/dpopsuev/oculus/v3/cache"
 )
 
+const testModulePath = "test/lru"
+
 func TestLRU_HitAvoidsDisk(t *testing.T) {
 	inner := store.NewFilesystem(cache.New(t.TempDir()), t.TempDir())
 	lru := store.NewLRU(inner, 4)
@@ -77,5 +79,62 @@ func TestLRU_MissReturnsFalse(t *testing.T) {
 	}
 	if hit {
 		t.Error("expected miss for nonexistent key")
+	}
+}
+
+func TestLRU_LenAndCapacity(t *testing.T) {
+	inner := store.NewFilesystem(cache.New(t.TempDir()), t.TempDir())
+	lru := store.NewLRU(inner, 4)
+
+	if lru.Capacity() != 4 {
+		t.Errorf("Capacity() = %d, want 4", lru.Capacity())
+	}
+	if lru.Len() != 0 {
+		t.Errorf("Len() = %d, want 0", lru.Len())
+	}
+
+	ctx := context.Background()
+	r := &arch.ContextReport{ScanCore: arch.ScanCore{ModulePath: testModulePath}}
+	_ = lru.PutReport(ctx, "/r1", "s1", r)
+	_ = lru.PutReport(ctx, "/r2", "s2", r)
+
+	if lru.Len() != 2 {
+		t.Errorf("Len() = %d, want 2", lru.Len())
+	}
+}
+
+func TestLRU_EvictOldest(t *testing.T) {
+	inner := store.NewFilesystem(cache.New(t.TempDir()), t.TempDir())
+	lru := store.NewLRU(inner, 4)
+
+	ctx := context.Background()
+	r := &arch.ContextReport{ScanCore: arch.ScanCore{ModulePath: testModulePath}}
+	_ = lru.PutReport(ctx, "/r1", "s1", r)
+	_ = lru.PutReport(ctx, "/r2", "s2", r)
+	_ = lru.PutReport(ctx, "/r3", "s3", r)
+
+	evicted := lru.EvictOldest(2)
+	if evicted != 2 {
+		t.Errorf("EvictOldest(2) = %d, want 2", evicted)
+	}
+	if lru.Len() != 1 {
+		t.Errorf("Len() = %d, want 1", lru.Len())
+	}
+}
+
+func TestLRU_EvictOldest_MoreThanAvailable(t *testing.T) {
+	inner := store.NewFilesystem(cache.New(t.TempDir()), t.TempDir())
+	lru := store.NewLRU(inner, 4)
+
+	ctx := context.Background()
+	r := &arch.ContextReport{ScanCore: arch.ScanCore{ModulePath: testModulePath}}
+	_ = lru.PutReport(ctx, "/r1", "s1", r)
+
+	evicted := lru.EvictOldest(5)
+	if evicted != 1 {
+		t.Errorf("EvictOldest(5) = %d, want 1", evicted)
+	}
+	if lru.Len() != 0 {
+		t.Errorf("Len() = %d, want 0", lru.Len())
 	}
 }

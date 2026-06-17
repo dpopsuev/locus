@@ -20,6 +20,7 @@ import (
 
 	"github.com/dpopsuev/locus/internal/config"
 	locusmcp "github.com/dpopsuev/locus/internal/mcp"
+	"github.com/dpopsuev/locus/internal/resource"
 	"github.com/dpopsuev/locus/internal/store"
 	"github.com/dpopsuev/oculus/v3/analyzer"
 	"github.com/dpopsuev/oculus/v3/arch"
@@ -143,8 +144,6 @@ Tools: scan_project, get_dependencies, get_impact, get_coupling_table,
        get_cycles, render_diagram, triage.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if serveFlags.logLevel != "" {
-			// --log-level overrides LOCUS_LOG_LEVEL; re-init logger with the
-			// flag value so operators can set it without touching the environment.
 			_ = os.Setenv("LOCUS_LOG_LEVEL", serveFlags.logLevel)
 			initLogger()
 		}
@@ -159,16 +158,31 @@ Tools: scan_project, get_dependencies, get_impact, get_coupling_table,
 		if serveFlags.ingestURL != "" {
 			_ = os.Setenv("LOCUS_INGEST_URL", serveFlags.ingestURL)
 		}
-		s := config.NewStore()
+
+		resCfg := resource.LoadConfig()
+		s := config.NewStoreWithConfig(resCfg)
 		defer s.Close()
 
-		pool := lsp.NewPool()
+		pool := lsp.NewPoolWithConfig(lsp.PoolConfig{
+			MaxActive: resCfg.LSPMaxActive,
+			TTL:       resCfg.LSPTTL,
+		})
 
 		ctx, stop := signal.NotifyContext(cmd.Context(), syscall.SIGTERM, syscall.SIGINT)
 		defer stop()
 		defer pool.Shutdown(ctx) //nolint:errcheck // best-effort cleanup
 
-		srv, _ := locusmcp.NewServer(s, roots, version, pool)
+		srv, _, eng := locusmcp.NewServer(s, roots, version, pool)
+
+		// Resource monitor — tracks RSS, LRU, pool state; applies memory pressure.
+		var lruInspector resource.LRUInspector
+		if snap, ok := s.(interface{ Len() int; Capacity() int; EvictOldest(int) int }); ok {
+			lruInspector = snap
+		}
+		mon := resource.New(resCfg, lruInspector, &resource.PoolAdapter{Pool: pool}, eng)
+		mon.Start(ctx)
+		defer mon.Stop()
+
 		if serveFlags.transport == "http" {
 			sdk := srv.SDK()
 			mcpHandler := sdkmcp.NewStreamableHTTPHandler(
@@ -178,8 +192,7 @@ Tools: scan_project, get_dependencies, get_impact, get_coupling_table,
 			mux := http.NewServeMux()
 			mux.Handle("/", mcpHandler)
 			mux.HandleFunc("/debug/cache", debugCacheHandler(s))
-			// /debug/pprof/* is registered by the blank import above;
-			// forward the prefix so the default mux handler is reachable.
+			mux.HandleFunc("/debug/resources", resource.Handler(mon))
 			mux.Handle("/debug/pprof/", http.DefaultServeMux)
 			slog.LogAttrs(ctx, slog.LevelInfo, "locus server starting", slog.String(logKeyVersion, version), slog.String(logKeyTransport, "http"), slog.String(logKeyAddr, serveFlags.addr))
 			server := &http.Server{Addr: serveFlags.addr, Handler: mux, ReadHeaderTimeout: 10 * time.Second}
@@ -575,7 +588,7 @@ Examples:
   locus triage --category performance`,
 	Args: cobra.MaximumNArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		_, reg := locusmcp.NewServer(config.NewStore(), nil, version)
+		_, reg, _ := locusmcp.NewServer(config.NewStore(), nil, version)
 
 		if triageFlags.list {
 			tools := reg.List()

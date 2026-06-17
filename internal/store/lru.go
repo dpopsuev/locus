@@ -137,6 +137,31 @@ func (s *LRUStore) Snapshot() []LRUEntry {
 	return entries
 }
 
+// Len returns the number of entries currently in the LRU.
+func (s *LRUStore) Len() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.order.Len()
+}
+
+// Capacity returns the maximum number of entries.
+func (s *LRUStore) Capacity() int {
+	return s.capacity
+}
+
+// EvictOldest removes up to n least-recently-used entries.
+// Returns the number actually evicted.
+func (s *LRUStore) EvictOldest(n int) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	evicted := 0
+	for i := 0; i < n && s.order.Len() > 0; i++ {
+		s.evictLocked()
+		evicted++
+	}
+	return evicted
+}
+
 func (s *LRUStore) evictLocked() {
 	back := s.order.Back()
 	if back == nil {
