@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"path/filepath"
 	_ "net/http/pprof" //nolint:gosec // intentional: pprof is gated behind the HTTP mux, not exposed by default
 	"os"
 	"os/signal"
@@ -18,6 +19,7 @@ import (
 
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	scribebridge "github.com/dpopsuev/locus/bridges/scribe"
 	"github.com/dpopsuev/locus/internal/config"
 	locusmcp "github.com/dpopsuev/locus/internal/mcp"
 	"github.com/dpopsuev/locus/internal/resource"
@@ -94,6 +96,7 @@ var scanFlags struct {
 	includeExternal bool
 	includeTests    bool
 	budget          int
+	ingestURL       string
 }
 
 var scanCmd = &cobra.Command{
@@ -118,6 +121,13 @@ var scanCmd = &cobra.Command{
 		})
 		if err != nil {
 			return err
+		}
+		if scanFlags.ingestURL != "" {
+			project := filepath.Base(result.Report.Project.Path)
+			if err := scribebridge.IngestScan(cmd.Context(), result.Report, project, scanFlags.ingestURL); err != nil {
+				return fmt.Errorf("ingest: %w", err)
+			}
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "ingested %d components into %s\n", len(result.Report.Architecture.Services), scanFlags.ingestURL)
 		}
 		return renderReport(result.Report, scanFlags.format)
 	},
@@ -684,6 +694,7 @@ func init() {
 	scanCmd.Flags().BoolVar(&scanFlags.includeExternal, "include-external", false, "Include external (third-party) dependencies")
 	scanCmd.Flags().BoolVar(&scanFlags.includeTests, "include-tests", false, "Include test packages")
 	scanCmd.Flags().IntVar(&scanFlags.budget, "budget", 0, "Cap output to N tokens (rank by importance, 0 = unlimited)")
+	scanCmd.Flags().StringVar(&scanFlags.ingestURL, "ingest", "", "POST scan results to Scribe ingest URL (e.g. http://localhost:8083/api/v1/ingest)")
 
 	serveCmd.Flags().StringArrayVar(&serveFlags.workspaces, "workspace", nil, "Workspace root paths (repeatable; defaults to cwd)")
 	serveCmd.Flags().StringVar(&serveFlags.transport, "transport", envOr("LOCUS_TRANSPORT", "stdio"), "Transport type: stdio, http ($LOCUS_TRANSPORT)")
