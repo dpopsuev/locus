@@ -28,8 +28,10 @@ func TranslateScan(report *oculus.ContextReport, project string) translate.Resul
 				{Name: "language", Text: svc.Language.String()},
 			},
 			Extra: map[string]any{
-				"loc":   svc.LOC,
-				"churn": svc.Churn,
+				"ref_backend": "locus",
+				"ref_id":      id,
+				"loc":         svc.LOC,
+				"churn":       svc.Churn,
 			},
 		}
 		if svc.TrustZone != "" {
