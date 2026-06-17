@@ -13,7 +13,6 @@ import (
 
 	"golang.org/x/sync/singleflight"
 
-	batterymcp "github.com/dpopsuev/battery/mcp"
 	"github.com/dpopsuev/locus/internal/store"
 	oculus "github.com/dpopsuev/oculus/v3"
 	"github.com/dpopsuev/oculus/v3/analyzer"
@@ -185,13 +184,15 @@ var DiagramMinIntent = map[string]string{
 	DiagramSymbolDSM:  string(arch.IntentHealth),
 }
 
-// --- Server ---
-
-func NewServer(s store.Store, workspaceRoots []string, version string, pool ...lsp.Pool) (*batterymcp.Server, *triage.Registry) {
+// NewServer creates the Locus MCP server with codograph, analysis, and diagram tools.
+func NewServer(s store.Store, workspaceRoots []string, version string, pool ...lsp.Pool) (*sdkmcp.Server, *triage.Registry) {
 	proto := engine.New(s, workspaceRoots, pool...)
-	bsrv := batterymcp.NewServer("locus", version).
-		WithInstructions("Scan first (codograph scan_local), then walk (analysis probe/scenario/convergence/isolate). Results cached by SHA; pass cache_key to skip rescanning.")
-	srv := bsrv.SDK()
+	srv := sdkmcp.NewServer(
+		&sdkmcp.Implementation{Name: "locus", Version: version},
+		&sdkmcp.ServerOptions{
+			Instructions: "Scan first (codograph scan_local), then walk (analysis probe/scenario/convergence/isolate). Results cached by SHA; pass cache_key to skip rescanning.",
+		},
+	)
 	h := &handler{proto: proto, sproto: proto}
 	// Record binary mtime at startup for stale binary detection.
 	if exe, err := os.Executable(); err == nil {
@@ -231,7 +232,7 @@ func NewServer(s store.Store, workspaceRoots []string, version string, pool ...l
 
 	h.reg = reg
 
-	return bsrv, reg
+	return srv, reg
 }
 
 // scanProto is a narrow interface over the two engine methods used by
