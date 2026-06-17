@@ -127,6 +127,7 @@ var serveFlags struct {
 	transport  string
 	addr       string
 	logLevel   string
+	ingestURL  string
 }
 
 var serveCmd = &cobra.Command{
@@ -154,6 +155,9 @@ Tools: scan_project, get_dependencies, get_impact, get_coupling_table,
 			slog.LogAttrs(cmd.Context(), slog.LevelWarn,
 				"no --workspace set, using cwd; analysis tools will fail if cwd is not a git repo",
 				slog.String("cwd", cwd))
+		}
+		if serveFlags.ingestURL != "" {
+			_ = os.Setenv("LOCUS_INGEST_URL", serveFlags.ingestURL)
 		}
 		s := config.NewStore()
 		defer s.Close()
@@ -672,6 +676,7 @@ func init() {
 	serveCmd.Flags().StringVar(&serveFlags.transport, "transport", envOr("LOCUS_TRANSPORT", "stdio"), "Transport type: stdio, http ($LOCUS_TRANSPORT)")
 	serveCmd.Flags().StringVar(&serveFlags.addr, "addr", envOr("LOCUS_ADDR", ":8081"), "Listen address for http transport ($LOCUS_ADDR)")
 	serveCmd.Flags().StringVar(&serveFlags.logLevel, "log-level", "", "Log level: debug, info, warn, error (overrides $LOCUS_LOG_LEVEL)")
+	serveCmd.Flags().StringVar(&serveFlags.ingestURL, "ingest-url", envOr("LOCUS_INGEST_URL", ""), "POST scan results to this Scribe ingest URL ($LOCUS_INGEST_URL)")
 
 	codographCmd.Flags().StringVar(&codographFlags.ref, "ref", "", "Branch or tag to clone (default: repo default branch)")
 	codographCmd.Flags().BoolVar(&codographFlags.keep, "keep", false, "Keep the cloned directory after scan")

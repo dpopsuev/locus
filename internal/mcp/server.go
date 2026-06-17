@@ -192,7 +192,7 @@ func NewServer(s store.Store, workspaceRoots []string, version string, pool ...l
 	bsrv := batterymcp.NewServer("locus", version).
 		WithInstructions("Scan first (codograph scan_local), then walk (analysis probe/scenario/convergence/isolate). Results cached by SHA; pass cache_key to skip rescanning.")
 	srv := bsrv.SDK()
-	h := &handler{proto: proto, sproto: proto}
+	h := &handler{proto: proto, sproto: proto, ingestURL: os.Getenv("LOCUS_INGEST_URL")}
 	// Record binary mtime at startup for stale binary detection.
 	if exe, err := os.Executable(); err == nil {
 		h.binPath = exe
@@ -263,6 +263,8 @@ type handler struct {
 	// When analysis tools are called with no path= and no cache_key=, this is used
 	// instead of falling back to the configured workspace root (LCS-BUG-97).
 	lastScannedPath atomic.Value // stores string
+
+	ingestURL string // if set, POST scan results to this Scribe ingest endpoint
 }
 
 // --- Input structs (per-tool, only relevant fields) ---
@@ -819,6 +821,11 @@ func (h *handler) handleScanProject(ctx context.Context, req *sdkmcp.CallToolReq
 		return nil, nil, err
 	}
 	h.lastScannedPath.Store(resolvedPath)
+
+	if h.ingestURL != "" {
+		go h.postScanToScribe(ctx, v.(*sfPayload).scanResult, resolvedPath)
+	}
+
 	res, renderErr := renderScanPayload(v.(*sfPayload), in.Format)
 	return res, nil, renderErr
 }
