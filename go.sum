@@ -21,6 +21,8 @@ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/dpopsuev/battery v1.0.0 h1:W2FnzgGm799n4a5k4bK62uLX1FqFkdAGqKuTsZDbgrE=
 github.com/dpopsuev/battery v1.0.0/go.mod h1:wbm7TeW4aAKWe8qQDwonJar8vM8jrpqc5V/cjKqZ7XI=
+github.com/dpopsuev/battery v1.1.0 h1:sNTDnJQBxlf8cBrpFwNUNmpfkB0SM/RQfQNLo3mWDx8=
+github.com/dpopsuev/battery v1.1.0/go.mod h1:wbm7TeW4aAKWe8qQDwonJar8vM8jrpqc5V/cjKqZ7XI=
 github.com/dpopsuev/tako v0.0.0-20260508195727-91edf3b3bb2d h1:R9jrS4t0xRxtSK+BjIAoRdhFpBO7AvS1u87es6v4tHU=
 github.com/dpopsuev/tako v0.0.0-20260508195727-91edf3b3bb2d/go.mod h1:eul6ww9H+ytheglO+ghB9E+FMIWNmwfy2UoZl1DRu6s=
 github.com/elazarl/goproxy v1.7.2 h1:Y2o6urb7Eule09PjlhQRGNsqRfPmYI3KKQLFpCAV3+o=
