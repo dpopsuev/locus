@@ -166,8 +166,9 @@ Tools: scan_project, get_dependencies, get_impact, get_coupling_table,
 
 		srv, _ := locusmcp.NewServer(s, roots, version, pool)
 		if serveFlags.transport == "http" {
+			sdk := srv.SDK()
 			mcpHandler := sdkmcp.NewStreamableHTTPHandler(
-				func(_ *http.Request) *sdkmcp.Server { return srv },
+				func(r *http.Request) *sdkmcp.Server { return sdk },
 				nil,
 			)
 			mux := http.NewServeMux()
@@ -186,7 +187,7 @@ Tools: scan_project, get_dependencies, get_impact, get_coupling_table,
 			return server.ListenAndServe()
 		}
 		slog.LogAttrs(ctx, slog.LevelInfo, "locus server starting", slog.String(logKeyVersion, version), slog.String(logKeyTransport, "stdio"))
-		return srv.Run(ctx, &sdkmcp.StdioTransport{})
+		return srv.Serve(ctx, &sdkmcp.StdioTransport{})
 	},
 }
 
