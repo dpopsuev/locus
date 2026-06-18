@@ -62,21 +62,22 @@ func TranslateScanWithSymbols(report *oculus.ContextReport, project string) tran
 	for _, svc := range report.Architecture.Services {
 		compID := componentID(project, svc.Name)
 		for _, sym := range svc.Symbols {
-			if !sym.Exported {
-				continue
-			}
-			kind := kindCodeInterface
 			symID := symbolID(project, svc.Name, sym.Name)
+			visibility := "private"
+			if sym.Exported {
+				visibility = "public"
+			}
 			r := translate.Record{
 				ID:     symID,
-				Kind:   kind,
+				Kind:   kindCodeInterface,
 				Title:  sym.Name,
-				Labels: []string{sourceLabel, projectLabel, "symbol:" + sym.Kind.String()},
+				Labels: []string{sourceLabel, projectLabel, "symbol:" + sym.Kind.String(), "visibility:" + visibility},
 				Extra: map[string]any{
-					"ref_backend":  "locus",
-					"ref_id":       symID,
-					"symbol_kind":  sym.Kind.String(),
-					"component":    svc.Name,
+					"ref_backend": "locus",
+					"ref_id":      symID,
+					"symbol_kind": sym.Kind.String(),
+					"component":   svc.Name,
+					"exported":    sym.Exported,
 				},
 			}
 			if sym.File != "" {
