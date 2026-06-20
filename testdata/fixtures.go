@@ -25,6 +25,18 @@ func HexagonalProject() (*oculus.ContextReport, *oculus.SymbolGraph) {
 		{From: "adapter", To: "domain", Weight: 3},
 	}
 	report.ImportDepth = graph.ImportDepth(report.Architecture.Edges)
+	report.Project = &model.Project{
+		Path: "app",
+		Namespaces: []*model.Namespace{
+			{Name: "domain", ImportPath: "app/domain", Files: []*model.File{
+				{Path: "domain/repo.go", Package: "domain", Lines: 30},
+				{Path: "domain/svc.go", Package: "domain", Lines: 50},
+			}},
+			{Name: "adapter", ImportPath: "app/adapter", Files: []*model.File{
+				{Path: "adapter/pg.go", Package: "adapter", Lines: 40},
+			}},
+		},
+	}
 
 	sg := &oculus.SymbolGraph{
 		Nodes: []oculus.Symbol{

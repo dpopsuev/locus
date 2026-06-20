@@ -3,6 +3,7 @@ package scribe
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/dpopsuev/battery/translate"
@@ -77,11 +78,21 @@ func translateSymbolGraph(result *translate.Result, report *oculus.ContextReport
 	projectLabel := "project:" + project
 	pkgToComponent := buildPkgToComponent(report, project)
 
+	fileNodes := translateFiles(result, report, project, sourceLabel, projectLabel, pkgToComponent)
+
 	for _, sym := range sg.Nodes {
 		symID := symbolIDFromFQN(project, symbolFQN(sym.Package, sym.Name))
 		r := buildSymbolRecord(sym, symID, sourceLabel, projectLabel)
 		result.Records = append(result.Records, r)
 
+		if sym.File != "" {
+			if fileID, ok := fileNodes[sym.File]; ok {
+				result.Edges = append(result.Edges, translate.Edge{
+					From: fileID, Relation: "contains", To: symID,
+				})
+				continue
+			}
+		}
 		if compID, ok := pkgToComponent[sym.Package]; ok {
 			result.Edges = append(result.Edges, translate.Edge{
 				From: compID, Relation: "contains", To: symID,
@@ -98,6 +109,55 @@ func translateSymbolGraph(result *translate.Result, report *oculus.ContextReport
 			})
 		}
 	}
+}
+
+// translateFiles emits code.file records from the Project's namespace file
+// lists. Returns a map from file path to Scribe file ID for symbol→file
+// edge wiring.
+func translateFiles(result *translate.Result, report *oculus.ContextReport, project, sourceLabel, projectLabel string, pkgToComponent map[string]string) map[string]string {
+	if report.Project == nil {
+		return nil
+	}
+	fileNodes := make(map[string]string)
+	seen := make(map[string]bool)
+
+	for _, ns := range report.Project.Namespaces {
+		compID := pkgToComponent[ns.ImportPath]
+		if compID == "" {
+			compID = pkgToComponent[ns.Name]
+		}
+		for _, f := range ns.Files {
+			if seen[f.Path] {
+				continue
+			}
+			seen[f.Path] = true
+
+			fileID := fileIDFromPath(project, f.Path)
+			fileNodes[f.Path] = fileID
+
+			r := translate.Record{
+				ID:     fileID,
+				Kind:   "code.file",
+				Title:  filepath.Base(f.Path),
+				Labels: []string{sourceLabel, projectLabel},
+				Extra: map[string]any{
+					"ref_backend": "locus",
+					"ref_id":      fileID,
+					"path":        f.Path,
+					"package":     f.Package,
+					"lines":       f.Lines,
+				},
+			}
+			result.Records = append(result.Records, r)
+
+			if compID != "" {
+				result.Edges = append(result.Edges, translate.Edge{
+					From: compID, Relation: "contains", To: fileID,
+				})
+			}
+		}
+	}
+	return fileNodes
 }
 
 func buildSymbolRecord(sym oculus.Symbol, symID, sourceLabel, projectLabel string) translate.Record {
@@ -301,6 +361,17 @@ func symbolID(project, component, name string) string {
 
 func componentID(project, name string) string {
 	return fmt.Sprintf("%s/%s", project, slug(name))
+}
+
+// fileIDFromPath builds a Scribe ID for a file node.
+// Example: "service/handler.go" → "proj/service:handler.go"
+func fileIDFromPath(project, path string) string {
+	dir := filepath.Dir(path)
+	base := filepath.Base(path)
+	if dir == "." || dir == "" {
+		return fmt.Sprintf("%s/_:%s", project, slug(base))
+	}
+	return fmt.Sprintf("%s/%s:%s", project, slug(dir), slug(base))
 }
 
 func slug(s string) string {
