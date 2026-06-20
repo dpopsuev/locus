@@ -597,3 +597,34 @@ func filterEdgesFrom(edges []translate.Edge, from string) []translate.Edge {
 	}
 	return out
 }
+
+func TestTranslateScanWithSymbols_TraitAndInherits(t *testing.T) {
+	report := &oculus.ContextReport{}
+	report.Architecture.Services = []oculus.ArchService{
+		{Name: "app", Package: "app"},
+	}
+
+	sg := &oculus.SymbolGraph{
+		Nodes: []oculus.Symbol{
+			{Name: "Drawable", Package: "app", Kind: "trait", Exported: true},
+			{Name: "Clickable", Package: "app", Kind: "trait", Exported: true},
+			{Name: "Button", Package: "app", Kind: "struct", Exported: true},
+		},
+		Edges: []oculus.SymbolEdge{
+			{SourceFQN: "app.Button", TargetFQN: "app.Drawable", Kind: "implements"},
+			{SourceFQN: "app.Clickable", TargetFQN: "app.Drawable", Kind: "inherits"},
+		},
+	}
+
+	result := bridge.TranslateScanWithSymbols(report, sg, "myapp")
+
+	symbols := filterSymbols(result.Records)
+	assertRecordKind(t, symbols, "Drawable", "code.interface")
+	assertRecordKind(t, symbols, "Clickable", "code.interface")
+	assertRecordKind(t, symbols, "Button", "code.struct")
+
+	implEdges := filterEdgesByRelation(result.Edges, "implements")
+	if len(implEdges) != 2 {
+		t.Fatalf("implements edges = %d; want 2 (one implements + one inherits mapped to implements)", len(implEdges))
+	}
+}

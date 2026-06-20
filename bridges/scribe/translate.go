@@ -264,6 +264,7 @@ const (
 
 var symbolKindMap = map[string]string{
 	"interface": kindInterface,
+	"trait":     kindInterface,
 	"struct":    kindStruct,
 	"class":     kindStruct,
 	"function":  kindFunction,
@@ -282,6 +283,7 @@ var edgeKindMap = map[string]string{
 	"call":          relCalls,
 	"implements":    relImplements,
 	"extends":       relImplements,
+	"inherits":      relImplements,
 	"embeds":        relEmbeds,
 	"field_ref":     relFieldRef,
 	"goroutine":     relCalls,
