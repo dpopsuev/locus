@@ -4,8 +4,47 @@ package testdata
 
 import (
 	oculus "github.com/dpopsuev/oculus/v3"
+	"github.com/dpopsuev/oculus/v3/graph"
 	"github.com/dpopsuev/oculus/v3/model"
 )
+
+// HexagonalProject returns a fixture with both a ContextReport and a
+// SymbolGraph representing a minimal hexagonal architecture:
+//
+//	domain package: Repository (interface), Service (struct), Service.Create (method)
+//	adapter package: PgRepo (struct, implements Repository)
+//
+// Edges: implements, field_ref, call, embeds.
+func HexagonalProject() (*oculus.ContextReport, *oculus.SymbolGraph) {
+	report := &oculus.ContextReport{}
+	report.Architecture.Services = []oculus.ArchService{
+		{Name: "domain", Package: "app/domain", Language: model.LangGo, LOC: 200},
+		{Name: "adapter", Package: "app/adapter", Language: model.LangGo, LOC: 150},
+	}
+	report.Architecture.Edges = []oculus.ArchEdge{
+		{From: "adapter", To: "domain", Weight: 3},
+	}
+	report.ImportDepth = graph.ImportDepth(report.Architecture.Edges)
+
+	sg := &oculus.SymbolGraph{
+		Nodes: []oculus.Symbol{
+			{Name: "Repository", Package: "app/domain", Kind: "interface", Exported: true, File: "domain/repo.go", Line: 5},
+			{Name: "Service", Package: "app/domain", Kind: "struct", Exported: true, File: "domain/svc.go", Line: 10},
+			{Name: "Service.Create", Package: "app/domain", Kind: "method", Exported: true, File: "domain/svc.go", Line: 20,
+				ParamTypes: []string{"context.Context", "string"}, ReturnTypes: []string{"*Entity", "error"},
+				Signature: "func (s *Service) Create(ctx context.Context, name string) (*Entity, error)"},
+			{Name: "PgRepo", Package: "app/adapter", Kind: "struct", Exported: true, File: "adapter/pg.go", Line: 8},
+		},
+		Edges: []oculus.SymbolEdge{
+			{SourceFQN: "app/adapter.PgRepo", TargetFQN: "app/domain.Repository", Kind: "implements"},
+			{SourceFQN: "app/domain.Service", TargetFQN: "app/domain.Repository", Kind: "field_ref"},
+			{SourceFQN: "app/domain.Service.Create", TargetFQN: "app/adapter.PgRepo", Kind: "call"},
+			{SourceFQN: "app/domain.Service", TargetFQN: "app/domain.Repository", Kind: "embeds"},
+		},
+	}
+
+	return report, sg
+}
 
 // SmallProject returns a 3-component scan with 2 dependency edges.
 // Represents a typical small Go project: api → service → db.

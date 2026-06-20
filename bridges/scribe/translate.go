@@ -7,6 +7,7 @@ import (
 
 	"github.com/dpopsuev/battery/translate"
 	oculus "github.com/dpopsuev/oculus/v3"
+	"github.com/dpopsuev/oculus/v3/model"
 )
 
 // TranslateScan converts a Locus scan result into canonical Records + Edges.
@@ -34,6 +35,9 @@ func TranslateScan(report *oculus.ContextReport, project string) translate.Resul
 				"churn":       svc.Churn,
 			},
 		}
+		if depth, ok := report.ImportDepth[svc.Name]; ok {
+			r.Extra["layer_depth"] = depth
+		}
 		if svc.TrustZone != "" {
 			r.Labels = append(r.Labels, "zone:"+svc.TrustZone)
 		}
@@ -51,11 +55,98 @@ func TranslateScan(report *oculus.ContextReport, project string) translate.Resul
 	return result
 }
 
-// TranslateScanWithSymbols extends TranslateScan to also emit symbol-level
-// records (code.interface, code.test) linked to their parent component.
-func TranslateScanWithSymbols(report *oculus.ContextReport, project string) translate.Result {
+// TranslateScanWithSymbols extends TranslateScan with symbol-level records
+// from the SymbolGraph. When sg is non-nil, symbols and edges come from the
+// full SymbolGraph (including private symbols and inter-symbol edges).
+// When sg is nil, falls back to the exported-only symbols from ArchService.
+func TranslateScanWithSymbols(report *oculus.ContextReport, sg *oculus.SymbolGraph, project string) translate.Result {
 	result := TranslateScan(report, project)
 
+	if sg != nil {
+		translateSymbolGraph(&result, report, sg, project)
+		return result
+	}
+
+	translateArchSymbols(&result, report, project)
+	return result
+}
+
+// translateSymbolGraph emits records and edges from a full SymbolGraph.
+func translateSymbolGraph(result *translate.Result, report *oculus.ContextReport, sg *oculus.SymbolGraph, project string) {
+	sourceLabel := "source:locus"
+	projectLabel := "project:" + project
+	pkgToComponent := buildPkgToComponent(report, project)
+
+	for _, sym := range sg.Nodes {
+		symID := symbolIDFromFQN(project, symbolFQN(sym.Package, sym.Name))
+		r := buildSymbolRecord(sym, symID, sourceLabel, projectLabel)
+		result.Records = append(result.Records, r)
+
+		if compID, ok := pkgToComponent[sym.Package]; ok {
+			result.Edges = append(result.Edges, translate.Edge{
+				From: compID, Relation: "contains", To: symID,
+			})
+		}
+	}
+
+	for _, edge := range sg.Edges {
+		if rel := mapEdgeKind(edge.Kind); rel != "" {
+			result.Edges = append(result.Edges, translate.Edge{
+				From:     symbolIDFromFQN(project, edge.SourceFQN),
+				Relation: rel,
+				To:       symbolIDFromFQN(project, edge.TargetFQN),
+			})
+		}
+	}
+}
+
+func buildSymbolRecord(sym oculus.Symbol, symID, sourceLabel, projectLabel string) translate.Record {
+	visibility := "private"
+	if sym.Exported {
+		visibility = "public"
+	}
+	r := translate.Record{
+		ID:    symID,
+		Kind:  mapSymbolKind(sym.Kind),
+		Title: sym.Name,
+		Labels: []string{
+			sourceLabel, projectLabel,
+			"symbol:" + sym.Kind,
+			"visibility:" + visibility,
+		},
+		Extra: map[string]any{
+			"ref_backend": "locus",
+			"ref_id":      symID,
+			"symbol_kind": sym.Kind,
+			"package":     sym.Package,
+			"exported":    sym.Exported,
+		},
+	}
+	if sym.File != "" {
+		r.Extra["file"] = sym.File
+		r.Extra["line"] = sym.Line
+	}
+	if sym.EndLine > 0 {
+		r.Extra["end_line"] = sym.EndLine
+	}
+	if sym.Signature != "" {
+		r.Sections = append(r.Sections, translate.Section{Name: "signature", Text: sym.Signature})
+	}
+	if len(sym.ParamTypes) > 0 {
+		r.Sections = append(r.Sections, translate.Section{Name: "param_types", Text: strings.Join(sym.ParamTypes, ", ")})
+	}
+	if len(sym.ReturnTypes) > 0 {
+		r.Sections = append(r.Sections, translate.Section{Name: "return_types", Text: strings.Join(sym.ReturnTypes, ", ")})
+	}
+	if sym.ReceiverType != "" {
+		r.Extra["receiver_type"] = sym.ReceiverType
+	}
+	return r
+}
+
+// translateArchSymbols is the legacy path: emit exported-only symbols from
+// ArchService when no SymbolGraph is available.
+func translateArchSymbols(result *translate.Result, report *oculus.ContextReport, project string) {
 	sourceLabel := "source:locus"
 	projectLabel := "project:" + project
 
@@ -69,7 +160,7 @@ func TranslateScanWithSymbols(report *oculus.ContextReport, project string) tran
 			}
 			r := translate.Record{
 				ID:     symID,
-				Kind:   kindCodeInterface,
+				Kind:   mapModelSymbolKind(sym.Kind),
 				Title:  sym.Name,
 				Labels: []string{sourceLabel, projectLabel, "symbol:" + sym.Kind.String(), "visibility:" + visibility},
 				Extra: map[string]any{
@@ -97,18 +188,121 @@ func TranslateScanWithSymbols(report *oculus.ContextReport, project string) tran
 			})
 		}
 	}
-	return result
 }
 
-const kindCodeInterface = "code.interface"
+const (
+	kindInterface = "code.interface"
+	kindStruct    = "code.struct"
+	kindFunction  = "code.function"
+	kindMethod    = "code.method"
+
+	relCalls      = "calls"
+	relImplements = "implements"
+	relEmbeds     = "embeds"
+	relFieldRef   = "field_ref"
+)
+
+var symbolKindMap = map[string]string{
+	"interface": kindInterface,
+	"struct":    kindStruct,
+	"class":     kindStruct,
+	"function":  kindFunction,
+	"method":    kindMethod,
+}
+
+var modelSymbolKindMap = map[model.SymbolKind]string{
+	model.SymbolInterface: kindInterface,
+	model.SymbolStruct:    kindStruct,
+	model.SymbolClass:     kindStruct,
+	model.SymbolFunction:  kindFunction,
+	model.SymbolMethod:    kindMethod,
+}
+
+var edgeKindMap = map[string]string{
+	"call":          relCalls,
+	"implements":    relImplements,
+	"extends":       relImplements,
+	"embeds":        relEmbeds,
+	"field_ref":     relFieldRef,
+	"goroutine":     relCalls,
+	"channel_send":  relCalls,
+	"channel_recv":  relCalls,
+	"await_call":    relCalls,
+	"promise_chain": relCalls,
+	"task_spawn":    relCalls,
+}
+
+func mapSymbolKind(kind string) string {
+	if k, ok := symbolKindMap[kind]; ok {
+		return k
+	}
+	return kindFunction
+}
+
+func mapModelSymbolKind(kind model.SymbolKind) string {
+	if k, ok := modelSymbolKindMap[kind]; ok {
+		return k
+	}
+	return kindFunction
+}
+
+func mapEdgeKind(kind string) string {
+	return edgeKindMap[kind]
+}
+
+// buildPkgToComponent creates a mapping from package import path to component
+// Scribe ID, derived from the architecture services.
+func buildPkgToComponent(report *oculus.ContextReport, project string) map[string]string {
+	m := make(map[string]string)
+	for _, svc := range report.Architecture.Services {
+		if svc.Package != "" {
+			m[svc.Package] = componentID(project, svc.Name)
+		}
+		m[svc.Name] = componentID(project, svc.Name)
+	}
+	return m
+}
+
+// symbolFQN builds a fully qualified name from package and symbol name.
+func symbolFQN(pkg, name string) string {
+	name = strings.TrimPrefix(name, "*")
+	if pkg == "" {
+		return name
+	}
+	return pkg + "." + name
+}
+
+// symbolIDFromFQN normalizes a symbol FQN into a Scribe artifact ID.
+// Example: "github.com/dpopsuev/scribe/service.Protocol.Create" → "scribe/service:protocol.create"
+func symbolIDFromFQN(project, fqn string) string {
+	parts := strings.SplitN(fqn, ".", 2)
+	if len(parts) < 2 {
+		return fmt.Sprintf("%s/_:%s", project, slug(fqn))
+	}
+	pkg := parts[0]
+	name := parts[1]
+
+	pkgShort := pkg
+	if idx := strings.LastIndex(pkg, "/"); idx >= 0 {
+		prefix := strings.TrimSuffix(pkg[:idx], "/")
+		if slashIdx := strings.LastIndex(prefix, "/"); slashIdx >= 0 {
+			pkgShort = prefix[slashIdx+1:] + "/" + pkg[idx+1:]
+		} else {
+			pkgShort = pkg[idx+1:]
+		}
+	}
+
+	return fmt.Sprintf("%s/%s:%s", project, slug(pkgShort), slug(name))
+}
 
 func symbolID(project, component, name string) string {
-	comp := strings.ReplaceAll(strings.ToLower(component), " ", "-")
-	sym := strings.ReplaceAll(strings.ToLower(name), " ", "-")
-	return fmt.Sprintf("%s/%s:%s", project, comp, sym)
+	return fmt.Sprintf("%s/%s:%s", project, slug(component), slug(name))
 }
 
 func componentID(project, name string) string {
-	slug := strings.ReplaceAll(strings.ToLower(name), " ", "-")
-	return fmt.Sprintf("%s/%s", project, slug)
+	return fmt.Sprintf("%s/%s", project, slug(name))
+}
+
+func slug(s string) string {
+	return strings.ReplaceAll(strings.ToLower(s), " ", "-")
 }

@@ -8,7 +8,10 @@ import (
 )
 
 // IngestScan translates a scan result (with symbols) and POSTs to the Scribe ingest URL.
-func IngestScan(ctx context.Context, report *oculus.ContextReport, project, ingestURL string) error {
-	result := TranslateScanWithSymbols(report, project)
+// When sg is non-nil, the full SymbolGraph (including private symbols and inter-symbol
+// edges) is included. When sg is nil, only exported symbols from the architecture
+// projection are posted.
+func IngestScan(ctx context.Context, report *oculus.ContextReport, sg *oculus.SymbolGraph, project, ingestURL string) error {
+	result := TranslateScanWithSymbols(report, sg, project)
 	return scribeclient.Post(ctx, result.Records, result.Edges, "locus", ingestURL)
 }

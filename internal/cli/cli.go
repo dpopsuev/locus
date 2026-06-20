@@ -124,7 +124,7 @@ var scanCmd = &cobra.Command{
 		}
 		if scanFlags.ingestURL != "" {
 			project := filepath.Base(result.Report.Project.Path)
-			if err := scribebridge.IngestScan(cmd.Context(), result.Report, project, scanFlags.ingestURL); err != nil {
+			if err := scribebridge.IngestScan(cmd.Context(), result.Report, nil, project, scanFlags.ingestURL); err != nil {
 				return fmt.Errorf("ingest: %w", err)
 			}
 			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "ingested %d components into %s\n", len(result.Report.Architecture.Services), scanFlags.ingestURL)

@@ -1,7 +1,8 @@
 # Locus MCP Server — on-demand analysis container
 #
 #   make deploy
-#   podman run --rm -i -v /path/to/repo:/path/to/repo:rbind \
+#   podman run --rm -i --security-opt label=disable \
+#     -v /path/to/repo:/path/to/repo:rbind \
 #     locus:$(VERSION) serve --transport http --addr :8081
 
 FROM ubuntu:24.04

@@ -28,7 +28,7 @@ func TestIngestScan_PostsNDJSON(t *testing.T) {
 	defer srv.Close()
 
 	report := testdata.SmallProject()
-	err := bridge.IngestScan(context.Background(), report, "test-proj", srv.URL)
+	err := bridge.IngestScan(context.Background(), report, nil, "test-proj", srv.URL)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +56,7 @@ func TestIngestScan_MonorepoProject(t *testing.T) {
 	defer srv.Close()
 
 	report := testdata.MonorepoProject()
-	err := bridge.IngestScan(context.Background(), report, "mono", srv.URL)
+	err := bridge.IngestScan(context.Background(), report, nil, "mono", srv.URL)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -72,6 +72,7 @@ deploy: image
 			--userns=keep-id \
 			--user $(shell id -u):$(shell id -g) \
 			-p 8081:8081 \
+			--security-opt label=disable \
 			-v $(HOME):$(HOME):rbind \
 			$(IMAGE) \
 			serve --transport http --addr :8081 \

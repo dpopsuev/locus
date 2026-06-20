@@ -14,6 +14,7 @@ require (
 require (
 	github.com/dpopsuev/battery v1.5.0
 	github.com/dpopsuev/oculus/v3 v3.91.0
+	github.com/dpopsuev/scribe v0.52.0
 	github.com/dpopsuev/tako v0.0.0-20260508195727-91edf3b3bb2d
 )
 
@@ -23,7 +24,6 @@ require (
 	github.com/ProtonMail/go-crypto v1.1.6 // indirect
 	github.com/cloudflare/circl v1.6.3 // indirect
 	github.com/cyphar/filepath-securejoin v0.4.1 // indirect
-	github.com/dpopsuev/scribe v0.52.0 // indirect
 	github.com/emirpasic/gods v1.18.1 // indirect
 	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
 	github.com/go-git/go-billy/v5 v5.8.0 // indirect
