@@ -4,12 +4,18 @@ import (
 	"context"
 	"log/slog"
 	"path/filepath"
+	"time"
 
 	scribebridge "github.com/dpopsuev/locus/bridges/scribe"
 	"github.com/dpopsuev/oculus/v3/engine"
 )
 
-func (h *handler) postScanToScribe(ctx context.Context, scanResult *engine.ScanResult, path string) {
+const ingestTimeout = 120 * time.Second
+
+func (h *handler) postScanToScribe(_ context.Context, scanResult *engine.ScanResult, path string) {
+	ctx, cancel := context.WithTimeout(context.Background(), ingestTimeout)
+	defer cancel()
+
 	project := filepath.Base(path)
 
 	sg, err := h.proto.GetSymbolGraph(ctx, path)
