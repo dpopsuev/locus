@@ -13,7 +13,7 @@ require (
 
 require (
 	github.com/dpopsuev/battery v1.5.0
-	github.com/dpopsuev/oculus/v3 v3.91.0
+	github.com/dpopsuev/oculus/v3 v3.93.0
 	github.com/dpopsuev/scribe v0.52.0
 	github.com/dpopsuev/tako v0.0.0-20260508195727-91edf3b3bb2d
 )
@@ -53,5 +53,3 @@ require (
 	gonum.org/v1/gonum v0.17.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1
 )
-
-replace github.com/dpopsuev/oculus/v3 => ../oculus
