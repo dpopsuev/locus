@@ -18,7 +18,7 @@ func (h *handler) postScanToScribe(_ context.Context, scanResult *engine.ScanRes
 
 	project := filepath.Base(path)
 
-	sg, err := h.proto.GetSymbolGraph(ctx, path)
+	sg, err := h.proto.GetSymbolGraph(ctx, path, engine.SymbolGraphOpts{Quick: true})
 	if err != nil {
 		slog.WarnContext(ctx, "symbol graph unavailable, ingesting without symbols",
 			"error", err, "project", project)
