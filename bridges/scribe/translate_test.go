@@ -24,7 +24,7 @@ func TestTranslateScan_Components(t *testing.T) {
 	result := bridge.TranslateScan(report, "myapp")
 
 	assertRecordCount(t, result.Records, 2)
-	assertRecord(t, result.Records[0], "myapp/auth", "knowledge.source", "auth")
+	assertRecord(t, result.Records[0], "myapp/auth", "code.file", "auth")
 	assertExtra(t, result.Records[0], "loc", 500)
 	assertExtra(t, result.Records[0], "churn", 12)
 	assertLabel(t, result.Records[0], "source:locus")
@@ -363,7 +363,7 @@ func TestTranslateScanWithSymbols_SG_EmptySymbolGraph(t *testing.T) {
 
 	result := bridge.TranslateScanWithSymbols(report, sg, "p")
 
-	components := filterByKind(result.Records, "knowledge.source")
+	components := filterByKind(result.Records, "code.file")
 	symbols := filterSymbols(result.Records)
 	assertRecordCount(t, components, 1)
 	assertRecordCount(t, symbols, 0)
@@ -543,7 +543,7 @@ func filterByKind(records []translate.Record, kind string) []translate.Record {
 func filterSymbols(records []translate.Record) []translate.Record {
 	var out []translate.Record
 	for _, r := range records {
-		if r.Kind != "knowledge.source" {
+		if r.Kind != "code.file" {
 			out = append(out, r)
 		}
 	}

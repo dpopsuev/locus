@@ -22,7 +22,7 @@ func TranslateScan(report *oculus.ContextReport, project string) translate.Resul
 		id := componentID(project, svc.Name)
 		r := translate.Record{
 			ID:     id,
-			Kind:   "knowledge.source",
+			Kind:   "code.file",
 			Title:  svc.Name,
 			Labels: []string{sourceLabel, projectLabel},
 			Sections: []translate.Section{
