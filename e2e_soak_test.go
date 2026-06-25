@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -158,7 +159,8 @@ func TestSoak_MemorySLA(t *testing.T) {
 
 func discoverRepos(t *testing.T) []string {
 	t.Helper()
-	workspace := "/home/dpopsuev/Workspace"
+	home, _ := os.UserHomeDir()
+	workspace := filepath.Join(home, "Workspace")
 	entries, err := os.ReadDir(workspace)
 	if err != nil {
 		t.Skipf("cannot read %s: %v", workspace, err)
@@ -188,7 +190,7 @@ func startSoakContainer(t *testing.T, name string, repos []string) func() {
 
 	args := []string{"run", "-d", "--name", name,
 		"-p", "18081:8081",
-		"-v", "/home/dpopsuev:/home/dpopsuev:ro,z",
+		"-v", home+":"+home+":ro,z",
 		containerImage,
 		"serve", "--transport", "http", "--addr", ":8081",
 	}

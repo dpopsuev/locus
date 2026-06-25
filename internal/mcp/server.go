@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -459,10 +460,14 @@ func (h *handler) handleAnalysis(ctx context.Context, _ *sdkmcp.CallToolRequest,
 	ctx, cancel := context.WithTimeout(ctx, analysisTimeout())
 	defer cancel()
 
-	// LCS-BUG-97: when no path and no cache_key are provided, fall back to
-	// the last successfully scanned path rather than the configured workspace.
+	// When no path and no cache_key are provided, resolve the default project.
+	// Prefer a workspace root that is a registered (previously scanned) project
+	// over lastScannedPath, which may point to a sibling project scanned later.
+	// Fall back to lastScannedPath only when no workspace root matches (LCS-BUG-97).
 	if in.Path == "" && in.CacheKey == "" {
-		if v := h.lastScannedPath.Load(); v != nil {
+		if resolved := h.resolveDefaultProject(ctx); resolved != "" {
+			in.Path = resolved
+		} else if v := h.lastScannedPath.Load(); v != nil {
 			if p, ok := v.(string); ok && p != "" {
 				in.Path = p
 			}
@@ -899,6 +904,31 @@ func scanTimeout() time.Duration {
 		}
 	}
 	return defaultScanTimeout
+}
+
+// resolveDefaultProject picks the right scanned project when no explicit path
+// is provided. It checks workspace roots against registered (scanned) projects
+// and returns the first match. If a workspace root is inside a project
+// (e.g. CWD is a subdirectory), the enclosing project wins.
+func (h *handler) resolveDefaultProject(ctx context.Context) string {
+	status, err := h.proto.Status(ctx)
+	if err != nil || len(status.Projects) == 0 {
+		return ""
+	}
+	for _, ws := range status.Workspaces {
+		var best string
+		for _, p := range status.Projects {
+			if ws == p.Path || strings.HasPrefix(ws, p.Path+string(filepath.Separator)) {
+				if len(p.Path) > len(best) {
+					best = p.Path
+				}
+			}
+		}
+		if best != "" {
+			return best
+		}
+	}
+	return ""
 }
 
 // logAnalysisEntry records the path, SHA, and cache key for every dispatch.

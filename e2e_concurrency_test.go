@@ -43,9 +43,10 @@ func TestConcurrentContainers_HeavyScan(t *testing.T) {
 	// Use Oculus as the large fixture — ~27K LOC, 22 packages
 	repoPath := os.Getenv("HEAVY_FIXTURE")
 	if repoPath == "" {
+		home, _ := os.UserHomeDir()
 		candidates := []string{
-			"/home/dpopsuev/Workspace/oculus",
-			"/home/dpopsuev/Workspace/locus",
+			filepath.Join(home, "Workspace", "oculus"),
+			filepath.Join(home, "Workspace", "locus"),
 		}
 		for _, c := range candidates {
 			if _, err := os.Stat(filepath.Join(c, "go.mod")); err == nil {
