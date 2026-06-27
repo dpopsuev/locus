@@ -10,6 +10,8 @@ import (
 
 const maxPressureLog = 50
 
+const logKeyTotalRSSMB = "total_rss_mb"
+
 // LRUInspector is the subset of LRUStore needed by the monitor.
 type LRUInspector interface {
 	Len() int
@@ -79,6 +81,11 @@ func (m *Monitor) Stop() {
 func (m *Monitor) loop(ctx context.Context) {
 	ticker := time.NewTicker(m.cfg.MonitorInterval)
 	defer ticker.Stop()
+
+	if m.cfg.MemLimitMB <= 0 {
+		slog.WarnContext(ctx, "resource monitor: LOCUS_MEM_LIMIT_MB not set — memory pressure disabled; set it to enable automatic eviction")
+	}
+
 	for {
 		select {
 		case <-m.done:
@@ -91,7 +98,8 @@ func (m *Monitor) loop(ctx context.Context) {
 			m.latest = snap
 			m.mu.Unlock()
 
-			slog.LogAttrs(ctx, slog.LevelDebug, "resource snapshot",
+			level := m.snapshotLevel(snap)
+			slog.LogAttrs(ctx, level, "resource snapshot",
 				slog.Float64("self_rss_mb", snap.SelfRSSMB),
 				slog.Float64("total_rss_mb", snap.TotalRSSMB),
 				slog.Int("goroutines", snap.Goroutines),
@@ -106,6 +114,23 @@ func (m *Monitor) loop(ctx context.Context) {
 			}
 			m.applyPressure(snap)
 		}
+	}
+}
+
+// RSS tripwire thresholds (MB). Crossing these escalates snapshot log level.
+const (
+	rssWarnMB  = 4096  // 4 GB
+	rssCritMB  = 16384 // 16 GB
+)
+
+func (m *Monitor) snapshotLevel(snap *Snapshot) slog.Level {
+	switch {
+	case snap.TotalRSSMB >= rssCritMB:
+		return slog.LevelError
+	case snap.TotalRSSMB >= rssWarnMB:
+		return slog.LevelWarn
+	default:
+		return slog.LevelDebug
 	}
 }
 

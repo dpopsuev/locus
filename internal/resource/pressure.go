@@ -1,9 +1,17 @@
 package resource
 
-import "fmt"
+import (
+	"fmt"
+	"log/slog"
+)
 
 func (m *Monitor) applyPressure(snap *Snapshot) {
 	if m.cfg.MemLimitMB <= 0 {
+		if snap.TotalRSSMB >= rssWarnMB {
+			slog.Warn("resource pressure: would evict but LOCUS_MEM_LIMIT_MB=0 — set it to enable automatic eviction", //nolint:sloglint // no ctx available in pressure path
+				slog.Float64(logKeyTotalRSSMB, snap.TotalRSSMB),
+			)
+		}
 		return
 	}
 	limitMB := float64(m.cfg.MemLimitMB)
