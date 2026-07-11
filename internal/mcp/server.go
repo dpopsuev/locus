@@ -379,6 +379,17 @@ func (h *handler) stalenessWarning(path, cacheKey string) string {
 	return fmt.Sprintf("Warning: cached scan is stale (scan@%s, HEAD=%s). Run scan_local to refresh.\n", shaPart, head)
 }
 
+// pathFromCacheKey extracts the repo path from a cache_key of the form
+// path@sha[-intent][-file]. Uses LastIndex so intent suffixes like -full
+// do not shift the split (unlike assuming a fixed 40-char SHA).
+func pathFromCacheKey(cacheKey string) string {
+	atIdx := strings.LastIndex(cacheKey, "@")
+	if atIdx <= 0 {
+		return ""
+	}
+	return cacheKey[:atIdx]
+}
+
 // prependWarning prepends a warning string to the first text content item of
 // result. Returns a new CallToolResult; the original is not modified.
 func prependWarning(warn string, r *sdkmcp.CallToolResult) *sdkmcp.CallToolResult {
@@ -459,6 +470,16 @@ func (h *handler) handleAnalysis(ctx context.Context, _ *sdkmcp.CallToolRequest,
 	// fires before our deadline, callers still see the shorter deadline.
 	ctx, cancel := context.WithTimeout(ctx, analysisTimeout())
 	defer cancel()
+
+	// Prefer an explicit path; otherwise recover it from cache_key
+	// (path@sha[-intent][-file]). Intent suffixes like -full break the old
+	// "SHA is exactly 40 chars" parse and left Path empty — ProbeSymbol then
+	// scanned workspaces[0] (dogfood: $HOME → 20GB+ RSS).
+	if in.Path == "" && in.CacheKey != "" {
+		if p := pathFromCacheKey(in.CacheKey); p != "" {
+			in.Path = p
+		}
+	}
 
 	// When no path and no cache_key are provided, resolve the default project.
 	// Prefer a workspace root that is a registered (previously scanned) project
@@ -688,9 +709,8 @@ func (h *handler) symbolSearchFull(ctx context.Context, in *analysisInput, r *en
 	// For local scans in.Path == probe path, so this is a no-op.
 	probePath := in.Path
 	if in.CacheKey != "" {
-		// cache_key is "<path>@<sha>" — extract the path component.
-		if i := len(in.CacheKey) - 41; i > 0 && in.CacheKey[i-1] == '@' {
-			probePath = in.CacheKey[:i-1]
+		if p := pathFromCacheKey(in.CacheKey); p != "" {
+			probePath = p
 		}
 	}
 
