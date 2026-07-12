@@ -17,6 +17,7 @@ test:
 
 test-e2e:
 	go test -tags=e2e ./internal/testkit/... -count=1 -v
+	go test ./internal/mcp/ -run 'TestAXCampaign_E2E' -count=1 -timeout 180s -v
 	$(MAKE) build
 	go test -tags=e2e -run 'TestTypeScriptScan_SucceedsWithoutLanguageServer' -count=1 -v .
 	@if command -v docker >/dev/null 2>&1; then \
@@ -61,6 +62,8 @@ deploy: image
 		sed -i "s|locus:v[^ ]*|$(IMAGE)|g" "$$SERVICE"; \
 		if ! grep -q '\-\-workspace' "$$SERVICE"; then \
 			sed -i "s|--addr :8081|--addr :8081 \\\\\n\t--workspace $(WORKSPACE)|g" "$$SERVICE"; \
+		else \
+			sed -i "s|--workspace [^[:space:]\\\\]*|--workspace $(WORKSPACE)|g" "$$SERVICE"; \
 		fi; \
 		systemctl --user daemon-reload; \
 		systemctl --user restart container-locus.service; \
