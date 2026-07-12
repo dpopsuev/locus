@@ -35,7 +35,8 @@ fi
 echo "=== hot_spots (cache_key only) ==="
 HS=$(mcp 3 analysis "{\"action\":\"coupling\",\"view\":\"hot_spots\",\"top_n\":15,\"cache_key\":\"$CK\"}")
 echo "$HS" | head -c 600; echo
-echo "$HS" | grep -q '"component"' || { echo "FAIL: no hotspots"; exit 1; }
+# SSE JSON escapes quotes as \", so match component without requiring raw ".
+echo "$HS" | grep -q 'component' || { echo "FAIL: no hotspots"; exit 1; }
 
 echo "=== architecture_review ==="
 REV=$(mcp 4 analysis "{\"action\":\"preset\",\"preset\":\"architecture_review\",\"cache_key\":\"$CK\"}")
@@ -49,7 +50,7 @@ PROBE=$(mcp 5 analysis "{\"action\":\"probe\",\"symbol\":\"$SYMBOL\",\"cache_key
 ELAPSED=$(( $(date +%s) - START ))
 echo "elapsed=${ELAPSED}s"
 echo "$PROBE" | head -c 1200; echo
-echo "$PROBE" | grep -qi isError && { echo "FAIL: probe error"; exit 1; }
+echo "$PROBE" | grep -q '"isError":true' && { echo "FAIL: probe error"; exit 1; }
 [[ "$ELAPSED" -lt 10 ]] || { echo "FAIL: probe ${ELAPSED}s >= 10s"; exit 1; }
 
 echo "=== scenario ==="
@@ -58,7 +59,7 @@ SCEN=$(mcp 6 analysis "{\"action\":\"scenario\",\"symbol\":\"$SYMBOL\",\"cache_k
 ELAPSED=$(( $(date +%s) - START ))
 echo "elapsed=${ELAPSED}s"
 echo "$SCEN" | head -c 800; echo
-echo "$SCEN" | grep -qi isError && { echo "FAIL: scenario error"; exit 1; }
+echo "$SCEN" | grep -q '"isError":true' && { echo "FAIL: scenario error"; exit 1; }
 [[ "$ELAPSED" -lt 10 ]] || { echo "FAIL: scenario ${ELAPSED}s >= 10s"; exit 1; }
 
 echo "AX dogfood OK (cache_key=$CK)"
