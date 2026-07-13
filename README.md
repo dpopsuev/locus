@@ -92,6 +92,8 @@ The agent starts broad (scan), zooms into a symbol (probe), traces its context (
 | `rename` | prepareRename + WorkspaceEdit; dry-run default; `--apply` / `apply:true` writes + rebinds graph |
 | `pipelines` | Detect linear call chains (minimum length filter) |
 
+See [docs/LSP_GOTCHAS.md](docs/LSP_GOTCHAS.md) for show≠definition, rename coverage, and server quirks.
+
 ### Architecture
 
 | Action | What it does |
