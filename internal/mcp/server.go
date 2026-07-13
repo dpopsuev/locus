@@ -293,7 +293,7 @@ type codographActionInput struct {
 	Format          string   `json:"format,omitempty" jsonschema:"json or summary"`
 	Intent          string   `json:"intent,omitempty" jsonschema:"architecture|coupling|health|full"`
 	Scanner         string   `json:"scanner,omitempty" jsonschema:"auto|go|packages|rust|typescript|lsp|ctags|composite"`
-	FileGranularity bool     `json:"file_granularity,omitempty" jsonschema:"TypeScript: file-level components"`
+	FileGranularity bool     `json:"file_granularity,omitempty" jsonschema:"TypeScript/Rust: file-level components"`
 	Since           string   `json:"since,omitempty" jsonschema:"git ref for incremental scan"`
 	URL             string   `json:"url,omitempty" jsonschema:"GitHub URL (scan_remote)"`
 	Ref             string   `json:"ref,omitempty" jsonschema:"git ref (scan_remote)"`
