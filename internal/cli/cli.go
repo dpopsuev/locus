@@ -691,8 +691,74 @@ var lintCmd = &cobra.Command{
 	},
 }
 
+var navFlags struct {
+	path string
+}
+
+func newProtoWithLSP() (eng *engine.Engine, cleanup func()) {
+	resCfg := resource.LoadConfig()
+	s := config.NewStoreWithConfig(resCfg)
+	pool := lsp.NewPoolWithConfig(lsp.PoolConfig{
+		MaxActive: resCfg.LSPMaxActive,
+		TTL:       resCfg.LSPTTL,
+	})
+	eng = engine.New(s, nil, pool)
+	cleanup = func() {
+		_ = pool.Shutdown(context.Background())
+		_ = s.Close()
+	}
+	return eng, cleanup
+}
+
+var definitionCmd = &cobra.Command{
+	Use:   "definition <locator>",
+	Short: "Go-to-definition via WarmLSP",
+	Long: `Resolve a locator then call textDocument/definition.
+
+Locators: Symbol | Parent.Symbol | path:Symbol | path:line:Symbol
+
+  locus definition WarmLSP
+  locus definition engine/protocol.go:WarmLSP --path /path/to/repo`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		eng, cleanup := newProtoWithLSP()
+		defer cleanup()
+		path := navFlags.path
+		if path == "" {
+			path = "."
+		}
+		r, err := eng.GetDefinition(cmd.Context(), path, args[0])
+		if err != nil {
+			return err
+		}
+		return printJSON(r)
+	},
+}
+
+var referencesCmd = &cobra.Command{
+	Use:   "references <locator>",
+	Short: "Find references via WarmLSP",
+	Long: `Resolve a locator then call textDocument/references.
+
+  locus references WarmLSP --path /path/to/repo`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		eng, cleanup := newProtoWithLSP()
+		defer cleanup()
+		path := navFlags.path
+		if path == "" {
+			path = "."
+		}
+		r, err := eng.GetReferencesByLocator(cmd.Context(), path, args[0])
+		if err != nil {
+			return err
+		}
+		return printJSON(r)
+	},
+}
+
 func init() {
-	rootCmd.AddCommand(versionCmd, scanCmd, serveCmd, codographCmd, historyCmd, diffCmd, validateCmd, conventionsCmd, impactCmd, gapsCmd, healthCmd, diagramCmd, triageCmd, lintCmd)
+	rootCmd.AddCommand(versionCmd, scanCmd, serveCmd, codographCmd, historyCmd, diffCmd, validateCmd, conventionsCmd, impactCmd, gapsCmd, healthCmd, diagramCmd, triageCmd, lintCmd, definitionCmd, referencesCmd)
 
 	scanCmd.Flags().StringVar(&scanFlags.format, "format", formatJSON, "Output format: json, summary, md, mermaid")
 	scanCmd.Flags().StringVar(&scanFlags.scanner, "scanner", "auto", "Scanner: auto, go, packages, rust, typescript, composite, ctags, lsp")
@@ -743,6 +809,8 @@ func init() {
 	triageCmd.Flags().StringVar(&triageFlags.category, "category", "", "Show tools in a specific category")
 
 	lintCmd.Flags().StringVar(&lintFlags.preset, "preset", "full_clinic", "Analysis preset: full_clinic, code_health, architecture_review")
+	definitionCmd.Flags().StringVar(&navFlags.path, "path", "", "Workspace root (default: cwd)")
+	referencesCmd.Flags().StringVar(&navFlags.path, "path", "", "Workspace root (default: cwd)")
 }
 
 func renderReport(report *arch.ContextReport, format string) error {

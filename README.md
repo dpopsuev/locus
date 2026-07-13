@@ -86,6 +86,8 @@ The agent starts broad (scan), zooms into a symbol (probe), traces its context (
 | `symbol_graph` | Full symbol graph for a repository |
 | `symbol_search` | Search symbols by name pattern |
 | `resolve` | Resolve locator → FQN / file:line (`Symbol` \| `Parent.Symbol` \| `path:Symbol` \| `path:line:Symbol`) |
+| `definition` | Go-to-definition via WarmLSP (locator → location(s)) |
+| `references` | Find-references via WarmLSP (compact file:line list) |
 | `pipelines` | Detect linear call chains (minimum length filter) |
 
 ### Architecture

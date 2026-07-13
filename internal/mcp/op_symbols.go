@@ -12,7 +12,7 @@ func init() {
 	analysisOps = append(analysisOps,
 		opSymbolSearch, opCallees, opCallPath, opSymbolGraph,
 		opCallers, opCallersAt, opPipelines, opSymbolDiff,
-		opResolve,
+		opResolve, opDefinition, opReferences,
 	)
 }
 
@@ -27,6 +27,42 @@ var opResolve = AnalysisOp{
 			return nil, ErrLocatorRequired
 		}
 		r, err := h.proto.ResolveLocator(ctx, in.Path, in.Symbol, in.CacheKey)
+		if err != nil {
+			return nil, err
+		}
+		return jsonOp(r)
+	},
+}
+
+var opDefinition = AnalysisOp{
+	Name: ActionDefinition,
+	Run: func(ctx context.Context, h *handler, raw json.RawMessage) (*result, error) {
+		var in analysisInput
+		if err := json.Unmarshal(raw, &in); err != nil {
+			return nil, err
+		}
+		if in.Symbol == "" {
+			return nil, ErrDefinitionLocatorRequired
+		}
+		r, err := h.proto.GetDefinition(ctx, in.Path, in.Symbol, in.CacheKey)
+		if err != nil {
+			return nil, err
+		}
+		return jsonOp(r)
+	},
+}
+
+var opReferences = AnalysisOp{
+	Name: ActionReferences,
+	Run: func(ctx context.Context, h *handler, raw json.RawMessage) (*result, error) {
+		var in analysisInput
+		if err := json.Unmarshal(raw, &in); err != nil {
+			return nil, err
+		}
+		if in.Symbol == "" {
+			return nil, ErrReferencesLocatorRequired
+		}
+		r, err := h.proto.GetReferencesByLocator(ctx, in.Path, in.Symbol, in.CacheKey)
 		if err != nil {
 			return nil, err
 		}
