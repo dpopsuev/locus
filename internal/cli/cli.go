@@ -184,6 +184,10 @@ Tools: scan_project, get_dependencies, get_impact, get_coupling_table,
 
 		srv, _, eng := locusmcp.NewServer(s, roots, version, pool)
 
+		// Always-warm: background LSP warm for workspaces + recent projects.
+		projects, _ := s.ListProjects(ctx)
+		locusmcp.WarmRecentProjects(eng, locusmcp.CollectWarmPaths(roots, projects, 0), nil)
+
 		// Resource monitor — tracks RSS, LRU, pool state; applies memory pressure.
 		var lruInspector resource.LRUInspector
 		if snap, ok := s.(interface{ Len() int; Capacity() int; EvictOldest(int) int }); ok {
