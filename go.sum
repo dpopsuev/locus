@@ -21,8 +21,8 @@ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/dpopsuev/battery v1.5.0 h1:ZeVCOVGq5Drzfg+PxKGBC7RsoBntC+Y+YGe2HA6HZNU=
 github.com/dpopsuev/battery v1.5.0/go.mod h1:wbm7TeW4aAKWe8qQDwonJar8vM8jrpqc5V/cjKqZ7XI=
-github.com/dpopsuev/oculus/v3 v3.98.3 h1:VuXypSPdP0hrWpgfG74mo4mTU5PtIbyny5ucB6xE4U0=
-github.com/dpopsuev/oculus/v3 v3.98.3/go.mod h1:NVYyxhesN/Z1WPIQDPDJu9NZopWOTC+XzQ1x3aw6seA=
+github.com/dpopsuev/oculus/v3 v3.98.4 h1:Int6qV7nNh2sbytDXcdfd7vhmRM5JENuuMxJFGjMGOE=
+github.com/dpopsuev/oculus/v3 v3.98.4/go.mod h1:NVYyxhesN/Z1WPIQDPDJu9NZopWOTC+XzQ1x3aw6seA=
 github.com/dpopsuev/scribe v0.52.0 h1:ZmK54bgOPVebOZR6P2rEovKlECvb/tGpnCsLfuzfb+I=
 github.com/dpopsuev/scribe v0.52.0/go.mod h1:iZx3vg9tKJP+N8WYMp2oTszoOUaEZJ6TPatK1u7an8E=
 github.com/dpopsuev/tako v0.0.0-20260508195727-91edf3b3bb2d h1:R9jrS4t0xRxtSK+BjIAoRdhFpBO7AvS1u87es6v4tHU=

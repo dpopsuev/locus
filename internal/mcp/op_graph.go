@@ -26,7 +26,7 @@ var opProbe = AnalysisOp{
 		if in.Symbol == "" {
 			return nil, ErrSymbolRequired
 		}
-		r, err := h.proto.ProbeSymbol(ctx, in.Path, in.Symbol)
+		r, err := h.proto.ProbeSymbol(ctx, in.Path, in.Symbol, in.symbolGraphOpts())
 		if err != nil {
 			return nil, err
 		}
@@ -48,7 +48,7 @@ var opScenario = AnalysisOp{
 		if depth <= 0 {
 			depth = 10
 		}
-		r, err := h.proto.GetScenario(ctx, in.Path, in.Symbol, depth, in.Stress)
+		r, err := h.proto.GetScenario(ctx, in.Path, in.Symbol, depth, in.Stress, in.symbolGraphOpts())
 		if err != nil {
 			return nil, err
 		}
@@ -66,7 +66,7 @@ var opConvergence = AnalysisOp{
 		if len(in.Symbols) < 2 {
 			return nil, ErrConvergenceMinSymbols
 		}
-		r, err := h.proto.GetConvergence(ctx, in.Path, in.Symbols)
+		r, err := h.proto.GetConvergence(ctx, in.Path, in.Symbols, in.symbolGraphOpts())
 		if err != nil {
 			return nil, err
 		}
@@ -84,7 +84,7 @@ var opIsolate = AnalysisOp{
 		if in.Symbol == "" {
 			return nil, ErrSymbolRequired
 		}
-		r, err := h.proto.IsolateSymbol(ctx, in.Path, in.Symbol)
+		r, err := h.proto.IsolateSymbol(ctx, in.Path, in.Symbol, in.symbolGraphOpts())
 		if err != nil {
 			return nil, err
 		}
@@ -102,7 +102,7 @@ var opDiagnose = AnalysisOp{
 		if in.Symbol == "" {
 			return nil, ErrSymbolRequired
 		}
-		r, err := h.proto.Diagnose(ctx, in.Path, in.Symbol)
+		r, err := h.proto.Diagnose(ctx, in.Path, in.Symbol, in.symbolGraphOpts())
 		if err != nil {
 			return nil, err
 		}
@@ -117,7 +117,7 @@ var opIslands = AnalysisOp{
 		if err := json.Unmarshal(raw, &in); err != nil {
 			return nil, err
 		}
-		r, err := h.proto.FindIslands(ctx, in.Path, in.Symbols)
+		r, err := h.proto.FindIslands(ctx, in.Path, in.Symbols, in.symbolGraphOpts())
 		if err != nil {
 			return nil, err
 		}

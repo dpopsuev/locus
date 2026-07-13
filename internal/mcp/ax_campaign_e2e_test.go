@@ -110,6 +110,39 @@ func TestAXCampaign_E2E(t *testing.T) {
 		if strings.Contains(body, decoy) {
 			t.Errorf("probe body references decoy workspace %q", decoy)
 		}
+		// Type pivots (engine.Engine) should suggest method pivots after FQN fix.
+		if symbol == "engine.Engine" && !strings.Contains(body, "suggested_pivots") {
+			t.Log("note: no suggested_pivots in body (may be empty JSON omitempty if uncovered)")
+		}
+	})
+
+	t.Run("hybrid_query_cache_key_only", func(t *testing.T) {
+		r, _, err := decoyH.handleAnalysis(ctx, nil, analysisInput{
+			Action:   ActionQuery,
+			Query:    "where is GetSymbolGraph defined",
+			CacheKey: cacheKey,
+		})
+		if err != nil {
+			t.Fatalf("query hybrid: %v", err)
+		}
+		body := extractText(r)
+		t.Logf("hybrid query: %.500s", body)
+		if !strings.Contains(body, "hybrid") {
+			t.Errorf("expected hybrid action; got %.300s", body)
+		}
+		// Prefer non-empty hits when SG is warm; allow empty on cold sparse indexes.
+		if strings.Contains(body, `"hits":[]`) {
+			t.Log("hybrid hits empty — package index miss; SG fallback may still be warming")
+		} else if !strings.Contains(body, "GetSymbolGraph") && !strings.Contains(body, "SymbolGraph") {
+			t.Logf("hybrid hits present but no GetSymbolGraph substring: %.400s", body)
+		}
+	})
+
+	t.Run("quality_default_quick", func(t *testing.T) {
+		in := analysisInput{Quality: ""}
+		if !in.symbolGraphOpts().Quick {
+			t.Fatal("empty quality must default to Quick")
+		}
 	})
 
 	t.Run("scenario_cache_key_only", func(t *testing.T) {

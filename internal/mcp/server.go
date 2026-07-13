@@ -39,6 +39,7 @@ const (
 	logKeyEdges     = "edges"
 	logKeyCacheKey  = "cache_key"
 	logKeyCacheHit  = "cache_hit"
+	logKeyQuality   = "quality"
 )
 
 // Sentinel errors for input validation.
@@ -245,7 +246,7 @@ type scanProto interface {
 
 type handler struct {
 	proto    *engine.Engine
-	sproto   scanProto  // scan+drift; defaults to proto, replaceable in tests
+	sproto   scanProto // scan+drift; defaults to proto, replaceable in tests
 	reg      *triage.Registry
 	binStart time.Time // mtime of binary at startup, for stale detection
 	binPath  string    // path to running binary
@@ -266,6 +267,10 @@ type handler struct {
 	lastScannedPath atomic.Value // stores string
 
 	ingestURL string // if set, POST scan results to this Scribe ingest endpoint
+
+	// warmAfterScan is invoked after a successful scan when an LSP pool is
+	// configured. Tests inject a spy; production leaves it nil and uses WarmLSP.
+	warmAfterScan func(ctx context.Context, path string)
 }
 
 // --- Input structs (per-tool, only relevant fields) ---
@@ -333,6 +338,7 @@ type analysisInput struct {
 	Target    string   `json:"target,omitempty" jsonschema:"package, file path, or FQN"`
 	Content   string   `json:"content,omitempty" jsonschema:"content to write (context_write)"`
 	Intent    string   `json:"intent,omitempty" jsonschema:"natural language intent (triage)"`
+	Quality   string   `json:"quality,omitempty" jsonschema:"quick|deep — symbol graph quality; default quick"`
 }
 
 // staleBinaryWarning returns a warning string if the on-disk binary has been
@@ -557,6 +563,8 @@ func (h *handler) handleScanProject(ctx context.Context, req *sdkmcp.CallToolReq
 		return nil, nil, err
 	}
 	h.lastScannedPath.Store(resolvedPath)
+
+	h.maybeWarmAfterScan(resolvedPath)
 
 	if h.ingestURL != "" {
 		go h.postScanToScribe(ctx, v.(*sfPayload).scanResult, resolvedPath)
@@ -951,6 +959,35 @@ func (h *handler) resolveDefaultProject(ctx context.Context) string {
 	return ""
 }
 
+// maybeWarmAfterScan kicks off LSP warm for the scanned path when a pool is
+// configured. Never blocks the scan response.
+func (h *handler) maybeWarmAfterScan(path string) {
+	if path == "" || h.proto == nil || h.proto.Pool() == nil {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		if h.warmAfterScan != nil {
+			h.warmAfterScan(ctx, path)
+			return
+		}
+		if err := h.proto.WarmLSP(ctx, path); err != nil {
+			slog.LogAttrs(ctx, slog.LevelDebug, "post-scan warm skipped",
+				slog.String(logKeyPath, path), slog.Any(logKeyError, err))
+		}
+	}()
+}
+
+// symbolGraphOpts maps analysis quality= to oculus SymbolGraphOpts.
+// Default (empty/quick) is Quick; only quality=deep opts into LSP CallGraph.
+func (in *analysisInput) symbolGraphOpts() engine.SymbolGraphOpts {
+	if in != nil && strings.EqualFold(strings.TrimSpace(in.Quality), "deep") {
+		return engine.SymbolGraphOpts{Quick: false}
+	}
+	return engine.SymbolGraphOpts{Quick: true}
+}
+
 // logAnalysisEntry records the path, SHA, and cache key for every dispatch.
 // sha_resolved=false means HEAD could not be resolved — the workspace is
 // likely not a git repo and every call will trigger a cold scan.
@@ -962,6 +999,7 @@ func (h *handler) logAnalysisEntry(ctx context.Context, in *analysisInput) {
 		slog.String(logKeyPath, resolvedPath),
 		slog.String(logKeySHA, sha),
 		slog.String(logKeyCacheKey, in.CacheKey),
+		slog.String(logKeyQuality, in.Quality),
 		slog.Bool("sha_resolved", sha != ""),
 	)
 }
