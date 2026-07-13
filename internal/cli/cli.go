@@ -188,6 +188,11 @@ Tools: scan_project, get_dependencies, get_impact, get_coupling_table,
 		projects, _ := s.ListProjects(ctx)
 		locusmcp.WarmRecentProjects(eng, locusmcp.CollectWarmPaths(roots, projects, 0), nil)
 
+		watch := locusmcp.StartWorkspaceWatcher(eng, roots)
+		if watch != nil {
+			defer watch.Close()
+		}
+
 		// Resource monitor — tracks RSS, LRU, pool state; applies memory pressure.
 		var lruInspector resource.LRUInspector
 		if snap, ok := s.(interface{ Len() int; Capacity() int; EvictOldest(int) int }); ok {

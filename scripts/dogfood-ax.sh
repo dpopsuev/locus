@@ -63,4 +63,9 @@ echo "$SCEN" | head -c 800; echo
 echo "$SCEN" | grep -q '"isError":true' && { echo "FAIL: scenario error"; exit 1; }
 [[ "$ELAPSED" -lt 10 ]] || { echo "FAIL: scenario ${ELAPSED}s >= 10s"; exit 1; }
 
+echo "=== hybrid query (chunk depth) ==="
+HQ=$(mcp 7 analysis "{\"action\":\"query\",\"query\":\"where is ScanProject defined\",\"cache_key\":\"$CK\"}")
+echo "$HQ" | head -c 1000; echo
+echo "$HQ" | grep -qi 'ScanProject\|hybrid\|chunk\|protocol.go' || { echo "FAIL: hybrid query miss"; exit 1; }
+
 echo "AX dogfood OK (cache_key=$CK)"
