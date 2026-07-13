@@ -119,22 +119,61 @@ func TestAXCampaign_E2E(t *testing.T) {
 	t.Run("hybrid_query_cache_key_only", func(t *testing.T) {
 		r, _, err := decoyH.handleAnalysis(ctx, nil, analysisInput{
 			Action:   ActionQuery,
-			Query:    "where is GetSymbolGraph defined",
+			Query:    "where is auth handled",
 			CacheKey: cacheKey,
 		})
 		if err != nil {
 			t.Fatalf("query hybrid: %v", err)
 		}
 		body := extractText(r)
-		t.Logf("hybrid query: %.500s", body)
+		t.Logf("hybrid auth query: %.500s", body)
 		if !strings.Contains(body, "hybrid") {
 			t.Errorf("expected hybrid action; got %.300s", body)
 		}
-		// Prefer non-empty hits when SG is warm; allow empty on cold sparse indexes.
 		if strings.Contains(body, `"hits":[]`) {
 			t.Log("hybrid hits empty — package index miss; SG fallback may still be warming")
-		} else if !strings.Contains(body, "GetSymbolGraph") && !strings.Contains(body, "SymbolGraph") {
-			t.Logf("hybrid hits present but no GetSymbolGraph substring: %.400s", body)
+		} else if !strings.Contains(strings.ToLower(body), "auth") {
+			t.Logf("hybrid hits present but no auth substring: %.400s", body)
+		}
+	})
+
+	t.Run("complexity_hints_cache_key_only", func(t *testing.T) {
+		r, _, err := decoyH.handleAnalysis(ctx, nil, analysisInput{
+			Action:   ActionComplexityHints,
+			TopN:     10,
+			CacheKey: cacheKey,
+		})
+		if err != nil {
+			t.Fatalf("complexity_hints: %v", err)
+		}
+		body := extractText(r)
+		t.Logf("complexity_hints: %.400s", body)
+		if !strings.Contains(body, "disclaimer") && !strings.Contains(body, "heuristic") {
+			t.Errorf("expected disclaimer; got %.300s", body)
+		}
+	})
+
+	t.Run("taint_heuristic", func(t *testing.T) {
+		fixDir := filepath.Join(dir, "testdata", "taintfix")
+		if _, err := os.Stat(fixDir); err != nil {
+			t.Skip("no testdata/taintfix under fixture")
+		}
+		r, _, err := decoyH.handleAnalysis(ctx, nil, analysisInput{
+			Action: ActionTaint,
+			Path:   fixDir,
+			From:   "Source",
+			To:     "Sink",
+		})
+		if err != nil {
+			t.Fatalf("taint: %v", err)
+		}
+		body := extractText(r)
+		t.Logf("taint: %.400s", body)
+		if !strings.Contains(body, "heuristic") && !strings.Contains(body, "federated") {
+			t.Errorf("expected engine field; got %.300s", body)
+		}
+		if !strings.Contains(body, "disclaimer") {
+			t.Errorf("expected disclaimer; got %.300s", body)
 		}
 	})
 

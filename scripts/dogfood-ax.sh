@@ -63,9 +63,35 @@ echo "$SCEN" | head -c 800; echo
 echo "$SCEN" | grep -q '"isError":true' && { echo "FAIL: scenario error"; exit 1; }
 [[ "$ELAPSED" -lt 10 ]] || { echo "FAIL: scenario ${ELAPSED}s >= 10s"; exit 1; }
 
-echo "=== hybrid query (chunk depth) ==="
-HQ=$(mcp 7 analysis "{\"action\":\"query\",\"query\":\"where is ScanProject defined\",\"cache_key\":\"$CK\"}")
+echo "=== hybrid query (auth / chunk) ==="
+HQ=$(mcp 7 analysis "{\"action\":\"query\",\"query\":\"where is auth handled\",\"cache_key\":\"$CK\"}")
 echo "$HQ" | head -c 1000; echo
-echo "$HQ" | grep -qi 'ScanProject\|hybrid\|chunk\|protocol.go' || { echo "FAIL: hybrid query miss"; exit 1; }
+echo "$HQ" | grep -qi 'auth\|hybrid\|chunk\|Authenticate\|Token\|Login\|protocol.go\|engine' || { echo "FAIL: hybrid auth query miss"; exit 1; }
+# Prefer chunk-level hit signal when present (not whole-package dump).
+echo "$HQ" | grep -qi 'chunk\|HybridHit\|path.*\.go' || echo "WARN: no explicit chunk field (engine may still have hit)"
+
+echo "=== complexity_hints ==="
+CH=$(mcp 8 analysis "{\"action\":\"complexity_hints\",\"top_n\":10,\"cache_key\":\"$CK\"}")
+echo "$CH" | head -c 800; echo
+echo "$CH" | grep -qi 'disclaimer\|heuristic\|hot_spots\|complexity' || { echo "FAIL: complexity_hints miss"; exit 1; }
+
+echo "=== taint (heuristic) ==="
+TAINT_SRC="${AX_TAINT_SOURCE:-Source}"
+TAINT_SINK="${AX_TAINT_SINK:-Sink}"
+TAINT_PATH="${AX_TAINT_PATH:-}"
+if [[ -z "$TAINT_PATH" ]]; then
+  # Prefer fixture module if present; else probe oculus Engine call chain.
+  FIX="$REPO/testdata/taintfix"
+  if [[ -d "$FIX" ]]; then
+    TAINT_PATH="$FIX"
+  else
+    TAINT_PATH="$REPO"
+    TAINT_SRC="${AX_TAINT_SOURCE:-ScanProject}"
+    TAINT_SINK="${AX_TAINT_SINK:-getOrScan}"
+  fi
+fi
+TN=$(mcp 9 analysis "{\"action\":\"taint\",\"from\":\"$TAINT_SRC\",\"to\":\"$TAINT_SINK\",\"path\":\"$TAINT_PATH\",\"cache_key\":\"$CK\"}")
+echo "$TN" | head -c 800; echo
+echo "$TN" | grep -qi 'heuristic\|federated\|disclaimer' || { echo "FAIL: taint miss"; exit 1; }
 
 echo "AX dogfood OK (cache_key=$CK)"

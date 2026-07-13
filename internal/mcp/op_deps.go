@@ -10,6 +10,7 @@ import (
 func init() {
 	analysisOps = append(analysisOps,
 		opDeps, opImpact, opCoupling, opCycles, opViolations, opRiskScores,
+		opComplexityHints, opTaint,
 	)
 }
 
@@ -131,6 +132,46 @@ var opRiskScores = AnalysisOp{
 			return nil, err
 		}
 		r, err := h.proto.GetRiskScores(ctx, in.Path, in.CacheKey)
+		if err != nil {
+			return nil, err
+		}
+		return jsonOp(r)
+	},
+}
+
+var opComplexityHints = AnalysisOp{
+	Name: ActionComplexityHints,
+	Run: func(ctx context.Context, h *handler, raw json.RawMessage) (*result, error) {
+		var in analysisInput
+		if err := json.Unmarshal(raw, &in); err != nil {
+			return nil, err
+		}
+		r, err := h.proto.GetComplexityHints(ctx, in.Path, in.TopN, in.CacheKey)
+		if err != nil {
+			return nil, err
+		}
+		return jsonOp(r)
+	},
+}
+
+var opTaint = AnalysisOp{
+	Name: ActionTaint,
+	Run: func(ctx context.Context, h *handler, raw json.RawMessage) (*result, error) {
+		var in analysisInput
+		if err := json.Unmarshal(raw, &in); err != nil {
+			return nil, err
+		}
+		source, sink := in.From, in.To
+		if source == "" {
+			source = in.Symbol
+		}
+		if sink == "" {
+			sink = in.Query
+		}
+		if source == "" || sink == "" {
+			return nil, ErrTaintFromToRequired
+		}
+		r, err := h.proto.TaintQuery(ctx, in.Path, source, sink, in.CacheKey)
 		if err != nil {
 			return nil, err
 		}

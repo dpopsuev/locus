@@ -57,6 +57,7 @@ var (
 	ErrUnknownContextAction   = errors.New("unknown context action")
 	ErrQueryRequired          = errors.New("symbol_search requires a non-empty symbol or file; provide symbol= (name pattern) or file= (absolute path)")
 	ErrCallersAtFileRequired  = errors.New("callers_at requires file=")
+	ErrTaintFromToRequired    = errors.New("taint requires from/to (source/sink)")
 )
 
 // defaultAnalysisTimeout caps every analysis dispatch.
@@ -130,6 +131,8 @@ const (
 	ActionContextRead  = "context_read"
 	ActionContextWrite = "context_write"
 	ActionTriage       = "triage"
+	ActionComplexityHints = "complexity_hints"
+	ActionTaint           = "taint"
 )
 
 // Coupling view names.
@@ -304,7 +307,7 @@ type codographActionInput struct {
 }
 
 type analysisInput struct {
-	Action    string   `json:"action" jsonschema:"required,deps|impact|coupling|cycles|violations|callers|callers_at|component|search|query|preset|scan_diff|risk_scores|symbol_search|callees|call_path|symbol_graph|pipelines|mesh|probe|scenario|convergence|isolate|diagnose|islands|explain_edge|symbol_diff|intra_deps|intra_coupling|type_usages|book|context_read|context_write|triage"`
+	Action    string   `json:"action" jsonschema:"required,deps|impact|coupling|cycles|violations|callers|callers_at|component|search|query|preset|scan_diff|risk_scores|symbol_search|callees|call_path|symbol_graph|pipelines|mesh|probe|scenario|convergence|isolate|diagnose|islands|explain_edge|symbol_diff|intra_deps|intra_coupling|type_usages|book|context_read|context_write|triage|complexity_hints|taint"`
 	Symbols   []string `json:"symbols,omitempty" jsonschema:"FQNs for convergence"`
 	Stress    bool     `json:"stress,omitempty" jsonschema:"enrich scenario nodes with fan-out"`
 	Path      string   `json:"path,omitempty"`
