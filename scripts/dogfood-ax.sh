@@ -22,7 +22,7 @@ mcp() {
 }
 
 echo "=== status ==="
-mcp 1 codograph '{"action":"status"}' | head -c 400; echo
+mcp 1 codograph '{"action":"status"}' | head -c 400 || true; echo
 
 echo "=== scan_local $REPO ==="
 SCAN=$(mcp 2 codograph "{\"action\":\"scan_local\",\"path\":\"$REPO\",\"intent\":\"full\"}")
