@@ -12,7 +12,26 @@ func init() {
 	analysisOps = append(analysisOps,
 		opSymbolSearch, opCallees, opCallPath, opSymbolGraph,
 		opCallers, opCallersAt, opPipelines, opSymbolDiff,
+		opResolve,
 	)
+}
+
+var opResolve = AnalysisOp{
+	Name: ActionResolve,
+	Run: func(ctx context.Context, h *handler, raw json.RawMessage) (*result, error) {
+		var in analysisInput
+		if err := json.Unmarshal(raw, &in); err != nil {
+			return nil, err
+		}
+		if in.Symbol == "" {
+			return nil, ErrLocatorRequired
+		}
+		r, err := h.proto.ResolveLocator(ctx, in.Path, in.Symbol, in.CacheKey)
+		if err != nil {
+			return nil, err
+		}
+		return jsonOp(r)
+	},
 }
 
 var opSymbolSearch = AnalysisOp{

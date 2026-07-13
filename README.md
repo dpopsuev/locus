@@ -85,6 +85,7 @@ The agent starts broad (scan), zooms into a symbol (probe), traces its context (
 | `call_path` | Path between two symbols in the call graph |
 | `symbol_graph` | Full symbol graph for a repository |
 | `symbol_search` | Search symbols by name pattern |
+| `resolve` | Resolve locator → FQN / file:line (`Symbol` \| `Parent.Symbol` \| `path:Symbol` \| `path:line:Symbol`) |
 | `pipelines` | Detect linear call chains (minimum length filter) |
 
 ### Architecture
