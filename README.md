@@ -89,6 +89,7 @@ The agent starts broad (scan), zooms into a symbol (probe), traces its context (
 | `definition` | Go-to-definition via WarmLSP (locator → location(s)) |
 | `references` | Find-references via WarmLSP (compact file:line list) |
 | `show` | documentSymbol body slice + outline (**not** definition) |
+| `rename` | prepareRename + WorkspaceEdit; dry-run default; `--apply` / `apply:true` writes + rebinds graph |
 | `pipelines` | Detect linear call chains (minimum length filter) |
 
 ### Architecture

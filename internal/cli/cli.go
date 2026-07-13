@@ -692,7 +692,8 @@ var lintCmd = &cobra.Command{
 }
 
 var navFlags struct {
-	path string
+	path  string
+	apply bool
 }
 
 func newProtoWithLSP() (eng *engine.Engine, cleanup func()) {
@@ -785,8 +786,34 @@ Locators: Symbol | Parent.Symbol | path:Symbol | path:line:Symbol
 	},
 }
 
+var renameCmd = &cobra.Command{
+	Use:   "rename <locator> <newName>",
+	Short: "Rename symbol via WarmLSP (dry-run by default)",
+	Long: `Resolve a locator, prepareRename, probe references, then request rename.
+
+Default is dry-run (prints WorkspaceEdit + coverage gate). Pass --apply to
+write edits and rebind the graph (MarkDirty + SG flush).
+
+  locus rename WarmLSP HotLSP --path /path/to/repo
+  locus rename pkg/a.go:Hello Howdy --apply`,
+	Args: cobra.ExactArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		eng, cleanup := newProtoWithLSP()
+		defer cleanup()
+		path := navFlags.path
+		if path == "" {
+			path = "."
+		}
+		r, err := eng.GetRename(cmd.Context(), path, args[0], args[1], engine.RenameOpts{Apply: navFlags.apply})
+		if err != nil {
+			return err
+		}
+		return printJSON(r)
+	},
+}
+
 func init() {
-	rootCmd.AddCommand(versionCmd, scanCmd, serveCmd, codographCmd, historyCmd, diffCmd, validateCmd, conventionsCmd, impactCmd, gapsCmd, healthCmd, diagramCmd, triageCmd, lintCmd, definitionCmd, referencesCmd, showCmd)
+	rootCmd.AddCommand(versionCmd, scanCmd, serveCmd, codographCmd, historyCmd, diffCmd, validateCmd, conventionsCmd, impactCmd, gapsCmd, healthCmd, diagramCmd, triageCmd, lintCmd, definitionCmd, referencesCmd, showCmd, renameCmd)
 
 	scanCmd.Flags().StringVar(&scanFlags.format, "format", formatJSON, "Output format: json, summary, md, mermaid")
 	scanCmd.Flags().StringVar(&scanFlags.scanner, "scanner", "auto", "Scanner: auto, go, packages, rust, typescript, composite, ctags, lsp")
@@ -840,6 +867,8 @@ func init() {
 	definitionCmd.Flags().StringVar(&navFlags.path, "path", "", "Workspace root (default: cwd)")
 	referencesCmd.Flags().StringVar(&navFlags.path, "path", "", "Workspace root (default: cwd)")
 	showCmd.Flags().StringVar(&navFlags.path, "path", "", "Workspace root (default: cwd)")
+	renameCmd.Flags().StringVar(&navFlags.path, "path", "", "Workspace root (default: cwd)")
+	renameCmd.Flags().BoolVar(&navFlags.apply, "apply", false, "Write WorkspaceEdit (default: dry-run)")
 }
 
 func renderReport(report *arch.ContextReport, format string) error {

@@ -38,6 +38,20 @@ func TestOpShow_EmptyRejected(t *testing.T) {
 	}
 }
 
+func TestOpRename_EmptyRejected(t *testing.T) {
+	h := newHandlerWithWorkspace(t, t.TempDir())
+	raw, _ := json.Marshal(analysisInput{Action: ActionRename, Symbol: "X"})
+	_, err := opRename.Run(context.Background(), h, raw)
+	if !errors.Is(err, ErrRenameNewNameRequired) {
+		t.Fatalf("got %v", err)
+	}
+	raw, _ = json.Marshal(analysisInput{Action: ActionRename, NewName: "Y"})
+	_, err = opRename.Run(context.Background(), h, raw)
+	if !errors.Is(err, ErrRenameLocatorRequired) {
+		t.Fatalf("got %v", err)
+	}
+}
+
 func TestOpDefinition_AfterScan_AmbiguousOrHit(t *testing.T) {
 	dir := t.TempDir()
 	mustWrite := func(rel, body string) {
@@ -86,6 +100,16 @@ func TestOpDefinition_AfterScan_AmbiguousOrHit(t *testing.T) {
 		t.Fatalf("unexpected show: %s", res.Text)
 	}
 	t.Logf("show: %s", res.Text)
+
+	raw, _ = json.Marshal(analysisInput{Action: ActionRename, Path: dir, Symbol: "pkg/hello.go:Hello", NewName: "Howdy"})
+	res, err = opRename.Run(ctx, h, raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(res.Text, "Howdy") && !strings.Contains(res.Text, "rename") && !strings.Contains(res.Text, "unavailable") {
+		t.Fatalf("unexpected rename: %s", res.Text)
+	}
+	t.Logf("rename: %s", res.Text)
 }
 
 func gitInitNav(t *testing.T, dir string) {

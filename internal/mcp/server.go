@@ -63,6 +63,8 @@ var (
 	ErrDefinitionLocatorRequired = errors.New("definition requires symbol= locator")
 	ErrReferencesLocatorRequired = errors.New("references requires symbol= locator")
 	ErrShowLocatorRequired       = errors.New("show requires symbol= locator")
+	ErrRenameLocatorRequired     = errors.New("rename requires symbol= locator")
+	ErrRenameNewNameRequired     = errors.New("rename requires new_name")
 )
 
 // defaultAnalysisTimeout caps every analysis dispatch.
@@ -142,6 +144,7 @@ const (
 	ActionDefinition      = "definition"
 	ActionReferences      = "references"
 	ActionShow            = "show"
+	ActionRename          = "rename"
 )
 
 // Coupling view names.
@@ -316,13 +319,15 @@ type codographActionInput struct {
 }
 
 type analysisInput struct {
-	Action    string   `json:"action" jsonschema:"required,deps|impact|coupling|cycles|violations|callers|callers_at|component|search|query|preset|scan_diff|risk_scores|symbol_search|callees|call_path|symbol_graph|pipelines|mesh|probe|scenario|convergence|isolate|diagnose|islands|explain_edge|symbol_diff|intra_deps|intra_coupling|type_usages|book|context_read|context_write|triage|complexity_hints|taint|resolve|definition|references|show"`
+	Action    string   `json:"action" jsonschema:"required,deps|impact|coupling|cycles|violations|callers|callers_at|component|search|query|preset|scan_diff|risk_scores|symbol_search|callees|call_path|symbol_graph|pipelines|mesh|probe|scenario|convergence|isolate|diagnose|islands|explain_edge|symbol_diff|intra_deps|intra_coupling|type_usages|book|context_read|context_write|triage|complexity_hints|taint|resolve|definition|references|show|rename"`
 	Symbols   []string `json:"symbols,omitempty" jsonschema:"FQNs for convergence"`
 	Stress    bool     `json:"stress,omitempty" jsonschema:"enrich scenario nodes with fan-out"`
 	Path      string   `json:"path,omitempty"`
 	CacheKey  string   `json:"cache_key,omitempty" jsonschema:"cache key from scan_remote"`
 	Component string   `json:"component,omitempty"`
-	Symbol    string   `json:"symbol,omitempty" jsonschema:"name pattern (callers/symbol_search); locator for resolve/definition/references/show"`
+	Symbol    string   `json:"symbol,omitempty" jsonschema:"name pattern (callers/symbol_search); locator for resolve/definition/references/show/rename"`
+	NewName   string   `json:"new_name,omitempty" jsonschema:"new identifier for rename"`
+	Apply     bool     `json:"apply,omitempty" jsonschema:"rename: write WorkspaceEdit (default dry-run)"`
 	SortBy    string   `json:"sort_by,omitempty"`
 	TopN      int      `json:"top_n,omitempty"`
 	View      string   `json:"view,omitempty" jsonschema:"hot_spots|edges"`

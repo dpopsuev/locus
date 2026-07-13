@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/dpopsuev/oculus/v3/engine"
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -12,7 +13,7 @@ func init() {
 	analysisOps = append(analysisOps,
 		opSymbolSearch, opCallees, opCallPath, opSymbolGraph,
 		opCallers, opCallersAt, opPipelines, opSymbolDiff,
-		opResolve, opDefinition, opReferences, opShow,
+		opResolve, opDefinition, opReferences, opShow, opRename,
 	)
 }
 
@@ -81,6 +82,27 @@ var opShow = AnalysisOp{
 			return nil, ErrShowLocatorRequired
 		}
 		r, err := h.proto.GetShow(ctx, in.Path, in.Symbol, in.CacheKey)
+		if err != nil {
+			return nil, err
+		}
+		return jsonOp(r)
+	},
+}
+
+var opRename = AnalysisOp{
+	Name: ActionRename,
+	Run: func(ctx context.Context, h *handler, raw json.RawMessage) (*result, error) {
+		var in analysisInput
+		if err := json.Unmarshal(raw, &in); err != nil {
+			return nil, err
+		}
+		if in.Symbol == "" {
+			return nil, ErrRenameLocatorRequired
+		}
+		if in.NewName == "" {
+			return nil, ErrRenameNewNameRequired
+		}
+		r, err := h.proto.GetRename(ctx, in.Path, in.Symbol, in.NewName, engine.RenameOpts{Apply: in.Apply}, in.CacheKey)
 		if err != nil {
 			return nil, err
 		}
