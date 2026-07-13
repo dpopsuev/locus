@@ -23,6 +23,7 @@ import (
 	diagramcore "github.com/dpopsuev/oculus/v3/diagram/core"
 	"github.com/dpopsuev/oculus/v3/engine"
 	"github.com/dpopsuev/oculus/v3/lsp"
+	"github.com/dpopsuev/oculus/v3/port"
 	"github.com/dpopsuev/oculus/v3/triage"
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -944,28 +945,48 @@ func scanTimeout() time.Duration {
 }
 
 // resolveDefaultProject picks the right scanned project when no explicit path
-// is provided. It checks workspace roots against registered (scanned) projects
-// and returns the first match. If a workspace root is inside a project
-// (e.g. CWD is a subdirectory), the enclosing project wins.
+// is provided.
+//
+// Order:
+//  1. Configured workspace roots that are (or live inside) a registered project
+//  2. Process CWD when it lives inside a registered project (pnpm/CWD-shift case:
+//     parent workspace matches nothing, but the shell is deep under alef)
+//
+// lastScannedPath is applied by the caller only when this returns empty.
 func (h *handler) resolveDefaultProject(ctx context.Context) string {
 	status, err := h.proto.Status(ctx)
 	if err != nil || len(status.Projects) == 0 {
 		return ""
 	}
 	for _, ws := range status.Workspaces {
-		var best string
-		for _, p := range status.Projects {
-			if ws == p.Path || strings.HasPrefix(ws, p.Path+string(filepath.Separator)) {
-				if len(p.Path) > len(best) {
-					best = p.Path
-				}
-			}
-		}
-		if best != "" {
+		if best := enclosingProject(ws, status.Projects); best != "" {
 			return best
 		}
 	}
+	if cwd, err := os.Getwd(); err == nil {
+		if abs, err := filepath.Abs(cwd); err == nil {
+			if best := enclosingProject(abs, status.Projects); best != "" {
+				return best
+			}
+		}
+	}
 	return ""
+}
+
+// enclosingProject returns the registered project whose path is equal to dir
+// or an ancestor of dir. Longest (most specific) match wins.
+func enclosingProject(dir string, projects []port.ProjectInfo) string {
+	dir = filepath.Clean(dir)
+	var best string
+	for _, p := range projects {
+		root := filepath.Clean(p.Path)
+		if dir == root || strings.HasPrefix(dir, root+string(filepath.Separator)) {
+			if len(root) > len(best) {
+				best = root
+			}
+		}
+	}
+	return best
 }
 
 // maybeWarmAfterScan kicks off LSP warm for the scanned path when a pool is
