@@ -31,7 +31,7 @@ echo "CK=$CK"
 if [[ -z "$CK" ]]; then
   echo "FAIL: no cache_key"; echo "$SCAN" | head -c 800; exit 1
 fi
-echo "$SCAN" | grep -q 'merkle_root' || echo "WARN: merkle_root not in scan summary (ok if format=summary)"
+echo "$SCAN" | grep -q 'merkle_root' || { echo "FAIL: merkle_root missing from scan summary"; exit 1; }
 
 echo "=== hot_spots (cache_key only) ==="
 HS=$(mcp 3 analysis "{\"action\":\"coupling\",\"view\":\"hot_spots\",\"top_n\":15,\"cache_key\":\"$CK\"}")
