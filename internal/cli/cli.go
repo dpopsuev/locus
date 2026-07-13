@@ -757,8 +757,36 @@ var referencesCmd = &cobra.Command{
 	},
 }
 
+var showCmd = &cobra.Command{
+	Use:   "show <locator>",
+	Short: "Show symbol body via documentSymbol (not definition)",
+	Long: `Resolve a locator then return a documentSymbol-backed body slice.
+
+Distinct from definition: show returns source body + outline; definition
+returns type-accurate jump location(s).
+
+Locators: Symbol | Parent.Symbol | path:Symbol | path:line:Symbol
+
+  locus show WarmLSP
+  locus show engine/protocol.go:WarmLSP --path /path/to/repo`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		eng, cleanup := newProtoWithLSP()
+		defer cleanup()
+		path := navFlags.path
+		if path == "" {
+			path = "."
+		}
+		r, err := eng.GetShow(cmd.Context(), path, args[0])
+		if err != nil {
+			return err
+		}
+		return printJSON(r)
+	},
+}
+
 func init() {
-	rootCmd.AddCommand(versionCmd, scanCmd, serveCmd, codographCmd, historyCmd, diffCmd, validateCmd, conventionsCmd, impactCmd, gapsCmd, healthCmd, diagramCmd, triageCmd, lintCmd, definitionCmd, referencesCmd)
+	rootCmd.AddCommand(versionCmd, scanCmd, serveCmd, codographCmd, historyCmd, diffCmd, validateCmd, conventionsCmd, impactCmd, gapsCmd, healthCmd, diagramCmd, triageCmd, lintCmd, definitionCmd, referencesCmd, showCmd)
 
 	scanCmd.Flags().StringVar(&scanFlags.format, "format", formatJSON, "Output format: json, summary, md, mermaid")
 	scanCmd.Flags().StringVar(&scanFlags.scanner, "scanner", "auto", "Scanner: auto, go, packages, rust, typescript, composite, ctags, lsp")
@@ -811,6 +839,7 @@ func init() {
 	lintCmd.Flags().StringVar(&lintFlags.preset, "preset", "full_clinic", "Analysis preset: full_clinic, code_health, architecture_review")
 	definitionCmd.Flags().StringVar(&navFlags.path, "path", "", "Workspace root (default: cwd)")
 	referencesCmd.Flags().StringVar(&navFlags.path, "path", "", "Workspace root (default: cwd)")
+	showCmd.Flags().StringVar(&navFlags.path, "path", "", "Workspace root (default: cwd)")
 }
 
 func renderReport(report *arch.ContextReport, format string) error {

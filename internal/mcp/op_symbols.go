@@ -12,7 +12,7 @@ func init() {
 	analysisOps = append(analysisOps,
 		opSymbolSearch, opCallees, opCallPath, opSymbolGraph,
 		opCallers, opCallersAt, opPipelines, opSymbolDiff,
-		opResolve, opDefinition, opReferences,
+		opResolve, opDefinition, opReferences, opShow,
 	)
 }
 
@@ -63,6 +63,24 @@ var opReferences = AnalysisOp{
 			return nil, ErrReferencesLocatorRequired
 		}
 		r, err := h.proto.GetReferencesByLocator(ctx, in.Path, in.Symbol, in.CacheKey)
+		if err != nil {
+			return nil, err
+		}
+		return jsonOp(r)
+	},
+}
+
+var opShow = AnalysisOp{
+	Name: ActionShow,
+	Run: func(ctx context.Context, h *handler, raw json.RawMessage) (*result, error) {
+		var in analysisInput
+		if err := json.Unmarshal(raw, &in); err != nil {
+			return nil, err
+		}
+		if in.Symbol == "" {
+			return nil, ErrShowLocatorRequired
+		}
+		r, err := h.proto.GetShow(ctx, in.Path, in.Symbol, in.CacheKey)
 		if err != nil {
 			return nil, err
 		}

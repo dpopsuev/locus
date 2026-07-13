@@ -29,6 +29,15 @@ func TestOpReferences_EmptyRejected(t *testing.T) {
 	}
 }
 
+func TestOpShow_EmptyRejected(t *testing.T) {
+	h := newHandlerWithWorkspace(t, t.TempDir())
+	raw, _ := json.Marshal(analysisInput{Action: ActionShow})
+	_, err := opShow.Run(context.Background(), h, raw)
+	if !errors.Is(err, ErrShowLocatorRequired) {
+		t.Fatalf("got %v", err)
+	}
+}
+
 func TestOpDefinition_AfterScan_AmbiguousOrHit(t *testing.T) {
 	dir := t.TempDir()
 	mustWrite := func(rel, body string) {
@@ -67,6 +76,16 @@ func TestOpDefinition_AfterScan_AmbiguousOrHit(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Logf("references: %s", res.Text)
+
+	raw, _ = json.Marshal(analysisInput{Action: ActionShow, Path: dir, Symbol: "pkg/hello.go:Hello"})
+	res, err = opShow.Run(ctx, h, raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(res.Text, "Hello") && !strings.Contains(res.Text, "show") && !strings.Contains(res.Text, "unavailable") {
+		t.Fatalf("unexpected show: %s", res.Text)
+	}
+	t.Logf("show: %s", res.Text)
 }
 
 func gitInitNav(t *testing.T, dir string) {
