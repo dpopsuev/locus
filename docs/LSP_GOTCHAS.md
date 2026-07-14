@@ -26,6 +26,13 @@ it is operational knowledge for agents and humans, not graph structure.
 - Parent workspace + CWD under a sibling project: default project binding uses
   process CWD when workspace roots miss — still pass `path=` / `cache_key=`
   when you know the target.
+- **Capacity:** default `MaxActive=3` (`LOCUS_LSP_MAX_ACTIVE`). When full, the
+  pool **evicts the LRU** idle server so a new workspace can be admitted
+  (admit-time eviction). Do not restart the container just to clear
+  `lsp pool: at capacity` after multi-repo dogfood — retry once; if it still
+  fails, check for stuck dead servers or raise `LOCUS_LSP_MAX_ACTIVE`.
+- Idle TTL reaping still runs (default 30m) for long-idle cleanup; eviction on
+  admit is what makes serial multi-repo sessions work.
 
 ## Rename coverage gate
 
@@ -51,12 +58,19 @@ it is operational knowledge for agents and humans, not graph structure.
   pool (`locus serve`) over one-shot CLI for large crates.
 - `file_granularity` scans are per-`.rs` components — locators should use
   concrete paths, not crate package names alone.
+- **Container image:** rustup installs a PATH *shim* at `cargo/bin/rust-analyzer`.
+  The locus image must keep `RUSTUP_HOME` at the install home (not an empty
+  `/tmp/rustup`) and/or PATH-prefer the real toolchain binary
+  (`/usr/local/bin/rust-analyzer` symlink). Otherwise initialize fails with
+  `Unknown binary 'rust-analyzer'` / EOF.
 
-### clangd / C++
+### Python / pyright
 
-- Compile commands (`compile_commands.json`) dominate quality. Without them,
-  prepareRename/rename are unreliable.
-- Header/source pairs often need both open for cross-file rename coverage.
+- Project root markers (`pyproject.toml`) select the server workspace.
+- **Scanner paths:** `PythonScanner` stores repo-relative `Symbol.File`
+  (e.g. `pkg/sub/mod.py`), not basename-only. Basename-only paths break
+  resolve/show/rename against nested modules — prefer locators that include
+  the nested path.
 
 ### TypeScript / pyright
 
@@ -64,6 +78,16 @@ it is operational knowledge for agents and humans, not graph structure.
   workspace. Wrong root → empty symbols.
 - Multi-package monorepos: pass the package path, not only the monorepo root,
   when resolving.
+- **`file_granularity`:** FileLevel namespaces are file paths. Relative imports
+  must resolve to concrete `.ts`/`.tsx`/index files (not parent directories),
+  or the architecture graph keeps components with **0 edges**. Dir-level
+  scans still use directory→directory import edges.
+
+### clangd / C++
+
+- Compile commands (`compile_commands.json`) dominate quality. Without them,
+  prepareRename/rename are unreliable.
+- Header/source pairs often need both open for cross-file rename coverage.
 
 ## Diagnostics vs navigation
 

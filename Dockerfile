@@ -34,7 +34,13 @@ RUN npm install -g typescript typescript-language-server pyright
 ENV RUSTUP_HOME=/usr/local/rustup CARGO_HOME=/usr/local/cargo
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
     --default-toolchain stable --profile minimal --component rust-analyzer
-ENV PATH="/usr/local/cargo/bin:${PATH}"
+# Put the real rust-analyzer ahead of the rustup cargo/bin shim so WarmLSP
+# does not depend on shim + RUSTUP_HOME resolution at runtime.
+RUN ARCH=$(dpkg --print-architecture) && \
+    case "$ARCH" in amd64) RARCH=x86_64 ;; arm64) RARCH=aarch64 ;; *) exit 1 ;; esac && \
+    ln -sfn "/usr/local/rustup/toolchains/stable-${RARCH}-unknown-linux-gnu/bin/rust-analyzer" \
+        /usr/local/bin/rust-analyzer
+ENV PATH="/usr/local/bin:/usr/local/cargo/bin:${PATH}"
 
 # Core LSP servers (installed above):
 #   gopls           — Go
@@ -55,10 +61,11 @@ ENV PATH="/usr/local/cargo/bin:${PATH}"
 RUN useradd -m -s /bin/bash locus
 USER locus
 
-# Runtime cargo/rust paths must be writable by the running user.
-# The install-time CARGO_HOME (/usr/local/cargo) is root-owned.
-# Override at runtime to user-writable location.
-ENV CARGO_HOME=/tmp/cargo RUSTUP_HOME=/tmp/rustup
+# Runtime cargo home must be writable by the running user (install-time
+# CARGO_HOME is root-owned). Keep RUSTUP_HOME at the install path so any
+# remaining rustup shim still finds the rust-analyzer component; pointing
+# it at an empty /tmp/rustup causes initialize EOF (Unknown binary).
+ENV CARGO_HOME=/tmp/cargo
 
 ENV GOMEMLIMIT=1GiB
 ENV GOGC=50
