@@ -281,6 +281,11 @@ type handler struct {
 	// instead of falling back to the configured workspace root (LCS-BUG-97).
 	lastScannedPath atomic.Value // stores string
 
+	// lastCacheKey is the cache_key from the most recent successful scan (local or remote).
+	// When analysis/diagram omit path= and cache_key=, CWD/workspace default wins
+	// (LCS-BUG-97); sticky key is attached only when it matches that project.
+	lastCacheKey atomic.Value // stores string
+
 	ingestURL string // if set, POST scan results to this Scribe ingest endpoint
 
 	// warmAfterScan is invoked after a successful scan when an LSP pool is
@@ -299,10 +304,10 @@ type codographActionInput struct {
 	IncludeExternal bool     `json:"include_external,omitempty"`
 	IncludeTests    bool     `json:"include_tests,omitempty"`
 	IncludeCoverage bool     `json:"include_coverage,omitempty"`
-	Budget          int      `json:"budget,omitempty" jsonschema:"max components in output"`
+	Budget          int      `json:"budget,omitempty" jsonschema:"soft cap: warn when components exceed N; graph is retained (0=unlimited)"`
 	Format          string   `json:"format,omitempty" jsonschema:"json or summary"`
 	Intent          string   `json:"intent,omitempty" jsonschema:"architecture|coupling|health|full"`
-	Scanner         string   `json:"scanner,omitempty" jsonschema:"auto|go|packages|rust|typescript|lsp|ctags|composite"`
+	Scanner         string   `json:"scanner,omitempty" jsonschema:"auto|go|packages|rust|typescript|lsp|ctags|composite — prefer auto/composite for polyglot; monoglot override hides other languages"`
 	FileGranularity bool     `json:"file_granularity,omitempty" jsonschema:"TypeScript/Rust: file-level components"`
 	Since           string   `json:"since,omitempty" jsonschema:"git ref for incremental scan"`
 	URL             string   `json:"url,omitempty" jsonschema:"GitHub URL (scan_remote)"`
@@ -504,19 +509,7 @@ func (h *handler) handleAnalysis(ctx context.Context, _ *sdkmcp.CallToolRequest,
 		}
 	}
 
-	// When no path and no cache_key are provided, resolve the default project.
-	// Prefer a workspace root that is a registered (previously scanned) project
-	// over lastScannedPath, which may point to a sibling project scanned later.
-	// Fall back to lastScannedPath only when no workspace root matches (LCS-BUG-97).
-	if in.Path == "" && in.CacheKey == "" {
-		if resolved := h.resolveDefaultProject(ctx); resolved != "" {
-			in.Path = resolved
-		} else if v := h.lastScannedPath.Load(); v != nil {
-			if p, ok := v.(string); ok && p != "" {
-				in.Path = p
-			}
-		}
-	}
+	h.applyStickyPathAndCacheKey(ctx, &in)
 
 	staleWarn := h.stalenessWarning(in.Path, in.CacheKey)
 	defer func() {
@@ -537,6 +530,61 @@ func (h *handler) handleAnalysis(ctx context.Context, _ *sdkmcp.CallToolRequest,
 		return nil, nil, err
 	}
 	return text(opResult.Text), nil, nil
+}
+
+// applyStickyPathAndCacheKey fills Path/CacheKey when both are empty.
+// Order: CWD/workspace default project (LCS-BUG-97) → sticky cache_key when it
+// matches that project → sticky alone when no default → lastScannedPath.
+func (h *handler) applyStickyPathAndCacheKey(ctx context.Context, in *analysisInput) {
+	h.fillStickyPathAndCacheKey(ctx, &in.Path, &in.CacheKey)
+}
+
+// fillStickyPathAndCacheKey is shared by analysis and diagram handlers.
+func (h *handler) fillStickyPathAndCacheKey(ctx context.Context, path, cacheKey *string) {
+	if *path != "" || *cacheKey != "" {
+		return
+	}
+	stickyCK, stickyPath := h.stickyCache()
+	if resolved := h.resolveDefaultProject(ctx); resolved != "" {
+		*path = resolved
+		// Reuse sticky key only when it belongs to the same project — avoids
+		// binding analysis to the last-scanned sibling after a CWD shift.
+		if stickyCK != "" && sameProjectPath(stickyPath, resolved) {
+			*cacheKey = stickyCK
+		}
+		return
+	}
+	if stickyCK != "" {
+		*cacheKey = stickyCK
+		if stickyPath != "" {
+			*path = stickyPath
+		}
+		return
+	}
+	if v := h.lastScannedPath.Load(); v != nil {
+		if p, ok := v.(string); ok && p != "" {
+			*path = p
+		}
+	}
+}
+
+func (h *handler) stickyCache() (cacheKey, path string) {
+	v := h.lastCacheKey.Load()
+	if v == nil {
+		return "", ""
+	}
+	ck, ok := v.(string)
+	if !ok || ck == "" {
+		return "", ""
+	}
+	return ck, pathFromCacheKey(ck)
+}
+
+func sameProjectPath(a, b string) bool {
+	if a == "" || b == "" {
+		return false
+	}
+	return filepath.Clean(a) == filepath.Clean(b)
 }
 
 // --- Codograph sub-handlers ---
@@ -580,6 +628,9 @@ func (h *handler) handleScanProject(ctx context.Context, req *sdkmcp.CallToolReq
 		return nil, nil, err
 	}
 	h.lastScannedPath.Store(resolvedPath)
+	if ck := v.(*sfPayload).scanResult.CacheKey; ck != "" {
+		h.lastCacheKey.Store(ck)
+	}
 
 	h.maybeWarmAfterScan(resolvedPath)
 
@@ -588,7 +639,54 @@ func (h *handler) handleScanProject(ctx context.Context, req *sdkmcp.CallToolReq
 	}
 
 	res, renderErr := renderScanPayload(v.(*sfPayload), in.Format)
-	return res, nil, renderErr
+	if renderErr != nil {
+		return res, nil, renderErr
+	}
+	if warn := polyglotScannerWarning(resolvedPath, effectiveScanner); warn != "" {
+		res = prependWarning(warn, res)
+	}
+	return res, nil, nil
+}
+
+// polyglotScannerWarning returns a warning when a monoglot scanner override
+// would hide other languages present at the project root (e.g. ShojiWM).
+//
+//nolint:goconst // scanner names and manifest filenames are intentional literals
+func polyglotScannerWarning(root, scanner string) string {
+	switch strings.ToLower(strings.TrimSpace(scanner)) {
+	case "", "auto", "composite", "lsp", "ctags", "packages":
+		return ""
+	}
+	markers := []struct {
+		file string
+		lang string
+	}{
+		{"go.mod", "go"},
+		{"Cargo.toml", "rust"},
+		{"package.json", "typescript"},
+		{"tsconfig.json", "typescript"},
+		{"pyproject.toml", "python"},
+		{"setup.py", "python"},
+	}
+	seen := map[string]bool{}
+	var langs []string
+	for _, m := range markers {
+		if _, err := os.Stat(filepath.Join(root, m.file)); err != nil {
+			continue
+		}
+		if seen[m.lang] {
+			continue
+		}
+		seen[m.lang] = true
+		langs = append(langs, m.lang)
+	}
+	if len(langs) < 2 {
+		return ""
+	}
+	return fmt.Sprintf(
+		"WARNING: scanner=%q on polyglot root (%s) — other languages are hidden. Prefer scanner=auto or scanner=composite.\n",
+		scanner, strings.Join(langs, "+"),
+	)
 }
 
 // sfPayload is the value shared between singleflight callers for a scan.
@@ -648,6 +746,12 @@ func (h *handler) handleCodographRemote(ctx context.Context, in *codographAction
 	data, jsonErr := arch.RenderJSON(result.Report)
 	if jsonErr != nil {
 		return nil, nil, fmt.Errorf("render JSON: %w", jsonErr)
+	}
+	if result.CacheKey != "" {
+		h.lastCacheKey.Store(result.CacheKey)
+		if p := pathFromCacheKey(result.CacheKey); p != "" {
+			h.lastScannedPath.Store(p)
+		}
 	}
 	out := fmt.Sprintf("%s\n\ncache_key: %s", string(data), result.CacheKey)
 	return text(out), nil, nil
@@ -789,7 +893,11 @@ func renderCyclesSummary(r *engine.CycleReport) string {
 // --- Diagram handler ---
 
 func (h *handler) handleRenderDiagram(ctx context.Context, _ *sdkmcp.CallToolRequest, in diagramInput) (*sdkmcp.CallToolResult, any, error) { //nolint:gocritic
+	h.fillStickyPathAndCacheKey(ctx, &in.Path, &in.CacheKey)
 	path := in.Path
+	if path == "" && in.CacheKey != "" {
+		path = pathFromCacheKey(in.CacheKey)
+	}
 	if path == "" && len(h.proto.Workspaces()) > 0 {
 		path = h.proto.Workspaces()[0]
 	}
@@ -873,7 +981,7 @@ func (h *handler) enrichDiagramInput(ctx context.Context, path, diagramType stri
 }
 
 type diagramInput struct {
-	Path            string `json:"path" jsonschema:"required"`
+	Path            string `json:"path,omitempty" jsonschema:"repo path; omit with sticky cache_key after scan"`
 	Type            string `json:"type" jsonschema:"required,dependency|c4|coupling|churn|layers|tree|classes|sequence|er|interfaces|hexa|zones|symbol_dsm"`
 	Scope           string `json:"scope,omitempty" jsonschema:"limit to sub-package"`
 	Depth           int    `json:"depth,omitempty"`
@@ -883,7 +991,7 @@ type diagramInput struct {
 	Enrich          string `json:"enrich,omitempty" jsonschema:"node labels: loc, fan_in, churn"`
 	Theme           string `json:"theme,omitempty" jsonschema:"light|dark|natural"`
 	Format          string `json:"format,omitempty" jsonschema:"mermaid|facts|both"`
-	CacheKey        string `json:"cache_key,omitempty" jsonschema:"cache key from scan_remote"`
+	CacheKey        string `json:"cache_key,omitempty" jsonschema:"cache key from scan; sticky after scan_local/remote"`
 	FileGranularity bool   `json:"file_granularity,omitempty" jsonschema:"TypeScript: file-level nodes"`
 }
 
@@ -961,6 +1069,9 @@ func scanTimeout() time.Duration {
 //
 // lastScannedPath is applied by the caller only when this returns empty.
 func (h *handler) resolveDefaultProject(ctx context.Context) string {
+	if h.proto == nil {
+		return ""
+	}
 	status, err := h.proto.Status(ctx)
 	if err != nil || len(status.Projects) == 0 {
 		return ""

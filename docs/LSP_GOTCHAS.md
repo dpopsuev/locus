@@ -82,6 +82,15 @@ it is operational knowledge for agents and humans, not graph structure.
   must resolve to concrete `.ts`/`.tsx`/index files (not parent directories),
   or the architecture graph keeps components with **0 edges**. Dir-level
   scans still use directory→directory import edges.
+- **Foreign clones / missing `node_modules`:** `typescript-language-server`
+  needs a workspace `typescript` install **or** `tsserver.path`. The container
+  sets `LOCUS_TSSERVER_PATH` to the image-global `tsserver.js`. Locally: run
+  `npm i` in the clone, or export `LOCUS_TSSERVER_PATH` to a global
+  `…/typescript/lib/tsserver.js`. When LSP still fails, `analysis show` returns
+  a **source excerpt** (not an empty unavailable body).
+- **GJS / GNOME Shell:** `gi://` and `resource://` imports become ambient
+  internal edges. Classic `imports.gi` / `imports.ui` forms are still
+  unsupported — treat those graphs as inventories until expanded.
 
 ### clangd / C++
 

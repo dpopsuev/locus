@@ -210,6 +210,11 @@ Tools: scan_project, get_dependencies, get_impact, get_coupling_table,
 			)
 			mux := http.NewServeMux()
 			mux.Handle("/", mcpHandler)
+			mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte(`{"status":"ok","service":"locus"}`))
+			})
 			mux.HandleFunc("/debug/cache", debugCacheHandler(s))
 			mux.HandleFunc("/debug/resources", resource.Handler(mon))
 			mux.Handle("/debug/pprof/", http.DefaultServeMux)
@@ -823,7 +828,7 @@ func init() {
 	scanCmd.Flags().BoolVar(&scanFlags.authors, "authors", false, "Include author ownership data")
 	scanCmd.Flags().BoolVar(&scanFlags.includeExternal, "include-external", false, "Include external (third-party) dependencies")
 	scanCmd.Flags().BoolVar(&scanFlags.includeTests, "include-tests", false, "Include test packages")
-	scanCmd.Flags().IntVar(&scanFlags.budget, "budget", 0, "Cap output to N tokens (rank by importance, 0 = unlimited)")
+	scanCmd.Flags().IntVar(&scanFlags.budget, "budget", 0, "Soft cap: warn when components exceed N; full graph retained (0 = unlimited)")
 	scanCmd.Flags().StringVar(&scanFlags.ingestURL, "ingest", "", "POST scan results to Scribe ingest URL (e.g. http://localhost:8083/api/v1/ingest)")
 
 	serveCmd.Flags().StringArrayVar(&serveFlags.workspaces, "workspace", nil, "Workspace root paths (repeatable; defaults to cwd)")

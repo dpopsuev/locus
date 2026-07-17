@@ -30,6 +30,9 @@ RUN ARCH=$(dpkg --print-architecture) && \
     curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${NODE_ARCH}.tar.xz" | \
     tar -C /usr/local --strip-components=1 -xJ
 RUN npm install -g typescript typescript-language-server pyright
+# Point WarmLSP at the image-global TypeScript so foreign clones without
+# node_modules/typescript can still initialize typescript-language-server.
+ENV LOCUS_TSSERVER_PATH=/usr/local/lib/node_modules/typescript/lib/tsserver.js
 
 ENV RUSTUP_HOME=/usr/local/rustup CARGO_HOME=/usr/local/cargo
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
@@ -73,7 +76,7 @@ ENV GOGC=50
 COPY locus /usr/local/bin/locus
 
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-  CMD ["locus", "version"]
+  CMD curl -fsS http://127.0.0.1:8081/health || exit 1
 
 ENTRYPOINT ["locus"]
 CMD ["serve"]

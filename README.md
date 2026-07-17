@@ -194,6 +194,20 @@ Options: `theme` (light/dark/natural), `enrich` (loc, fan_in, churn on node labe
 | `LOCUS_THEME` | `natural` | Default diagram theme: `light`, `dark`, `natural` |
 | `LOCUS_THEME_FILE` | `~/.locus/theme.yaml` | Custom theme override file |
 | `LOCUS_LOG_LEVEL` | `info` | Log level: `debug`, `info`, `warn`, `error` |
+| `LOCUS_INGEST_URL` | — | After `scan_local`, POST architecture/symbols to Scribe ingest (e.g. `http://localhost:8080/api/v1/ingest`). Also `--ingest-url` on `serve`, `--ingest` on `scan`. |
+| `LOCUS_TSSERVER_PATH` | (auto) | Path to `tsserver.js` for WarmLSP when a clone has no `node_modules/typescript`. Container default: global image install. |
+
+### HTTP health
+
+`locus serve --transport http --addr :8081` exposes:
+
+- `GET /health` → `{"status":"ok","service":"locus"}` (liveness for supervisors / Docker)
+- MCP Streamable HTTP on `/`
+- Debug: `/debug/cache`, `/debug/resources`, `/debug/pprof/`
+
+### Sticky cache_key
+
+After a successful `codograph scan_local` / `scan_remote`, the server remembers the returned `cache_key`. Later `analysis.*` / diagram calls with empty `path` and `cache_key` prefer the CWD/workspace default project (LCS-BUG-97); the sticky key is attached only when it matches that project. If no default project resolves, the sticky key is used alone. Prefer passing `cache_key` explicitly for multi-repo isolation.
 
 ## License
 
