@@ -205,6 +205,15 @@ Options: `theme` (light/dark/natural), `enrich` (loc, fan_in, churn on node labe
 - MCP Streamable HTTP on `/`
 - Debug: `/debug/cache`, `/debug/resources`, `/debug/pprof/`
 
+### Scanner selection (`auto`)
+
+Omit `scanner` (or pass `auto`). Locus inventories root manifests (`Cargo.toml`, `package.json`, …) plus a source-extension census, then:
+
+- **one language** → that language’s survey scanner  
+- **two or more** → `composite` (no agent guesswork)
+
+Monoglot overrides (`scanner=typescript`, `rust`, …) remain an escape hatch and warn on polyglot roots.
+
 ### Sticky cache_key
 
 After a successful `codograph scan_local` / `scan_remote`, the server remembers the returned `cache_key`. Later `analysis.*` / diagram calls with empty `path` and `cache_key` prefer the CWD/workspace default project (LCS-BUG-97); the sticky key is attached only when it matches that project. If no default project resolves, the sticky key is used alone. Prefer passing `cache_key` explicitly for multi-repo isolation.

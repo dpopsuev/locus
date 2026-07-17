@@ -307,7 +307,7 @@ type codographActionInput struct {
 	Budget          int      `json:"budget,omitempty" jsonschema:"soft cap: warn when components exceed N; graph is retained (0=unlimited)"`
 	Format          string   `json:"format,omitempty" jsonschema:"json or summary"`
 	Intent          string   `json:"intent,omitempty" jsonschema:"architecture|coupling|health|full"`
-	Scanner         string   `json:"scanner,omitempty" jsonschema:"auto|go|packages|rust|typescript|lsp|ctags|composite — prefer auto/composite for polyglot; monoglot override hides other languages"`
+	Scanner         string   `json:"scanner,omitempty" jsonschema:"auto|go|packages|rust|typescript|lsp|ctags|composite — omit or auto: inventory markers+.ext then composite if multi-lang; monoglot override is escape hatch only"`
 	FileGranularity bool     `json:"file_granularity,omitempty" jsonschema:"TypeScript/Rust: file-level components"`
 	Since           string   `json:"since,omitempty" jsonschema:"git ref for incremental scan"`
 	URL             string   `json:"url,omitempty" jsonschema:"GitHub URL (scan_remote)"`
