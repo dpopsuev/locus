@@ -150,9 +150,9 @@ var serveCmd = &cobra.Command{
   stdio (default): reads/writes JSON-RPC over stdin/stdout.
   http:            starts a Streamable HTTP server on --addr.
 
-Tools: scan_project, get_dependencies, get_impact, get_coupling_table,
-       codograph_remote, get_codograph_history, diff_branches,
-       get_cycles, render_diagram, triage.`,
+Tools: locus_codograph (scan_local|scan_remote|history|diff|…),
+       locus_analysis (probe|scenario|diagnose|coupling|diagram actions|…),
+       locus_diagram; GET /health on --transport http.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if serveFlags.logLevel != "" {
 			_ = os.Setenv("LOCUS_LOG_LEVEL", serveFlags.logLevel)
@@ -493,7 +493,7 @@ Examples:
 			return err
 		}
 
-		in := diagramcore.Input{Report: result.Report, Root: path}
+		in := diagramcore.Input{Report: result.Report, Root: path, Ctx: cmd.Context()}
 
 		if diagramFlags.diagramType == "churn" {
 			hist, _ := proto.GetHistory(cmd.Context(), path, 20)
