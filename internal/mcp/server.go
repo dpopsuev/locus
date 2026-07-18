@@ -202,6 +202,19 @@ var DiagramMinIntent = map[string]string{
 	DiagramSymbolDSM:  string(arch.IntentHealth),
 }
 
+// analysisTriageKeywords is the intent-matching corpus for the analysis tool.
+//
+//nolint:goconst // triage keyword corpus reuses common intent tokens
+var analysisTriageKeywords = []string{
+	"depend", "import", "impact", "coupling", "fan", "cycle", "circular",
+	"caller", "callee", "call", "who", "symbol", "function", "component",
+	"pipeline", "data flow", "chain", "risk", "risky", "dangerous", "health",
+	"review", "onboarding", "preset", "mesh", "zoom", "probe", "scenario",
+	"trace", "convergence", "meet", "isolate", "disconnect", "break",
+	"diagnose", "islands", "dead code", "unreachable", "explain", "snippet",
+	"diff", "changed", "hotspot", "hotspots", "hot",
+}
+
 // --- Server ---
 
 // NewServer creates the Locus MCP server with tool handlers.
@@ -232,7 +245,7 @@ func NewServer(s store.Store, workspaceRoots []string, version string, pool ...l
 	triage.AddTool(reg, srv, triage.ToolMeta{
 		Name:        "analysis",
 		Description: "Walk the symbol graph, query the knowledge book, and triage tool selection.",
-		Keywords:   []string{"depend", "import", "impact", "coupling", "fan", "cycle", "circular", "caller", "callee", "call", "who", "symbol", "function", "find", "component", "pipeline", "data flow", "chain", "risk", "risky", "dangerous", "health", "review", "onboarding", "preset", "mesh", "zoom", "probe", "scenario", "trace", "convergence", "meet", "isolate", "disconnect", "break", "diagnose", "islands", "dead code", "unreachable", "explain", "snippet", "diff", "changed"},
+		Keywords:   analysisTriageKeywords,
 		Categories: []string{"dependencies", "architecture"},
 		Rationale:  map[string]string{"dependencies": "Component-level dependency analysis and cycle detection"},
 		Priority:   2,

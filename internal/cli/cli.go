@@ -157,6 +157,10 @@ Tools: locus_codograph (scan_local|scan_remote|history|diff|…),
 		if serveFlags.logLevel != "" {
 			_ = os.Setenv("LOCUS_LOG_LEVEL", serveFlags.logLevel)
 			initLogger()
+		} else if os.Getenv("LOCUS_LOG_LEVEL") == "" {
+			// Long-running server: keep lifecycle INFO (CLI one-shots stay at warn).
+			_ = os.Setenv("LOCUS_LOG_LEVEL", "info")
+			initLogger()
 		}
 		roots := serveFlags.workspaces
 		if len(roots) == 0 {
@@ -931,11 +935,15 @@ func printJSON(v any) error {
 }
 
 func initLogger() {
-	level := slog.LevelInfo
+	// One-shot CLI defaults to warn so racer/LSP INFO JSON does not drown
+	// scan/diagram/lint stdout. Serve upgrades to info when unset (see serve RunE).
+	level := slog.LevelWarn
 	if v := os.Getenv("LOCUS_LOG_LEVEL"); v != "" {
 		switch strings.ToLower(v) {
 		case "debug":
 			level = slog.LevelDebug
+		case "info":
+			level = slog.LevelInfo
 		case "warn":
 			level = slog.LevelWarn
 		case "error":
