@@ -13,7 +13,7 @@ require (
 
 require (
 	github.com/dpopsuev/battery v1.5.0
-	github.com/dpopsuev/oculus/v3 v3.116.1
+	github.com/dpopsuev/oculus/v3 v3.116.2
 	github.com/dpopsuev/scribe v0.52.0
 	github.com/dpopsuev/tako v0.0.0-20260508195727-91edf3b3bb2d
 	github.com/fsnotify/fsnotify v1.10.1
