@@ -140,8 +140,13 @@ func TestDogfood_TypeUsages_SymbolDiscussionRef(t *testing.T) {
 		if report.TypeName != "DiscussionRef" {
 			t.Fatalf("symbol= ignored: type_name=%q (want DiscussionRef)\n%s", report.TypeName, text)
 		}
-		if len(report.Files) == 0 {
-			t.Fatalf("expected at least defining package for DiscussionRef\n%s", text)
+		if len(report.Files) < 2 {
+			t.Fatalf("expected kernel decl + foundry import-type consumer, got %d\n%s",
+				len(report.Files), text)
+		}
+		blob := text
+		if !strings.Contains(blob, "kernel") || !strings.Contains(blob, "foundry") {
+			t.Fatalf("want kernel + foundry in type_usages:\n%s", text)
 		}
 	})
 
