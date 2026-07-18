@@ -29,7 +29,10 @@ RUN ARCH=$(dpkg --print-architecture) && \
     case "$ARCH" in amd64) NODE_ARCH="x64" ;; arm64) NODE_ARCH="arm64" ;; *) exit 1 ;; esac && \
     curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${NODE_ARCH}.tar.xz" | \
     tar -C /usr/local --strip-components=1 -xJ
-RUN npm install -g typescript typescript-language-server pyright
+# Pin typescript@5.x — typescript@7 dropped lib/tsserver.js, which breaks
+# WarmLSP (LOCUS_TSSERVER_PATH Stat fails → empty tsserver_path while TLS=ok).
+RUN npm install -g typescript@5.8.3 typescript-language-server pyright \
+	&& test -f /usr/local/lib/node_modules/typescript/lib/tsserver.js
 # Point WarmLSP at the image-global TypeScript so foreign clones without
 # node_modules/typescript can still initialize typescript-language-server.
 ENV LOCUS_TSSERVER_PATH=/usr/local/lib/node_modules/typescript/lib/tsserver.js

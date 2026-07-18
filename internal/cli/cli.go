@@ -237,25 +237,39 @@ Tools: locus_codograph (scan_local|scan_remote|history|diff|…),
 	},
 }
 
-const healthStatusOK = "ok"
+const (
+	healthStatusOK        = "ok"
+	healthStatusMissing   = "missing"
+	healthStatusBrokenEnv = "broken_env"
+)
 
 // healthJSON returns a compact liveness payload including TypeScript LSP
 // toolchain status so agents can see why WarmLSP/show may fall back to excerpts.
 func healthJSON() string {
-	tls := "missing"
+	tls := healthStatusMissing
 	if _, err := exec.LookPath("typescript-language-server"); err == nil {
 		tls = healthStatusOK
 	}
+	configured := os.Getenv("LOCUS_TSSERVER_PATH")
 	tsPath := lsp.ResolveTSServerPath()
 	payload := map[string]string{
 		"status":                     healthStatusOK,
 		"service":                    "locus",
 		"typescript_language_server": tls,
 		"tsserver_path":              tsPath,
+		"tsserver_status":            healthStatusOK,
 	}
-	if tsPath == "" {
-		payload["tsserver_path"] = ""
-		payload["tsserver_hint"] = "set LOCUS_TSSERVER_PATH or npm i -g typescript typescript-language-server"
+	switch {
+	case tsPath != "":
+		payload["tsserver_status"] = healthStatusOK
+	case configured != "":
+		// ENV set but ResolveTSServerPath could not Stat it (e.g. typescript@7).
+		payload["tsserver_status"] = healthStatusBrokenEnv
+		payload["tsserver_hint"] = "LOCUS_TSSERVER_PATH=" + configured +
+			" not found; pin typescript@5.x (ships lib/tsserver.js) or fix the path"
+	default:
+		payload["tsserver_status"] = healthStatusMissing
+		payload["tsserver_hint"] = "set LOCUS_TSSERVER_PATH or npm i -g typescript@5 typescript-language-server"
 	}
 	b, err := json.Marshal(payload)
 	if err != nil {
