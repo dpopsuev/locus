@@ -47,6 +47,9 @@ func copyTree(src, dst string) error {
 		if err != nil {
 			return err
 		}
+		if d.IsDir() && d.Name() == ".git" {
+			return fs.SkipDir
+		}
 		rel, err := filepath.Rel(src, path)
 		if err != nil {
 			return err
