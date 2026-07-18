@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -281,10 +282,13 @@ type handler struct {
 	// instead of falling back to the configured workspace root (LCS-BUG-97).
 	lastScannedPath atomic.Value // stores string
 
-	// lastCacheKey is the cache_key from the most recent successful scan (local or remote).
-	// When analysis/diagram omit path= and cache_key=, CWD/workspace default wins
-	// (LCS-BUG-97); sticky key is attached only when it matches that project.
-	lastCacheKey atomic.Value // stores string
+	// stickyKeys maps normalized project path → cache_key from the last successful
+	// scan of that project. Multi-repo MCP servers look up by resolved path so
+	// scan B cannot steal analysis under project A. lastSticky is a process-global
+	// fallback when no path-keyed entry matches (compat with single-repo agents).
+	stickyMu    sync.Mutex
+	stickyKeys  map[string]string
+	lastSticky  string
 
 	ingestURL string // if set, POST scan results to this Scribe ingest endpoint
 
@@ -544,17 +548,19 @@ func (h *handler) fillStickyPathAndCacheKey(ctx context.Context, path, cacheKey 
 	if *path != "" || *cacheKey != "" {
 		return
 	}
-	stickyCK, stickyPath := h.stickyCache()
 	if resolved := h.resolveDefaultProject(ctx); resolved != "" {
 		*path = resolved
-		// Reuse sticky key only when it belongs to the same project — avoids
-		// binding analysis to the last-scanned sibling after a CWD shift.
-		if stickyCK != "" && sameProjectPath(stickyPath, resolved) {
+		if ck := h.stickyForPath(resolved); ck != "" {
+			*cacheKey = ck
+			return
+		}
+		// Compat: last-global sticky only when it matches the resolved project.
+		if stickyCK, stickyPath := h.stickyLast(); stickyCK != "" && sameProjectPath(stickyPath, resolved) {
 			*cacheKey = stickyCK
 		}
 		return
 	}
-	if stickyCK != "" {
+	if stickyCK, stickyPath := h.stickyLast(); stickyCK != "" {
 		*cacheKey = stickyCK
 		if stickyPath != "" {
 			*path = stickyPath
@@ -568,16 +574,41 @@ func (h *handler) fillStickyPathAndCacheKey(ctx context.Context, path, cacheKey 
 	}
 }
 
-func (h *handler) stickyCache() (cacheKey, path string) {
-	v := h.lastCacheKey.Load()
-	if v == nil {
+func (h *handler) rememberSticky(cacheKey string) {
+	if cacheKey == "" {
+		return
+	}
+	path := pathFromCacheKey(cacheKey)
+	h.stickyMu.Lock()
+	defer h.stickyMu.Unlock()
+	if h.stickyKeys == nil {
+		h.stickyKeys = make(map[string]string)
+	}
+	if path != "" {
+		h.stickyKeys[filepath.Clean(path)] = cacheKey
+	}
+	h.lastSticky = cacheKey
+}
+
+func (h *handler) stickyForPath(path string) string {
+	if path == "" {
+		return ""
+	}
+	h.stickyMu.Lock()
+	defer h.stickyMu.Unlock()
+	if h.stickyKeys == nil {
+		return ""
+	}
+	return h.stickyKeys[filepath.Clean(path)]
+}
+
+func (h *handler) stickyLast() (cacheKey, path string) {
+	h.stickyMu.Lock()
+	defer h.stickyMu.Unlock()
+	if h.lastSticky == "" {
 		return "", ""
 	}
-	ck, ok := v.(string)
-	if !ok || ck == "" {
-		return "", ""
-	}
-	return ck, pathFromCacheKey(ck)
+	return h.lastSticky, pathFromCacheKey(h.lastSticky)
 }
 
 func sameProjectPath(a, b string) bool {
@@ -628,9 +659,7 @@ func (h *handler) handleScanProject(ctx context.Context, req *sdkmcp.CallToolReq
 		return nil, nil, err
 	}
 	h.lastScannedPath.Store(resolvedPath)
-	if ck := v.(*sfPayload).scanResult.CacheKey; ck != "" {
-		h.lastCacheKey.Store(ck)
-	}
+	h.rememberSticky(v.(*sfPayload).scanResult.CacheKey)
 
 	h.maybeWarmAfterScan(resolvedPath)
 
@@ -748,7 +777,7 @@ func (h *handler) handleCodographRemote(ctx context.Context, in *codographAction
 		return nil, nil, fmt.Errorf("render JSON: %w", jsonErr)
 	}
 	if result.CacheKey != "" {
-		h.lastCacheKey.Store(result.CacheKey)
+		h.rememberSticky(result.CacheKey)
 		if p := pathFromCacheKey(result.CacheKey); p != "" {
 			h.lastScannedPath.Store(p)
 		}

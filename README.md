@@ -201,7 +201,7 @@ Options: `theme` (light/dark/natural), `enrich` (loc, fan_in, churn on node labe
 
 `locus serve --transport http --addr :8081` exposes:
 
-- `GET /health` → `{"status":"ok","service":"locus"}` (liveness for supervisors / Docker)
+- `GET /health` → `{"status":"ok","service":"locus","typescript_language_server":"ok|missing","tsserver_path":"<resolved|empty>"}` (liveness + WarmLSP toolchain)
 - MCP Streamable HTTP on `/`
 - Debug: `/debug/cache`, `/debug/resources`, `/debug/pprof/`
 
@@ -216,7 +216,7 @@ Monoglot overrides (`scanner=typescript`, `rust`, …) remain an escape hatch an
 
 ### Sticky cache_key
 
-After a successful `codograph scan_local` / `scan_remote`, the server remembers the returned `cache_key`. Later `analysis.*` / diagram calls with empty `path` and `cache_key` prefer the CWD/workspace default project (LCS-BUG-97); the sticky key is attached only when it matches that project. If no default project resolves, the sticky key is used alone. Prefer passing `cache_key` explicitly for multi-repo isolation.
+After a successful `codograph scan_local` / `scan_remote`, the server stores the returned `cache_key` keyed by project path. Later `analysis.*` / diagram calls with empty `path` and `cache_key` prefer the CWD/workspace default project (LCS-BUG-97) and bind that path’s sticky key — scan B cannot steal analysis under project A. If no default project resolves, the last sticky key is used alone. Prefer passing `cache_key` explicitly when you already have it.
 
 ## License
 

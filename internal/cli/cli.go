@@ -7,10 +7,11 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"path/filepath"
 	_ "net/http/pprof" //nolint:gosec // intentional: pprof is gated behind the HTTP mux, not exposed by default
 	"os"
+	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -213,7 +214,7 @@ Tools: scan_project, get_dependencies, get_impact, get_coupling_table,
 			mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusOK)
-				_, _ = w.Write([]byte(`{"status":"ok","service":"locus"}`))
+				_, _ = w.Write([]byte(healthJSON()))
 			})
 			mux.HandleFunc("/debug/cache", debugCacheHandler(s))
 			mux.HandleFunc("/debug/resources", resource.Handler(mon))
@@ -230,6 +231,33 @@ Tools: scan_project, get_dependencies, get_impact, get_coupling_table,
 		slog.LogAttrs(ctx, slog.LevelInfo, "locus server starting", slog.String(logKeyVersion, version), slog.String(logKeyTransport, "stdio"))
 		return srv.Serve(ctx, &sdkmcp.StdioTransport{})
 	},
+}
+
+const healthStatusOK = "ok"
+
+// healthJSON returns a compact liveness payload including TypeScript LSP
+// toolchain status so agents can see why WarmLSP/show may fall back to excerpts.
+func healthJSON() string {
+	tls := "missing"
+	if _, err := exec.LookPath("typescript-language-server"); err == nil {
+		tls = healthStatusOK
+	}
+	tsPath := lsp.ResolveTSServerPath()
+	payload := map[string]string{
+		"status":                     healthStatusOK,
+		"service":                    "locus",
+		"typescript_language_server": tls,
+		"tsserver_path":              tsPath,
+	}
+	if tsPath == "" {
+		payload["tsserver_path"] = ""
+		payload["tsserver_hint"] = "set LOCUS_TSSERVER_PATH or npm i -g typescript typescript-language-server"
+	}
+	b, err := json.Marshal(payload)
+	if err != nil {
+		return `{"status":"` + healthStatusOK + `","service":"locus"}`
+	}
+	return string(b)
 }
 
 // debugCacheHandler returns an HTTP handler for GET /debug/cache.
