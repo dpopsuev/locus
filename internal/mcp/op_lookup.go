@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 func init() {
@@ -160,12 +161,26 @@ var opTypeUsages = AnalysisOp{
 		if err := json.Unmarshal(raw, &in); err != nil {
 			return nil, err
 		}
-		r, err := h.proto.GetTypeUsages(ctx, in.Path, in.Query, in.CacheKey)
+		locator := firstNonEmpty(in.Symbol, in.Query, in.FQN)
+		if locator == "" {
+			return nil, ErrTypeUsagesLocatorRequired
+		}
+		r, err := h.proto.GetTypeUsages(ctx, in.Path, locator, in.CacheKey)
 		if err != nil {
 			return nil, err
 		}
 		return jsonOp(r)
 	},
+}
+
+// firstNonEmpty returns the first non-empty trimmed string among vals.
+func firstNonEmpty(vals ...string) string {
+	for _, v := range vals {
+		if s := strings.TrimSpace(v); s != "" {
+			return s
+		}
+	}
+	return ""
 }
 
 var opScanDiff = AnalysisOp{

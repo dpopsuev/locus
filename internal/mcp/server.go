@@ -66,6 +66,7 @@ var (
 	ErrShowLocatorRequired       = errors.New("show requires symbol= locator")
 	ErrRenameLocatorRequired     = errors.New("rename requires symbol= locator")
 	ErrRenameNewNameRequired     = errors.New("rename requires new_name")
+	ErrTypeUsagesLocatorRequired = errors.New("type_usages requires symbol=, query=, or fqn= (type name)")
 )
 
 // defaultAnalysisTimeout caps every analysis dispatch.
@@ -347,7 +348,7 @@ type analysisInput struct {
 	Path      string   `json:"path,omitempty"`
 	CacheKey  string   `json:"cache_key,omitempty" jsonschema:"cache key from scan_remote"`
 	Component string   `json:"component,omitempty"`
-	Symbol    string   `json:"symbol,omitempty" jsonschema:"name pattern (callers/symbol_search); locator for resolve/definition/references/show/rename"`
+	Symbol    string   `json:"symbol,omitempty" jsonschema:"name pattern (callers/symbol_search); locator for resolve/definition/references/show/rename; type name for type_usages"`
 	NewName   string   `json:"new_name,omitempty" jsonschema:"new identifier for rename"`
 	Apply     bool     `json:"apply,omitempty" jsonschema:"rename: write WorkspaceEdit (default dry-run)"`
 	SortBy    string   `json:"sort_by,omitempty"`
@@ -357,7 +358,7 @@ type analysisInput struct {
 	Layers    []string `json:"layers,omitempty" jsonschema:"ordered layer names"`
 	Format    string   `json:"format,omitempty" jsonschema:"json|summary"`
 	Preset    string   `json:"preset,omitempty" jsonschema:"architecture_review|health_check|onboarding|pre_pr|full_clinic|code_health"`
-	Query     string   `json:"query,omitempty" jsonschema:"component name (search) or natural language question (query)"`
+	Query     string   `json:"query,omitempty" jsonschema:"component name (search), natural language question (query), or type name (type_usages)"`
 	BeforeSHA string   `json:"before_sha,omitempty" jsonschema:"earlier SHA (scan_diff)"`
 	AfterSHA  string   `json:"after_sha,omitempty" jsonschema:"later SHA (scan_diff)"`
 	MinLength int      `json:"min_length,omitempty"`
@@ -762,19 +763,33 @@ func (h *handler) probeScanCache(ctx context.Context, scanN int64, path string) 
 }
 
 // renderScanPayload formats a completed scan according to the requested format.
+// Every format surfaces cache_key so agents can copy it for downstream calls
+// (matching scan_remote / tool description). Default driftText already includes
+// the key via engine.RenderScanSummary; summary/json append it explicitly.
 func renderScanPayload(payload *sfPayload, format string) (*sdkmcp.CallToolResult, error) {
+	var body string
 	switch format {
 	case FormatSummary:
-		return text(arch.RenderMarkdown(payload.scanResult.Report)), nil
+		body = arch.RenderMarkdown(payload.scanResult.Report)
 	case FormatJSON:
 		data, err := arch.RenderJSON(payload.scanResult.Report)
 		if err != nil {
 			return nil, fmt.Errorf("render JSON: %w", err)
 		}
-		return text(string(data)), nil
+		body = string(data)
 	default:
-		return text(payload.driftText), nil
+		body = payload.driftText
 	}
+	return text(appendCacheKeyLine(body, payload.scanResult.CacheKey)), nil
+}
+
+// appendCacheKeyLine ensures the MCP text payload ends with "cache_key: <key>".
+// Skips when the body already contains a cache_key line (default drift summary).
+func appendCacheKeyLine(body, cacheKey string) string {
+	if cacheKey == "" || strings.Contains(body, "cache_key:") {
+		return body
+	}
+	return fmt.Sprintf("%s\n\ncache_key: %s", body, cacheKey)
 }
 
 func (h *handler) handleCodographRemote(ctx context.Context, in *codographActionInput) (*sdkmcp.CallToolResult, any, error) {

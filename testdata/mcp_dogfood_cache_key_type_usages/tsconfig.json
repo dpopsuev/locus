@@ -1,0 +1,8 @@
+{
+  "compilerOptions": {
+    "paths": {
+      "@alef/kernel": ["./packages/kernel/src/index.ts"],
+      "@alef/foundry": ["./packages/foundry/src/index.ts"]
+    }
+  }
+}

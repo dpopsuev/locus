@@ -1,0 +1,6 @@
+{
+  "name": "alef-sim-dogfood",
+  "private": true,
+  "workspaces": ["packages/*"],
+  "description": "Fixture for MCP dogfood: scan_local cache_key + type_usages symbol= (DiscussionRef)"
+}

@@ -2,6 +2,8 @@ package mcp
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 )
@@ -99,5 +101,72 @@ func TestTypeUsages_Action(t *testing.T) {
 	// Must return valid output (even if zero files).
 	if text == "" {
 		t.Error("type_usages returned empty output")
+	}
+}
+
+func TestTypeUsages_SymbolAccepted(t *testing.T) {
+	dir := monorepoFixture(t)
+	h := newHandlerWithWorkspace(t, dir)
+	ctx := context.Background()
+
+	_, _, err := h.handleScanProject(ctx, nil, &codographActionInput{
+		Path:   dir,
+		Intent: "full",
+	})
+	if err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+
+	result, _, err := h.handleAnalysis(ctx, nil, analysisInput{
+		Action: ActionTypeUsages,
+		Symbol: "Scanner",
+		Path:   dir,
+	})
+	if err != nil {
+		t.Fatalf("type_usages symbol=: %v", err)
+	}
+	text := extractText(result)
+	if text == "" {
+		t.Fatal("type_usages(symbol=) returned empty output")
+	}
+	if strings.Contains(text, `"type_name":""`) {
+		t.Fatalf("symbol= ignored — empty type_name: %s", text)
+	}
+}
+
+func TestTypeUsages_EmptyRejected(t *testing.T) {
+	h := newHandlerWithWorkspace(t, t.TempDir())
+	raw, _ := json.Marshal(analysisInput{Action: ActionTypeUsages})
+	_, err := opTypeUsages.Run(context.Background(), h, raw)
+	if !errors.Is(err, ErrTypeUsagesLocatorRequired) {
+		t.Fatalf("got %v, want ErrTypeUsagesLocatorRequired", err)
+	}
+}
+
+func TestTypeUsages_SymbolPreferredOverQuery(t *testing.T) {
+	dir := monorepoFixture(t)
+	h := newHandlerWithWorkspace(t, dir)
+	ctx := context.Background()
+
+	_, _, err := h.handleScanProject(ctx, nil, &codographActionInput{
+		Path:   dir,
+		Intent: "full",
+	})
+	if err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+
+	raw, _ := json.Marshal(analysisInput{
+		Action: ActionTypeUsages,
+		Symbol: "Scanner",
+		Query:  "NonExistentFormattedTextXYZ",
+		Path:   dir,
+	})
+	res, err := opTypeUsages.Run(ctx, h, raw)
+	if err != nil {
+		t.Fatalf("opTypeUsages: %v", err)
+	}
+	if res == nil || !strings.Contains(res.Text, "Scanner") {
+		t.Fatalf("symbol= should win over query=; got %#v", res)
 	}
 }
