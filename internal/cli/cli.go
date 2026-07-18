@@ -525,6 +525,10 @@ Examples:
 			Theme:        theme,
 		})
 		if err != nil {
+			if errors.Is(err, diagramcore.ErrNoEntryProvided) || errors.Is(err, diagramcore.ErrNoCallsFound) {
+				return fmt.Errorf("%w\nexample: locus diagram %s --type %s --entry main",
+					err, path, diagramFlags.diagramType)
+			}
 			return err
 		}
 		fmt.Print(out)
