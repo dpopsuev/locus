@@ -1185,21 +1185,16 @@ func (h *handler) maybeWarmAfterScan(path string) {
 }
 
 // symbolGraphOpts maps analysis quality= to oculus SymbolGraphOpts.
-// Default (empty/quick) is AST-only interactive. quality=deep allows scoped
-// LSP enrichment (FocusEntry set by Probe/Scenario) under the call deadline —
-// not a separate whole-repo CallGraph universe.
+// Default is AST-only. quality=deep allows scoped LSP under the call deadline.
 func (in *analysisInput) symbolGraphOpts() engine.SymbolGraphOpts {
-	if in != nil && strings.EqualFold(strings.TrimSpace(in.Quality), "deep") {
-		return engine.SymbolGraphOpts{
-			AllowLSP:    true,
-			Interactive: true,
-			// 0 → oculus derives min(5s interactive default, remaining ctx).
-			MaxLSP:     0,
-			Hops:       engine.DefaultInteractiveHops,
-			FocusEntry: in.Symbol,
+	o := engine.SymbolGraphOpts{Interactive: true}
+	if in != nil {
+		o.FocusEntry = in.Symbol
+		if strings.EqualFold(strings.TrimSpace(in.Quality), "deep") {
+			o.AllowLSP = true
 		}
 	}
-	return engine.SymbolGraphOpts{Quick: true, AllowLSP: false, Interactive: true}
+	return o.Normalize()
 }
 
 // logAnalysisEntry records the path, SHA, and cache key for every dispatch.
