@@ -1193,9 +1193,10 @@ func (in *analysisInput) symbolGraphOpts() engine.SymbolGraphOpts {
 		return engine.SymbolGraphOpts{
 			AllowLSP:    true,
 			Interactive: true,
-			MaxLSP:      30 * time.Second,
-			Hops:        engine.DefaultInteractiveHops,
-			FocusEntry:  in.Symbol,
+			// 0 → oculus derives min(5s interactive default, remaining ctx).
+			MaxLSP:     0,
+			Hops:       engine.DefaultInteractiveHops,
+			FocusEntry: in.Symbol,
 		}
 	}
 	return engine.SymbolGraphOpts{Quick: true, AllowLSP: false, Interactive: true}
