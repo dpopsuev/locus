@@ -179,8 +179,8 @@ func TestAXCampaign_E2E(t *testing.T) {
 
 	t.Run("quality_default_quick", func(t *testing.T) {
 		in := analysisInput{Quality: ""}
-		if !in.symbolGraphOpts().Quick {
-			t.Fatal("empty quality must default to Quick")
+		if in.symbolGraphOpts().AllowLSP {
+			t.Fatal("empty quality must default to AST-only (!AllowLSP)")
 		}
 	})
 

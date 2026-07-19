@@ -16,20 +16,25 @@ import (
 
 func TestAnalysisInput_SymbolGraphOpts_DefaultQuick(t *testing.T) {
 	in := analysisInput{}
-	if !in.symbolGraphOpts().Quick {
-		t.Fatal("default quality must be Quick")
+	if in.symbolGraphOpts().AllowLSP || !in.symbolGraphOpts().Quick {
+		t.Fatal("default quality must be AST-only (!AllowLSP)")
 	}
 	in.Quality = "quick"
-	if !in.symbolGraphOpts().Quick {
-		t.Fatal("quality=quick must be Quick")
+	if in.symbolGraphOpts().AllowLSP {
+		t.Fatal("quality=quick must not AllowLSP")
 	}
 	in.Quality = "deep"
-	if in.symbolGraphOpts().Quick {
-		t.Fatal("quality=deep must disable Quick")
+	in.Symbol = "Foo"
+	o := in.symbolGraphOpts()
+	if !o.AllowLSP || o.Quick {
+		t.Fatal("quality=deep must AllowLSP")
+	}
+	if o.FocusEntry != "Foo" {
+		t.Fatalf("FocusEntry=%q want Foo", o.FocusEntry)
 	}
 	in.Quality = "DEEP"
-	if in.symbolGraphOpts().Quick {
-		t.Fatal("quality=DEEP must disable Quick")
+	if !in.symbolGraphOpts().AllowLSP {
+		t.Fatal("quality=DEEP must AllowLSP")
 	}
 }
 

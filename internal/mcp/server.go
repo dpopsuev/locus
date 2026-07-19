@@ -378,7 +378,7 @@ type analysisInput struct {
 	Target    string   `json:"target,omitempty" jsonschema:"package, file path, or FQN"`
 	Content   string   `json:"content,omitempty" jsonschema:"content to write (context_write)"`
 	Intent    string   `json:"intent,omitempty" jsonschema:"natural language intent (triage)"`
-	Quality   string   `json:"quality,omitempty" jsonschema:"quick|deep — symbol graph quality; default quick"`
+	Quality   string   `json:"quality,omitempty" jsonschema:"quick|deep — quick=AST-only (default); deep=AST+scoped LSP under budget"`
 }
 
 // staleBinaryWarning returns a warning string if the on-disk binary has been
@@ -1185,12 +1185,20 @@ func (h *handler) maybeWarmAfterScan(path string) {
 }
 
 // symbolGraphOpts maps analysis quality= to oculus SymbolGraphOpts.
-// Default (empty/quick) is Quick; only quality=deep opts into LSP CallGraph.
+// Default (empty/quick) is AST-only interactive. quality=deep allows scoped
+// LSP enrichment (FocusEntry set by Probe/Scenario) under the call deadline —
+// not a separate whole-repo CallGraph universe.
 func (in *analysisInput) symbolGraphOpts() engine.SymbolGraphOpts {
 	if in != nil && strings.EqualFold(strings.TrimSpace(in.Quality), "deep") {
-		return engine.SymbolGraphOpts{Quick: false}
+		return engine.SymbolGraphOpts{
+			AllowLSP:    true,
+			Interactive: true,
+			MaxLSP:      30 * time.Second,
+			Hops:        engine.DefaultInteractiveHops,
+			FocusEntry:  in.Symbol,
+		}
 	}
-	return engine.SymbolGraphOpts{Quick: true}
+	return engine.SymbolGraphOpts{Quick: true, AllowLSP: false, Interactive: true}
 }
 
 // logAnalysisEntry records the path, SHA, and cache key for every dispatch.
